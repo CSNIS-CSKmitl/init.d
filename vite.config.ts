@@ -29,19 +29,23 @@ export default defineConfig(({ mode }) => {
 					ws: true,
 					changeOrigin: true, // rewrite the Host header to match the Proxmox target host
 					secure: false, // bypass self-signed cert
-					rewrite: (path) => path.replace(/^\/proxmox-ws/, ''),
+					rewrite: (path) => path.replace(/^\/proxmox-ws\/cookie\/[^\/]+\//, '/').replace(/^\/proxmox-ws/, ''),
 					configure: (proxy) => {
 						proxy.on('proxyReqWs', (proxyReq, req, socket, options, head) => {
 							console.log('[Vite WS Proxy] Upgrading WebSocket connection...');
 							
 							const reqUrl = req.url || '';
+							const pathMatch = reqUrl.match(/\/cookie\/([^/]+)\//);
 							const urlMatch = reqUrl.match(/[?&]pveauthcookie=([^&]+)/);
 							
-							if (urlMatch && urlMatch[1]) {
-								const pveAuthCookie = decodeURIComponent(urlMatch[1]);
-								// Set the session cookie for Proxmox authentication
+							if (pathMatch && pathMatch[1]) {
+								const pveAuthCookie = decodeURIComponent(pathMatch[1]);
 								proxyReq.setHeader('Cookie', `PVEAuthCookie=${pveAuthCookie}`);
-								console.log('[Vite WS Proxy] Authenticated using dynamic PVEAuthCookie.');
+								console.log('[Vite WS Proxy] Authenticated using dynamic PVEAuthCookie from path.');
+							} else if (urlMatch && urlMatch[1]) {
+								const pveAuthCookie = decodeURIComponent(urlMatch[1]);
+								proxyReq.setHeader('Cookie', `PVEAuthCookie=${pveAuthCookie}`);
+								console.log('[Vite WS Proxy] Authenticated using dynamic PVEAuthCookie from query.');
 								
 								// Remove the custom pveauthcookie param from the path forwarded to Proxmox
 								const cleanPath = proxyReq.path.replace(/([?&])pveauthcookie=[^&]+(&|$)/, (_, g1, g2) => {

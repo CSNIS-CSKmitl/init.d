@@ -84,8 +84,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 		// 8. Build WebSocket URL routed through the Vite /proxmox-ws proxy.
 		//    Proxmox uses /vncwebsocket for BOTH vncproxy and termproxy tickets.
 		//    The ticket type determines what protocol the server uses (RFB vs PTY).
-		const wsPath = `/proxmox-ws/api2/json/nodes/${node}/${typePath}/${vmid}/vncwebsocket`;
-		let wsUrl = `${wsPath}?port=${ticketResponse.port}&vncticket=${encodeURIComponent(ticketResponse.ticket)}`;
+		let wsUrl: string;
 		if (ticketResponse.pveAuthCookie) {
 			cookies.set('PVEAuthCookie', ticketResponse.pveAuthCookie, {
 				path: '/',
@@ -94,8 +93,9 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 				sameSite: 'lax',
 				encode: (val) => val
 			});
-			// Keep query param for Vite dev proxy compatibility
-			wsUrl += `&pveauthcookie=${ticketResponse.pveAuthCookie}`;
+			wsUrl = `/proxmox-ws/cookie/${encodeURIComponent(ticketResponse.pveAuthCookie)}/api2/json/nodes/${node}/${typePath}/${vmid}/vncwebsocket?port=${ticketResponse.port}&vncticket=${encodeURIComponent(ticketResponse.ticket)}`;
+		} else {
+			wsUrl = `/proxmox-ws/api2/json/nodes/${node}/${typePath}/${vmid}/vncwebsocket?port=${ticketResponse.port}&vncticket=${encodeURIComponent(ticketResponse.ticket)}`;
 		}
 
 		return json({
