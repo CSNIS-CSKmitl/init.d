@@ -51,6 +51,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 		// 5. Map the 'type' value (case-insensitive and supports lxc/ct/container)
 		const typeLower = String(type || '').trim().toLowerCase();
 		const typePath = (typeLower === 'container' || typeLower === 'lxc' || typeLower === 'ct') ? 'lxc' : 'qemu';
+		console.log('[API Console Debug] ID:', instanceId, 'vmid:', vmid, 'node:', node, 'db type:', type, 'typeLower:', typeLower, 'typePath:', typePath);
 
 		// Read Proxmox credentials from environment
 		const host = env.PROXMOX_HOST;
