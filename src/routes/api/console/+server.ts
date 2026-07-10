@@ -81,15 +81,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			skipTls
 		});
 
-		// 7. Extract actual node from UPID (format: UPID:{node}:{pid}:...)
-		//    The VNC proxy may run on a different cluster node than requested.
-		const upidParts = (ticketResponse.upid ?? '').split(':');
-		const actualNode = upidParts.length > 1 ? upidParts[1] : node;
-
 		// 8. Build WebSocket URL routed through the Vite /proxmox-ws proxy.
 		//    Proxmox uses /vncwebsocket for BOTH vncproxy and termproxy tickets.
 		//    The ticket type determines what protocol the server uses (RFB vs PTY).
-		const wsPath = `/proxmox-ws/api2/json/nodes/${actualNode}/${typePath}/${vmid}/vncwebsocket`;
+		const wsPath = `/proxmox-ws/api2/json/nodes/${node}/${typePath}/${vmid}/vncwebsocket`;
 		let wsUrl = `${wsPath}?port=${ticketResponse.port}&vncticket=${encodeURIComponent(ticketResponse.ticket)}`;
 		if (ticketResponse.pveAuthCookie) {
 			wsUrl += `&pveauthcookie=${encodeURIComponent(ticketResponse.pveAuthCookie)}`;
@@ -101,7 +96,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			ticket: ticketResponse.ticket,
 			port: ticketResponse.port,
 			vmid,
-			node: actualNode,
+			node,
 			hostname,
 			user: ticketResponse.user,
 			pveAuthCookie: ticketResponse.pveAuthCookie

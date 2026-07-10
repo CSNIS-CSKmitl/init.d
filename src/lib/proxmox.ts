@@ -200,9 +200,15 @@ async function postProxmoxProxy(
 
 	console.log(`[Proxmox] POST ${url}`);
 
-	// termproxy takes no body params; vncproxy needs websocket=1 (and generate-password for qemu)
+	// termproxy for Qemu VMs requires specifying the serial port (e.g. serial0)
+	// to output text-based PTY data compatible with xterm.js. Otherwise it
+	// defaults to the graphical display console which outputs binary RFB/VNC.
 	const body = new URLSearchParams();
-	if (endpoint === 'vncproxy') {
+	if (endpoint === 'termproxy') {
+		if (typePath === 'qemu') {
+			body.set('serial', 'serial0');
+		}
+	} else if (endpoint === 'vncproxy') {
 		body.set('websocket', '1');
 		if (typePath === 'qemu') {
 			body.set('generate-password', '1');

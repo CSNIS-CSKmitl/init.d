@@ -27,6 +27,7 @@ export default defineConfig(({ mode }) => {
 				'/proxmox-ws': {
 					target: `https://${proxmoxHost}:${proxmoxPort}`,
 					ws: true,
+					changeOrigin: true, // rewrite the Host header to match the Proxmox target host
 					secure: false, // bypass self-signed cert
 					rewrite: (path) => path.replace(/^\/proxmox-ws/, ''),
 					configure: (proxy) => {
