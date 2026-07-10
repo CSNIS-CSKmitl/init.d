@@ -12,5 +12,7 @@ export default defineConfig({
         fs: {
             allow: ['..', '.svelte-kit', '.svelte-kit/**']
         }
+    },    build: {
+        sourcemap: false // ยึดมั่นปิดช่องโหว่ซอร์สโค้ดหลุดไว้ตรงนี้
     }
 });
