@@ -10,12 +10,57 @@
 		Calendar,
 		ChevronDown,
 		ChevronRight,
-		MessageSquareText
+		MessageSquareText,
+		Terminal,
+		X,
+		RefreshCw
 	} from '@lucide/svelte';
 
 	let { items = [] }: { items: LeaseInstance[] } = $props();
 
 	let expanded = $state<string | null>(null);
+
+	let consoleTarget = $state<LeaseInstance | null>(null);
+	let consoleUrl = $state<string | null>(null);
+	let consoleLoading = $state<boolean>(false);
+	let consoleError = $state<string | null>(null);
+
+	async function openConsole(item: LeaseInstance) {
+		consoleTarget = item;
+		consoleUrl = null;
+		consoleLoading = true;
+		consoleError = null;
+
+		try {
+			const res = await fetch('/api/console', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ instanceId: item.id })
+			});
+
+			const data = await res.json();
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to fetch console ticket.');
+			}
+			if (!data.success || !data.url) {
+				throw new Error(data.error || 'Invalid ticket response from server.');
+			}
+			consoleUrl = data.url;
+		} catch (err: any) {
+			consoleError = err.message || 'An unexpected error occurred.';
+		} finally {
+			consoleLoading = false;
+		}
+	}
+
+	function closeConsole() {
+		consoleTarget = null;
+		consoleUrl = null;
+		consoleLoading = false;
+		consoleError = null;
+	}
 
 	// Automatically collapse deleted items if they were expanded
 	$effect(() => {
@@ -186,6 +231,17 @@
 								</form>
 							</div>
 						{/if}
+						{#if item.status === 'completed' && item.vmid && item.node}
+							<div class="mt-4 flex gap-2 border-t border-app pt-4">
+								<button
+									type="button"
+									onclick={() => openConsole(item)}
+									class="inline-flex h-8 items-center justify-center rounded bg-accent border border-accent/20 px-3 font-mono text-[11px] uppercase tracking-wider text-zinc-950 transition-colors duration-200 hover:opacity-90 cursor-pointer"
+								>
+									Console
+								</button>
+							</div>
+						{/if}
 					</div>
 				{/if}
 			</div>
@@ -347,11 +403,97 @@
 										</form>
 									</div>
 								{/if}
+								{#if item.status === 'completed' && item.vmid && item.node}
+									<div class="mt-5 border-t border-app pt-4 flex gap-2">
+										<button
+											type="button"
+											onclick={() => openConsole(item)}
+											class="inline-flex h-8 items-center justify-center rounded bg-accent border border-accent/20 px-3 font-mono text-[11px] uppercase tracking-wider text-zinc-950 transition-colors duration-200 hover:opacity-90 cursor-pointer"
+										>
+											Console
+										</button>
+									</div>
+								{/if}
 							</td>
 						</tr>
 					{/if}
 				{/each}
 			</tbody>
 		</table>
+	</div>
+{/if}
+
+{#if consoleTarget}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm p-4 sm:p-6 transition-all duration-300">
+		<div class="flex h-[80vh] w-full max-w-5xl flex-col rounded-xl border border-app bg-surface shadow-2xl overflow-hidden transition-all duration-300 transform scale-100">
+			<!-- Modal Header -->
+			<header class="flex items-center justify-between border-b border-app bg-elevated px-4 py-3 sm:px-6">
+				<div class="flex items-center gap-2.5">
+					<Terminal class="h-4 w-4 text-accent animate-pulse" />
+					<div class="min-w-0">
+						<h3 class="font-mono-app text-sm font-semibold text-app truncate">
+							{consoleTarget.hostname} Console
+						</h3>
+						<p class="font-mono text-[10px] text-muted-app uppercase tracking-wider">
+							NODE: {consoleTarget.node} · VMID: {consoleTarget.vmid} · TYPE: {consoleTarget.type}
+						</p>
+					</div>
+				</div>
+				<button
+					type="button"
+					onclick={closeConsole}
+					class="rounded-md p-1.5 text-secondary-app hover:bg-surface hover:text-app transition-colors duration-200 cursor-pointer"
+					aria-label="Close console"
+				>
+					<X class="h-4 w-4" />
+				</button>
+			</header>
+
+			<!-- Modal Body (Iframe) -->
+			<div class="relative flex-1 bg-zinc-950 flex items-center justify-center p-1">
+				{#if consoleLoading}
+					<div class="flex flex-col items-center gap-3 text-center p-8">
+						<RefreshCw class="h-8 w-8 text-accent animate-spin" />
+						<p class="font-mono text-xs uppercase tracking-widest text-secondary-app animate-pulse">// AUTHORIZING CONSOLE SESSION...</p>
+					</div>
+				{:else}
+					{#if consoleError}
+						<div class="max-w-md text-center p-8 space-y-4">
+							<p class="text-sm font-medium" style="color: var(--danger)">
+								{consoleError}
+							</p>
+							<p class="text-xs text-muted-app font-mono leading-relaxed">
+								Failed to establish connection to the Proxmox console. Please make sure the instance is running and the hypervisor is online.
+							</p>
+							<div class="flex justify-center gap-2 pt-2">
+								<button
+									type="button"
+									onclick={() => openConsole(consoleTarget!)}
+									class="inline-flex h-8 items-center justify-center rounded border border-app bg-elevated px-3 font-mono text-[11px] uppercase tracking-wider text-app transition-colors duration-200 hover:border-strong-app hover:text-accent cursor-pointer"
+								>
+									Retry
+								</button>
+								<button
+									type="button"
+									onclick={closeConsole}
+									class="inline-flex h-8 items-center justify-center rounded border border-app bg-elevated px-3 font-mono text-[11px] uppercase tracking-wider text-secondary-app transition-colors duration-200 hover:border-strong-app cursor-pointer"
+								>
+									Close
+								</button>
+							</div>
+						</div>
+					{:else}
+						{#if consoleUrl}
+							<iframe
+								src={consoleUrl}
+								class="h-full w-full border-0 rounded-lg bg-black"
+								title="Proxmox xterm.js console"
+								allow="fullscreen; clipboard-read; clipboard-write"
+							></iframe>
+						{/if}
+					{/if}
+				{/if}
+			</div>
+		</div>
 	</div>
 {/if}

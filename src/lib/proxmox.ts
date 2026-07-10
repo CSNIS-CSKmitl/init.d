@@ -3,6 +3,10 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
+if (process.env.PROXMOX_SKIP_TLS_VERIFY === 'true') {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
 // Throw an error if the connection details are missing to prevent silent failures
 if (!process.env.PROXMOX_HOST || !process.env.PROXMOX_USER || !process.env.PROXMOX_TOKEN_SECRET) {
     console.warn("Proxmox API credentials not fully configured in environment variables.");
@@ -88,3 +92,42 @@ export const createVM = async (detail: any, network: string, node: string, id: n
         throw error;
     }
 }
+
+export interface ProxmoxVncTicketParams {
+	host: string;
+	port: string | number;
+	user: string;
+	token: string;
+	secret: string;
+	node: string;
+	typePath: 'qemu' | 'lxc';
+	vmid: number | string;
+	skipTls: boolean;
+}
+
+export interface ProxmoxVncTicketResponse {
+	ticket: string;
+	port: number;
+	upid: string;
+	cert: string;
+	user: string;
+}
+
+export const getProxmoxVncTicket = async (params: ProxmoxVncTicketParams): Promise<ProxmoxVncTicketResponse> => {
+	const { node, typePath, vmid } = params;
+	const numericVmid = typeof vmid === 'string' ? Number.parseInt(vmid, 10) : vmid;
+
+	if (typePath === 'qemu') {
+		const response = await proxmox.nodes.$(node).qemu.$(numericVmid).vncproxy.$post({
+			websocket: true,
+			'generate-password': true
+		});
+		return response as unknown as ProxmoxVncTicketResponse;
+	} else {
+		const response = await proxmox.nodes.$(node).lxc.$(numericVmid).vncproxy.$post({
+			websocket: true
+		});
+		return response as unknown as ProxmoxVncTicketResponse;
+	}
+};
+

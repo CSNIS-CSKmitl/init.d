@@ -29,6 +29,8 @@ export interface LeaseInstance {
 	passion_group: string | PassionGroupRef;
 	expand?: { passion_group?: PassionGroupRef };
 	type: InstanceType;
+	vmid?: number;
+	node?: string;
 	hostname: string;
 	os_template: string;
 	specs: InstanceSpecs;
