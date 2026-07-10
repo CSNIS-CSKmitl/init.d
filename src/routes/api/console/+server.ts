@@ -48,8 +48,9 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 			);
 		}
 
-		// 5. Map the 'type' value
-		const typePath = type === 'container' ? 'lxc' : 'qemu';
+		// 5. Map the 'type' value (case-insensitive and supports lxc/ct/container)
+		const typeLower = String(type || '').trim().toLowerCase();
+		const typePath = (typeLower === 'container' || typeLower === 'lxc' || typeLower === 'ct') ? 'lxc' : 'qemu';
 
 		// Read Proxmox credentials from environment
 		const host = env.PROXMOX_HOST;
