@@ -89,7 +89,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 		if (ticketResponse.pveAuthCookie) {
 			cookies.set('PVEAuthCookie', ticketResponse.pveAuthCookie, {
 				path: '/',
-				secure: false,
+				secure: true,
 				httpOnly: true,
 				sameSite: 'lax',
 				encode: (val) => val
