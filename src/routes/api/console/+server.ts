@@ -4,7 +4,7 @@ import { env } from '$env/dynamic/private';
 import { getProxmoxTermTicket } from '$lib/proxmox';
 import type { LeaseInstance } from '$lib/types';
 
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 	// 1. Verify user is logged in
 	if (!locals.user) {
 		return json({ error: 'Unauthorized. Please sign in.' }, { status: 401 });
@@ -87,7 +87,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const wsPath = `/proxmox-ws/api2/json/nodes/${node}/${typePath}/${vmid}/vncwebsocket`;
 		let wsUrl = `${wsPath}?port=${ticketResponse.port}&vncticket=${encodeURIComponent(ticketResponse.ticket)}`;
 		if (ticketResponse.pveAuthCookie) {
-			wsUrl += `&pveauthcookie=${encodeURIComponent(ticketResponse.pveAuthCookie)}`;
+			cookies.set('PVEAuthCookie', ticketResponse.pveAuthCookie, {
+				path: '/',
+				secure: false,
+				httpOnly: true,
+				sameSite: 'lax',
+				encode: (val) => val
+			});
+			// Keep query param for Vite dev proxy compatibility
+			wsUrl += `&pveauthcookie=${ticketResponse.pveAuthCookie}`;
 		}
 
 		return json({
