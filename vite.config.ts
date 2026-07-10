@@ -1,30 +1,16 @@
 import tailwindcss from '@tailwindcss/vite';
-import adapter from '@sveltejs/adapter-auto';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-	plugins: [
-		tailwindcss(),
-		sveltekit({
-			compilerOptions: {
-				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
-				runes: ({ filename }) => filename.split(/[/\\]/).includes('node_modules') ? undefined : true
-			},
-
-			// adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.
-			// If your environment is not supported, or you settled on a specific environment, switch out the adapter.
-			// See https://svelte.dev/docs/kit/adapters for more information about adapters.
-			adapter: adapter()
-		})
-	],
-	server: {
-		// Vite 8 restricts SSR file reads to the project root. SvelteKit
-		// generates runtime files in `.svelte-kit/generated/...` outside
-		// the source tree — we need to explicitly allow that directory
-		// for the SSR module loader to find `internal.js`.
-		fs: {
-			allow: ['..', '.svelte-kit', '.svelte-kit/**']
-		}
-	}
+    plugins: [
+        tailwindcss(),
+        sveltekit() // ปล่อยว่างไว้ เพื่อให้วิ่งไปอ่าน svelte.config.js
+    ],
+    server: {
+        // เก็บการตั้งค่าเพื่อส่องไฟล์นอก Source Tree ของ Vite 8 ไว้ที่นี่
+        fs: {
+            allow: ['..', '.svelte-kit', '.svelte-kit/**']
+        }
+    }
 });
