@@ -2,6 +2,7 @@
 	import type { LeaseInstance } from '$lib/types';
 	import { passionGroupName } from '$lib/types';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
+	import ProxmoxTerminal from '$lib/components/status/ProxmoxTerminal.svelte';
 	import {
 		Inbox,
 		Cpu,
@@ -21,22 +22,23 @@
 	let expanded = $state<string | null>(null);
 
 	let consoleTarget = $state<LeaseInstance | null>(null);
-	let consoleUrl = $state<string | null>(null);
+	let consoleWsUrl = $state<string | null>(null);
+	let consoleTicket = $state<string | null>(null);
+	let consoleUser = $state<string | null>(null);
 	let consoleLoading = $state<boolean>(false);
 	let consoleError = $state<string | null>(null);
 
 	async function openConsole(item: LeaseInstance) {
 		consoleTarget = item;
-		consoleUrl = null;
+		consoleWsUrl = null;
+		consoleTicket = null;
 		consoleLoading = true;
 		consoleError = null;
 
 		try {
 			const res = await fetch('/api/console', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ instanceId: item.id })
 			});
 
@@ -44,10 +46,12 @@
 			if (!res.ok) {
 				throw new Error(data.error || 'Failed to fetch console ticket.');
 			}
-			if (!data.success || !data.url) {
+			if (!data.success || !data.wsUrl) {
 				throw new Error(data.error || 'Invalid ticket response from server.');
 			}
-			consoleUrl = data.url;
+			consoleWsUrl = data.wsUrl;
+			consoleTicket = data.ticket;
+			consoleUser = data.user;
 		} catch (err: any) {
 			consoleError = err.message || 'An unexpected error occurred.';
 		} finally {
@@ -57,7 +61,9 @@
 
 	function closeConsole() {
 		consoleTarget = null;
-		consoleUrl = null;
+		consoleWsUrl = null;
+		consoleTicket = null;
+		consoleUser = null;
 		consoleLoading = false;
 		consoleError = null;
 	}
@@ -483,13 +489,8 @@
 							</div>
 						</div>
 					{:else}
-						{#if consoleUrl}
-							<iframe
-								src={consoleUrl}
-								class="h-full w-full border-0 rounded-lg bg-black"
-								title="Proxmox xterm.js console"
-								allow="fullscreen; clipboard-read; clipboard-write"
-							></iframe>
+						{#if consoleWsUrl && consoleTicket && consoleUser}
+							<ProxmoxTerminal wsUrl={consoleWsUrl} ticket={consoleTicket} user={consoleUser} />
 						{/if}
 					{/if}
 				{/if}

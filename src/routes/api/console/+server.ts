@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { getProxmoxVncTicket } from '$lib/proxmox';
+import { getProxmoxTermTicket } from '$lib/proxmox';
 import type { LeaseInstance } from '$lib/types';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -36,7 +36,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// 4. Extract vmid, node, and type
-		const { vmid, node, type, hostname } = record;
+		const { vmid, type, hostname } = record;
+		// DB stores node as a bare number (e.g. "3"); Proxmox expects "pve3"
+		const node = /^\d+$/.test(String(record.node ?? ''))
+			? `pve${record.node}`
+			: String(record.node ?? '');
 		if (!vmid || !node) {
 			return json(
 				{ error: 'Instance is not fully provisioned yet (missing vmid or node assignment).' },
@@ -44,59 +48,72 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			);
 		}
 
-		// 5. Map the 'type' value appropriately
-		// 'container' maps to 'lxc' and 'vm' maps to 'qemu' in the Proxmox API path
+		// 5. Map the 'type' value
 		const typePath = type === 'container' ? 'lxc' : 'qemu';
-		const consoleType = type === 'container' ? 'lxc' : 'kvm';
 
-		// Act as a secure proxy and make authenticated POST request to Proxmox API
+		// Read Proxmox credentials from environment
 		const host = env.PROXMOX_HOST;
 		const port = env.PROXMOX_PORT || '8006';
 		const user = env.PROXMOX_USER;
 		const token = env.PROXMOX_TOKEN;
 		const secret = env.PROXMOX_TOKEN_SECRET;
+		const password = env.PROXMOX_PASSWORD;
 		const skipTls = env.PROXMOX_SKIP_TLS_VERIFY === 'true';
 
-		if (!host || !user || !token || !secret) {
+		if (!host || !user) {
 			return json(
 				{ error: 'Proxmox integration credentials are not configured on the server.' },
 				{ status: 500 }
 			);
 		}
 
-		// Call Proxmox API vncproxy endpoint
-		const ticketResponse = await getProxmoxVncTicket({
+		// 6. Call Proxmox termproxy to get a PTY ticket (xterm.js compatible)
+		const ticketResponse = await getProxmoxTermTicket({
 			host,
 			port,
 			user,
 			token,
 			secret,
+			password,
 			node,
 			typePath,
 			vmid,
 			skipTls
 		});
 
-		// 6. Return the full Proxmox console URL containing the generated ticket parameters
-		const consoleUrl = `https://${host}:${port}/?console=${consoleType}&xtermjs=1&vmid=${vmid}&vmname=${encodeURIComponent(hostname)}&node=${node}&vncticket=${encodeURIComponent(ticketResponse.ticket)}&port=${ticketResponse.port}&path=api2/json/nodes/${node}/${typePath}/${vmid}/vncwebsocket/port/${ticketResponse.port}/vncticket/${encodeURIComponent(ticketResponse.ticket)}`;
+		// 7. Extract actual node from UPID (format: UPID:{node}:{pid}:...)
+		//    The VNC proxy may run on a different cluster node than requested.
+		const upidParts = (ticketResponse.upid ?? '').split(':');
+		const actualNode = upidParts.length > 1 ? upidParts[1] : node;
+
+		// 8. Build WebSocket URL routed through the Vite /proxmox-ws proxy.
+		//    Proxmox uses /vncwebsocket for BOTH vncproxy and termproxy tickets.
+		//    The ticket type determines what protocol the server uses (RFB vs PTY).
+		const wsPath = `/proxmox-ws/api2/json/nodes/${actualNode}/${typePath}/${vmid}/vncwebsocket`;
+		let wsUrl = `${wsPath}?port=${ticketResponse.port}&vncticket=${encodeURIComponent(ticketResponse.ticket)}`;
+		if (ticketResponse.pveAuthCookie) {
+			wsUrl += `&pveauthcookie=${encodeURIComponent(ticketResponse.pveAuthCookie)}`;
+		}
 
 		return json({
 			success: true,
-			url: consoleUrl,
+			wsUrl,
 			ticket: ticketResponse.ticket,
 			port: ticketResponse.port,
 			vmid,
-			node
+			node: actualNode,
+			hostname,
+			user: ticketResponse.user,
+			pveAuthCookie: ticketResponse.pveAuthCookie
 		});
 
 	} catch (e: any) {
 		console.error('[API Console Error]:', e);
-		
-		// PocketBase getOne throws 404 if record doesn't exist
+
 		if (e.status === 404) {
 			return json({ error: 'Instance not found in database.' }, { status: 404 });
 		}
-		
+
 		return json(
 			{ error: e.message || 'Failed to communicate with Proxmox hypervisor.' },
 			{ status: 500 }
