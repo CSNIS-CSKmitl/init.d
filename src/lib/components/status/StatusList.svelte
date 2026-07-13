@@ -79,6 +79,92 @@
 		}
 	});
 
+	let powerStates = $state<Record<string, { status: 'running' | 'stopped' | 'loading' | 'unknown', actionLoading?: boolean }>>({});
+
+	// Fetch power state for a specific instance
+	async function fetchPowerState(id: string) {
+		try {
+			const res = await fetch(`/api/instance-power?instanceId=${id}`);
+			if (res.ok) {
+				const data = await res.json();
+				powerStates[id] = { status: data.status };
+			} else {
+				powerStates[id] = { status: 'unknown' };
+			}
+		} catch {
+			powerStates[id] = { status: 'unknown' };
+		}
+	}
+
+	// Trigger start / shutdown
+	async function togglePower(item: LeaseInstance) {
+		const currentState = powerStates[item.id]?.status;
+		if (!currentState || currentState === 'loading') return;
+		const action = currentState === 'running' ? 'shutdown' : 'start';
+
+		// Set loading state
+		powerStates[item.id] = { status: currentState, actionLoading: true };
+
+		try {
+			const res = await requestPowerAction(item.id, action);
+			if (res.success && res.upid) {
+				// Poll task status until complete
+				await pollTaskStatus(item.node ? `pve${item.node}` : '', res.upid);
+			}
+		} catch (err) {
+			console.error('Power toggle failed:', err);
+		} finally {
+			// Pull status again from backend after action complete
+			await fetchPowerState(item.id);
+		}
+	}
+
+	async function requestPowerAction(instanceId: string, action: 'start' | 'shutdown') {
+		const res = await fetch('/api/instance-power', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ instanceId, action }),
+		});
+		if (!res.ok) {
+			const err = await res.json();
+			throw new Error(err.error || 'Action failed');
+		}
+		return await res.json();
+	}
+
+	async function pollTaskStatus(node: string, upid: string) {
+		return new Promise<void>((resolve) => {
+			const interval = setInterval(async () => {
+				try {
+					const res = await fetch(`/api/instance-power/task?node=${node}&upid=${upid}`);
+					if (res.ok) {
+						const data = await res.json();
+						if (data.status === 'stopped') {
+							clearInterval(interval);
+							resolve();
+						}
+					} else {
+						clearInterval(interval);
+						resolve();
+					}
+				} catch {
+					clearInterval(interval);
+					resolve();
+				}
+			}, 2000);
+		});
+	}
+
+	// Trigger fetches for all completed instances on mount/update
+	$effect(() => {
+		for (const item of items) {
+			if (item.status === 'completed' && item.vmid && item.node && !powerStates[item.id]) {
+				powerStates[item.id] = { status: 'loading' };
+				fetchPowerState(item.id);
+			}
+		}
+	});
+
 	const portsFor = (s: string | undefined) =>
 		(s ?? "")
 			.split(",")
@@ -326,6 +412,55 @@
 								>
 									Console
 								</button>
+								{#if powerStates[item.id]}
+									{@const pState = powerStates[item.id]}
+									{#if pState.status === "loading"}
+										<button
+											type="button"
+											disabled
+											class="inline-flex h-8 items-center justify-center rounded bg-elevated border border-app px-3 font-mono text-[11px] uppercase tracking-wider text-muted-app"
+										>
+											<RefreshCw class="mr-1 h-3 w-3 animate-spin text-muted-app" />
+											Syncing
+										</button>
+									{:else if pState.status === "running"}
+										<button
+											type="button"
+											onclick={() => togglePower(item)}
+											disabled={pState.actionLoading}
+											class="inline-flex h-8 items-center justify-center rounded border px-3 font-mono text-[11px] uppercase tracking-wider transition-colors duration-200 cursor-pointer {pState.actionLoading ? 'bg-elevated border-app text-muted-app cursor-not-allowed' : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20'}"
+										>
+											{#if pState.actionLoading}
+												<RefreshCw class="mr-1 h-3 w-3 animate-spin text-red-400" />
+												Stopping...
+											{:else}
+												Stop
+											{/if}
+										</button>
+									{:else if pState.status === "stopped"}
+										<button
+											type="button"
+											onclick={() => togglePower(item)}
+											disabled={pState.actionLoading}
+											class="inline-flex h-8 items-center justify-center rounded border px-3 font-mono text-[11px] uppercase tracking-wider transition-colors duration-200 cursor-pointer {pState.actionLoading ? 'bg-elevated border-app text-muted-app cursor-not-allowed' : 'bg-green-500/10 border-green-500/20 text-green-400 hover:bg-green-500/20'}"
+										>
+											{#if pState.actionLoading}
+												<RefreshCw class="mr-1 h-3 w-3 animate-spin text-green-400" />
+												Starting...
+											{:else}
+												Start
+											{/if}
+										</button>
+									{:else}
+										<button
+											type="button"
+											onclick={() => fetchPowerState(item.id)}
+											class="inline-flex h-8 items-center justify-center rounded bg-elevated border border-app px-3 font-mono text-[11px] uppercase tracking-wider text-secondary-app transition-colors duration-200 hover:border-strong-app cursor-pointer"
+										>
+											Retry Power
+										</button>
+									{/if}
+								{/if}
 							</div>
 						{/if}
 					</div>
@@ -587,6 +722,55 @@
 										>
 											Console
 										</button>
+										{#if powerStates[item.id]}
+											{@const pState = powerStates[item.id]}
+											{#if pState.status === "loading"}
+												<button
+													type="button"
+													disabled
+													class="inline-flex h-8 items-center justify-center rounded bg-elevated border border-app px-3 font-mono text-[11px] uppercase tracking-wider text-muted-app"
+												>
+													<RefreshCw class="mr-1 h-3 w-3 animate-spin text-muted-app" />
+													Syncing
+												</button>
+											{:else if pState.status === "running"}
+												<button
+													type="button"
+													onclick={() => togglePower(item)}
+													disabled={pState.actionLoading}
+													class="inline-flex h-8 items-center justify-center rounded border px-3 font-mono text-[11px] uppercase tracking-wider transition-colors duration-200 cursor-pointer {pState.actionLoading ? 'bg-elevated border-app text-muted-app cursor-not-allowed' : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20'}"
+												>
+													{#if pState.actionLoading}
+														<RefreshCw class="mr-1 h-3 w-3 animate-spin text-red-400" />
+														Stopping...
+													{:else}
+														Stop
+													{/if}
+												</button>
+											{:else if pState.status === "stopped"}
+												<button
+													type="button"
+													onclick={() => togglePower(item)}
+													disabled={pState.actionLoading}
+													class="inline-flex h-8 items-center justify-center rounded border px-3 font-mono text-[11px] uppercase tracking-wider transition-colors duration-200 cursor-pointer {pState.actionLoading ? 'bg-elevated border-app text-muted-app cursor-not-allowed' : 'bg-green-500/10 border-green-500/20 text-green-400 hover:bg-green-500/20'}"
+												>
+													{#if pState.actionLoading}
+														<RefreshCw class="mr-1 h-3 w-3 animate-spin text-green-400" />
+														Starting...
+													{:else}
+														Start
+													{/if}
+												</button>
+											{:else}
+												<button
+													type="button"
+													onclick={() => fetchPowerState(item.id)}
+													class="inline-flex h-8 items-center justify-center rounded bg-elevated border border-app px-3 font-mono text-[11px] uppercase tracking-wider text-secondary-app transition-colors duration-200 hover:border-strong-app cursor-pointer"
+												>
+													Retry Power
+												</button>
+											{/if}
+										{/if}
 									</div>
 								{/if}
 							</td>
