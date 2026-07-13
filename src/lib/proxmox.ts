@@ -9,6 +9,14 @@ if (process.env.PROXMOX_SKIP_TLS_VERIFY === 'true') {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 }
 
+const customFetch = (url: any, init: any) => {
+    if (init && init.headers) {
+        delete init.headers['Content-Length'];
+        delete init.headers['content-length'];
+    }
+    return fetch(url, init);
+};
+
 // Lazy getter — avoids UUID-format validation at module load time.
 // createCT / createVM use this; getProxmoxVncTicket creates its own client.
 function getProxmox() {
@@ -17,11 +25,13 @@ function getProxmox() {
         port: process.env.PROXMOX_PORT ? Number.parseInt(process.env.PROXMOX_PORT, 10) : 8006,
         tokenID: `${process.env.PROXMOX_USER}!${process.env.PROXMOX_TOKEN}`,
         tokenSecret: process.env.PROXMOX_TOKEN_SECRET || '',
+        fetch: customFetch as any,
     } : {
         host: process.env.PROXMOX_HOST || '',
         port: process.env.PROXMOX_PORT ? Number.parseInt(process.env.PROXMOX_PORT, 10) : 8006,
         username: process.env.PROXMOX_USER || '',
         password: process.env.PROXMOX_TOKEN_SECRET || '',
+        fetch: customFetch as any,
     });
 }
 
