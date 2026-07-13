@@ -437,4 +437,3 @@ export const getProxmoxTermTicket = (params: ProxmoxVncTicketParams) =>
 // Uses /vncproxy — returns RFB/VNC binary stream, compatible with noVNC.
 export const getProxmoxVncTicket = (params: ProxmoxVncTicketParams) =>
     postProxmoxProxy(params, 'vncproxy');
-
