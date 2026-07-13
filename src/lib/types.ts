@@ -30,7 +30,7 @@ export interface LeaseInstance {
 	expand?: { passion_group?: PassionGroupRef };
 	type: InstanceType;
 	vmid?: number;
-	node?: string;
+	node?: string | number;
 	hostname: string;
 	os_template: string;
 	specs: InstanceSpecs;
@@ -42,8 +42,7 @@ export interface LeaseInstance {
 	end_date: string;
 	quantity: number;
 	status: LeaseStatus;
-	vmid?: number;
-	node?: number;
+	IP?: string;
 	// Optional admin reply shown back on /status. Populated by admins from
 	// the `/admin` dashboard; users never set these directly.
 	admin_reply?: string;
