@@ -12,7 +12,10 @@ const config = {
 
     kit: {
         // ใช้ adapter-auto ตามโค้ดต้นฉบับของโปรเจกต์นี้
-        adapter: adapter()
+        adapter: adapter(),
+        alias: {
+            $static: './static'
+        }
     }
 };
 
