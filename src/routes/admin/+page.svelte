@@ -3,15 +3,52 @@
 	import { pbBrowser } from '$lib/pb/client';
 	import type { LeaseInstance } from '$lib/types';
 	import { untrack } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import AdminStats from '$lib/components/admin/AdminStats.svelte';
 	import AdminQueueTable from '$lib/components/admin/AdminQueueTable.svelte';
 
-	let { data, form }: { data: PageData; form: { error?: string; id?: string } | null } = $props();
+	let { data, form }: { data: PageData; form: { error?: string; id?: string; recordId?: string } | null } = $props();
 
 	// Live list — starts from the SSR snapshot and grows as the realtime
 	// subscription fires.
 	let items = $state<LeaseInstance[]>(untrack(() => [...data.items]));
 	let connectionState = $state<'connecting' | 'live' | 'offline'>('connecting');
+	let progressMap = $state<Record<string, { status: string; error?: string }>>({});
+
+	$effect(() => {
+		let active = true;
+		const poll = async () => {
+			try {
+				const res = await fetch('/api/provision-status');
+				if (res.ok) {
+					const data = await res.json();
+					if (active) {
+						progressMap = data;
+						// Trigger page data reload if any pending item completes provisioning
+						let hasCompleted = false;
+						for (const item of items) {
+							if (item.status === 'pending' && data[item.id]?.status === 'Complete') {
+								hasCompleted = true;
+							}
+						}
+						if (hasCompleted) {
+							invalidateAll();
+						}
+					}
+				}
+			} catch (err) {
+				console.error('Failed to poll provision status', err);
+			}
+		};
+
+		poll(); // initial fetch
+		const interval = setInterval(poll, 2000);
+
+		return () => {
+			active = false;
+			clearInterval(interval);
+		};
+	});
 
 	const stats = $derived({
 		total: items.length,
@@ -108,6 +145,6 @@
 	<AdminStats {stats} />
 
 	<!-- Data Table -->
-	<AdminQueueTable {items} {form} />
+	<AdminQueueTable {items} {form} {progressMap} />
 </div>
 

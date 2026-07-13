@@ -6,6 +6,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { LeaseInstance } from '$lib/types';
+import { createCT, createVM } from '$lib/proxmox';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -24,19 +25,96 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
+	update: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') throw error(403, 'Admin only.');
+
+		const fd = await request.formData();
+		const id = String(fd.get('id') ?? '');
+		if (!id) return fail(400, { error: 'Missing id.', recordId: id });
+
+		const cpu = Number(fd.get('cpu'));
+		const ram = Number(fd.get('ram'));
+		const disk = Number(fd.get('disk'));
+		const portsRaw = String(fd.get('ports') ?? '').trim();
+		const vmidRaw = String(fd.get('vmid') ?? '').trim();
+		const nodeRaw = String(fd.get('node') ?? '').trim();
+
+		const vmid = vmidRaw.length > 0 ? Number(vmidRaw) : null;
+		const node = nodeRaw.length > 0 ? Number(nodeRaw) : null;
+
+		if (![cpu, ram, disk].every((value) => Number.isFinite(value))) {
+			return fail(400, { error: 'Specs must be valid numbers.', recordId: id });
+		}
+		if (vmidRaw.length > 0 && !Number.isFinite(vmid)) {
+			return fail(400, { error: 'VMID must be a valid number.', recordId: id });
+		}
+		if (nodeRaw.length > 0 && !Number.isFinite(node)) {
+			return fail(400, { error: 'Node must be a valid number.', recordId: id });
+		}
+
+		try {
+			await locals.pb.collection('instances').update(id, {
+				specs: { cpu, ram, disk },
+				ports: portsRaw.length > 0 ? portsRaw : null,
+				vmid,
+				node
+			});
+			return { ok: true, id, recordId: id };
+		} catch (e) {
+			console.error('admin update failed', e);
+			return fail(500, { error: 'Could not update instance.', recordId: id });
+		}
+	},
 	resolve: async ({ request, locals }) => {
 		if (!locals.user || locals.user.role !== 'admin') throw error(403, 'Admin only.');
 
 		const fd = await request.formData();
 		const id = String(fd.get('id') ?? '');
 		if (!id) return fail(400, { error: 'Missing id.' });
+		const mode = String(fd.get('mode') ?? 'manual');
+		const vmidRaw = String(fd.get('vmid') ?? '').trim();
+		const nodeRaw = String(fd.get('node') ?? '').trim();
+		const storage = String(fd.get('storage') ?? '').trim();
 
 		try {
+			if (mode === 'auto') {
+				if (!vmidRaw) return fail(400, { error: 'Missing vmid.', recordId: id });
+				if (!nodeRaw) return fail(400, { error: 'Missing node.', recordId: id });
+				if (!storage) return fail(400, { error: 'Missing storage.', recordId: id });
+
+				const vmid = Number(vmidRaw);
+				const node = Number(nodeRaw);
+				if (!Number.isInteger(vmid) || vmid < 1) {
+					return fail(400, { error: 'VMID must be a valid number.', recordId: id });
+				}
+				if (!Number.isInteger(node) || node < 1) {
+					return fail(400, { error: 'Node must be a valid number.', recordId: id });
+				}
+
+				const record = await locals.pb.collection('instances').getOne<LeaseInstance>(id);
+				const network = 'vmbr1';
+				const detail = {
+					...record,
+					vmid,
+					cores: record.specs.cpu,
+					memory: record.specs.ram,
+				};
+
+				if (record.type === 'container') {
+					await createCT(detail, network, storage, `pve${node}`, vmid);
+				} else {
+					await createVM(detail, network, storage, `pve${node}`, vmid);
+				}
+
+				await locals.pb.collection('instances').update(id, { status: 'completed', node, vmid });
+				return { ok: true, id, recordId: id, mode };
+			}
+
 			await locals.pb.collection('instances').update(id, { status: 'completed' });
-			return { ok: true, id };
+			return { ok: true, id, recordId: id, mode };
 		} catch (e) {
 			console.error('resolve failed', e);
-			return fail(500, { error: 'Could not update instance.' });
+			return fail(500, { error: 'Could not update instance.', recordId: id });
 		}
 	},
 	reply: async ({ request, locals }) => {

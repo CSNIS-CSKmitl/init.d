@@ -40,6 +40,8 @@ export interface LeaseInstance {
 	end_date: string;
 	quantity: number;
 	status: LeaseStatus;
+	vmid?: number;
+	node?: number;
 	// Optional admin reply shown back on /status. Populated by admins from
 	// the `/admin` dashboard; users never set these directly.
 	admin_reply?: string;

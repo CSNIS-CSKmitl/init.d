@@ -1,6 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
+import path from 'path';
 
 export default defineConfig({
     plugins: [
@@ -14,5 +15,11 @@ export default defineConfig({
         }
     },    build: {
         sourcemap: false // ยึดมั่นปิดช่องโหว่ซอร์สโค้ดหลุดไว้ตรงนี้
-    }
+    },
+    resolve: {
+    alias: {
+      // This maps '$static' to 'D:/KMITL/init.d/static' (or wherever your static folder lives)
+      $static: path.resolve(__dirname, './static'), 
+    },
+  },
 });
