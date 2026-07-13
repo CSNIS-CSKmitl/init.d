@@ -45,18 +45,22 @@
 	<div
 		class="mx-auto flex h-14 max-w-[1400px] items-center justify-between gap-4 px-4 sm:gap-6 sm:px-6"
 	>
-		<a
-			href="/"
-			class="flex items-center gap-2 font-mono text-sm tracking-tight text-app"
-		>
-			<Server class="h-4 w-4 text-accent" />
-			<span class="font-semibold">init.d</span>
-			<span class=" text-xs text-zinc-500 mt-7 ">พบปัญหา ติดต่อ 66050160@kmitl.ac.th หรือ bornzi</span>
-			<!-- Brand suffix only shows from md up — keeps the row from
-			     getting crowded on phones where every pixel counts. -->
-			<!-- <span class="hidden text-muted-app md:inline">/ infrastructure provisioning</span> -->
-		</a>
+		<div class="flex flex-col justify-center">
+			<a
+				href="/"
+				class="flex items-center gap-2 font-mono text-sm tracking-tight text-app"
+			>
+				<Server class="h-4 w-4 text-accent" />
+				<span class="font-semibold">init.d</span>
 
+				<!-- Brand suffix only shows from md up — keeps the row from
+				     getting crowded on phones where every pixel counts. -->
+				<!-- <span class="hidden text-muted-app md:inline">/ infrastructure provisioning</span> -->
+			</a>
+			<p class="text-[10px] leading-tight text-zinc-500 sm:text-xs">
+				พบปัญหา ติดต่อ 66050160@kmitl.ac.th หรือ bornzi
+			</p>
+		</div>
 		<!-- Desktop nav — hidden below lg where the hamburger takes over. -->
 		<nav class="hidden items-center gap-1 lg:flex">
 			{#each links as link (link.href)}
@@ -68,9 +72,7 @@
 						? 'bg-elevated text-app'
 						: 'text-secondary-app hover:bg-elevated hover:text-app'}"
 				>
-					<Icon
-						class="h-3.5 w-3.5 {active ? 'text-accent' : ''}"
-					/>
+					<Icon class="h-3.5 w-3.5 {active ? 'text-accent' : ''}" />
 					{link.label}
 				</a>
 			{/each}
@@ -158,9 +160,7 @@
 							? 'bg-elevated text-app'
 							: 'text-secondary-app hover:bg-elevated hover:text-app'}"
 					>
-						<Icon
-							class="h-4 w-4 {active ? 'text-accent' : ''}"
-						/>
+						<Icon class="h-4 w-4 {active ? 'text-accent' : ''}" />
 						{link.label}
 					</a>
 				{:else}

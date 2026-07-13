@@ -94,6 +94,28 @@ if (!hasAdminReplyAt) {
 	});
 	console.log('[add] admin_reply_at');
 }
+const hasVmid = fields.some((f) => f.name === 'vmid');
+const hasNode = fields.some((f) => f.name === 'node');
+
+if (!hasVmid) {
+	fields.push({
+		name: 'vmid',
+		type: 'number',
+		required: false,
+		options: { noDecimal: true }
+	});
+	console.log('[add] vmid');
+}
+if (!hasNode) {
+	fields.push({
+		name: 'node',
+		type: 'text',
+		required: false,
+		options: { max: 128 }
+	});
+	console.log('[add] node');
+}
+
 if (pgField && pgField.type !== 'relation' && pgCollection) {
 	pgField.type = 'relation';
 	pgField.collectionId = pgCollection.id;
