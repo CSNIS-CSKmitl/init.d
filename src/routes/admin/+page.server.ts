@@ -7,6 +7,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { LeaseInstance } from '$lib/types';
 import { createCT, createVM, startProvisioning } from '$lib/proxmox';
+import { sendDiscordNotification } from '$lib/discord';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -104,7 +105,10 @@ export const actions: Actions = {
 				return { ok: true, id, recordId: id, mode, started: true };
 			}
 
-			await locals.pb.collection('instances').update(id, { status: 'completed' });
+			const record = await locals.pb.collection('instances').update<LeaseInstance>(id, { status: 'completed' });
+			sendDiscordNotification('completed', record).catch((err) =>
+				console.error('Failed to send discord notification:', err)
+			);
 			return { ok: true, id, recordId: id, mode };
 		} catch (e) {
 			console.error('resolve failed', e);

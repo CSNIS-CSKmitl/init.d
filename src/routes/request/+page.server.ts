@@ -15,6 +15,7 @@ import type {
 import { fetchPresets } from '$lib/presets';
 import PocketBase from 'pocketbase';
 import { env } from '$env/dynamic/private';
+import { sendDiscordNotification } from '$lib/discord';
 
 const TYPES: InstanceType[] = ['vm', 'container'];
 const NETWORKS: NetworkType[] = ['local', 'public'];
@@ -226,6 +227,9 @@ export const actions: Actions = {
 				quantity,
 				status: 'pending'
 			});
+			sendDiscordNotification('created', record).catch((err) =>
+				console.error('Failed to send discord notification:', err)
+			);
 		}
 
 		throw redirect(303, `/status#${record.id}`);
