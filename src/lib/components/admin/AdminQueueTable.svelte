@@ -10,7 +10,12 @@
 		progressMap?: Record<string, { status: string; error?: string }>;
 	};
 
-	let { items = [], form, provisioning = false, progressMap = {} }: Props = $props();
+	let {
+		items = [],
+		form,
+		provisioning = false,
+		progressMap = {},
+	}: Props = $props();
 
 	// Per-row reply editor state
 	let replyOpen = $state<string | null>(null);
@@ -145,7 +150,9 @@
 			</thead>
 			<tbody>
 				{#each items as item (item.id)}
-					{@const isPending = item.status === "pending" && progressMap[item.id]?.status !== "Complete"}
+					{@const isPending =
+						item.status === "pending" &&
+						progressMap[item.id]?.status !== "Complete"}
 					{@const isEditing = replyOpen === item.id}
 					{@const isResolving = resolveOpen === item.id}
 					{@const isFieldEditing = editOpen === item.id}
@@ -184,21 +191,55 @@
 									.specs.ram} GB RAM | {item.specs.disk} GB Disk
 							</div>
 							{#if progressMap[item.id]}
-								<div class="mt-2 max-w-md rounded-lg border border-accent bg-accent-soft p-3 font-mono-app text-xs text-accent">
+								<div
+									class="mt-2 max-w-md rounded-lg border border-accent bg-accent-soft p-3 font-mono-app text-xs text-accent"
+								>
 									<div class="flex items-center gap-2">
 										<span class="relative flex h-2 w-2">
-											<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
-											<span class="relative inline-flex rounded-full h-2 w-2 bg-accent"></span>
+											{#if progressMap[item.id].status !== "Complete" && progressMap[item.id].status !== "Failed"}
+												<span
+													class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"
+												></span>
+											{/if}
+											<span
+												class="relative inline-flex rounded-full h-2 w-2 bg-accent"
+											></span>
 										</span>
-										<span class="font-bold uppercase tracking-wider text-[10px] text-accent">Provisioning Status:</span>
+										<span
+											class="font-bold uppercase tracking-wider text-[10px] text-accent"
+											>Provisioning Status:</span
+										>
 									</div>
-									<div class="mt-1 text-app font-medium">{progressMap[item.id].status}</div>
+									<div class="mt-1 text-app font-medium">
+										{progressMap[item.id].status}
+									</div>
 									{#if progressMap[item.id].error}
-										<div class="mt-1.5 text-xs text-red-500 font-bold leading-normal">
+										<div
+											class="mt-1.5 text-xs text-red-500 font-bold leading-normal"
+										>
 											Error: {progressMap[item.id].error}
 										</div>
 									{/if}
 								</div>
+							{:else}
+								{#if item.status === "completed" && item.vmid}
+									<div
+										class="mt-2 max-w-md rounded-lg border border-app bg-elevated p-3 font-mono-app text-xs text-secondary-app"
+									>
+										<div class="flex items-center gap-2">
+											<span
+												class="inline-flex rounded-full h-2 w-2 bg-muted-app"
+											></span>
+											<span
+												class="font-bold uppercase tracking-wider text-[10px] text-muted-app"
+												>Provisioning Status:</span
+											>
+										</div>
+										<div class="mt-1 text-app font-medium">
+											Complete (Node: pve{item.node || ""}, VMID: {item.vmid})
+										</div>
+									</div>
+								{/if}
 							{/if}
 							{#if isPending}
 								<div

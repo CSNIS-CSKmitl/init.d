@@ -6,7 +6,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { LeaseInstance } from '$lib/types';
-import { createCT, createVM } from '$lib/proxmox';
+import { createCT, createVM, startProvisioning } from '$lib/proxmox';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -100,14 +100,8 @@ export const actions: Actions = {
 					memory: record.specs.ram,
 				};
 
-				if (record.type === 'container') {
-					await createCT(detail, network, storage, `pve${node}`, vmid);
-				} else {
-					await createVM(detail, network, storage, `pve${node}`, vmid);
-				}
-
-				await locals.pb.collection('instances').update(id, { status: 'completed', node, vmid });
-				return { ok: true, id, recordId: id, mode };
+				startProvisioning(locals.pb, id, detail, network, storage, `pve${node}`, vmid, record.type);
+				return { ok: true, id, recordId: id, mode, started: true };
 			}
 
 			await locals.pb.collection('instances').update(id, { status: 'completed' });
