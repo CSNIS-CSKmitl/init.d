@@ -214,7 +214,7 @@
 				{#each items as item (item.id)}
 					{@const isFailed = progressMap[item.id]?.status === "Failed"}
 					{@const isProvisioning = progressMap[item.id] && progressMap[item.id].status !== "Complete" && !isFailed}
-					{@const isPending = item.status === "pending" && !isFailed && !isProvisioning}
+					{@const isPending = item.status === "pending" && !isProvisioning}
 					{@const isCompleted = item.status === "completed" || progressMap[item.id]?.status === "Complete"}
 					{@const isEditing = replyOpen === item.id}
 					{@const isResolving = resolveOpen === item.id}
