@@ -14,9 +14,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	try {
 		const list = await locals.pb.collection('instances').getList<LeaseInstance>(1, 200, {
-			filter: `creator_email = "${email.replace(/"/g, '\\"')}"`,
+			filter: `email = "${locals.user.id}"`,
 			sort: '-created',
-			expand: 'passion_group'
+			expand: 'passion_group,email'
 		});
 		return { items: list.items, email };
 	} catch {
@@ -35,7 +35,7 @@ export const actions: Actions = {
 		try {
 			// 1. Get the instance to verify ownership
 			const record = await locals.pb.collection('instances').getOne<LeaseInstance>(id);
-			if (record.creator_email !== locals.user.email && locals.user.role !== 'admin') {
+			if (record.email !== locals.user.id && locals.user.role !== 'admin') {
 				return fail(403, { error: 'You are not authorized to cancel this request.' });
 			}
 

@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import type { LeaseInstance } from './types';
+import { type LeaseInstance, creatorEmail, creatorName } from './types';
 
 function formatDate(iso: string) {
 	try {
@@ -36,7 +36,8 @@ export async function sendDiscordNotification(
 			title = `🆕 New Lease Request: ${item.hostname}`;
 			color = 0xF59E0B; // Amber
 			fields = [
-				{ name: 'Requester', value: item.creator_email, inline: true },
+				{ name: 'Requester', value: creatorEmail(item), inline: true },
+				{ name: 'Name', value: creatorName(item), inline: true },
 				{ name: 'Type', value: item.type.toUpperCase(), inline: true },
 				{ name: 'Specifications', value: specsStr, inline: false },
 				{ name: 'OS Template', value: item.os_template, inline: true },

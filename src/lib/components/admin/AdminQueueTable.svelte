@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { LeaseInstance } from "$lib/types";
-	import { passionGroupName } from "$lib/types";
+	import { passionGroupName, creatorEmail } from "$lib/types";
 	import { enhance } from "$app/forms";
 	import SshTerminal from "$lib/components/status/SshTerminal.svelte";
 	import ProxmoxTerminal from "$lib/components/status/ProxmoxTerminal.svelte";
@@ -377,7 +377,7 @@
 								<div
 									class="font-mono-app text-xs text-muted-app mt-0.5"
 								>
-									{item.creator_email}
+									{creatorEmail(item)}
 								</div>
 
 								{#if provisioning}

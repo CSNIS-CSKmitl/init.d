@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	try {
 		const list = await locals.pb.collection('instances').getList<LeaseInstance>(1, 500, {
 			sort: '-created',
-			expand: 'passion_group'
+			expand: 'passion_group,email'
 		});
 		return { items: list.items };
 	} catch (e) {
@@ -92,7 +92,7 @@ export const actions: Actions = {
 					return fail(400, { error: 'Node must be a valid number.', recordId: id });
 				}
 
-				const record = await locals.pb.collection('instances').getOne<LeaseInstance>(id);
+				const record = await locals.pb.collection('instances').getOne<LeaseInstance>(id, { expand: 'email' });
 				const network = 'vmbr1';
 				const detail = {
 					...record,
@@ -105,7 +105,7 @@ export const actions: Actions = {
 				return { ok: true, id, recordId: id, mode, started: true };
 			}
 
-			const record = await locals.pb.collection('instances').update<LeaseInstance>(id, { status: 'completed' });
+			const record = await locals.pb.collection('instances').update<LeaseInstance>(id, { status: 'completed' }, { expand: 'email' });
 			sendDiscordNotification('completed', record).catch((err) =>
 				console.error('Failed to send discord notification:', err)
 			);
