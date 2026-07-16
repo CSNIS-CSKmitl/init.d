@@ -1,12 +1,35 @@
 import { Client } from 'ssh2';
 import type { WebSocket } from 'ws';
+import PocketBase from 'pocketbase';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
+
+function parseAuthCookie(cookieHeader: string): { token: string; userId: string } | null {
+	if (!cookieHeader) return null;
+	const match = cookieHeader.match(/pb_auth=([^;]+)/);
+	if (!match) return null;
+	try {
+		const decoded = decodeURIComponent(match[1]);
+		const data = JSON.parse(decoded);
+		if (data && data.token && data.record) {
+			return {
+				token: data.token,
+				userId: data.record.id
+			};
+		}
+	} catch (e) {
+		console.error('[SSH-WS Auth] Cookie parsing failed:', e);
+	}
+	return null;
+}
 
 export function setupSshWs(wss: any) {
-	wss.on('connection', (ws: WebSocket) => {
+	wss.on('connection', (ws: WebSocket, request: any) => {
 		let sshClient: Client | null = null;
 		let sshStream: any = null;
 
-		ws.on('message', (message: string) => {
+		ws.on('message', async (message: string) => {
 			try {
 				const data = JSON.parse(message.toString());
 
@@ -15,6 +38,35 @@ export function setupSshWs(wss: any) {
 
 					if (!host || !username) {
 						ws.send(JSON.stringify({ type: 'error', message: 'Missing host or username' }));
+						ws.close();
+						return;
+					}
+
+					// Verify authentication via cookie
+					const auth = parseAuthCookie(request?.headers?.cookie || '');
+					if (!auth) {
+						ws.send(JSON.stringify({ type: 'error', message: 'Unauthorized. Please log in.' }));
+						ws.close();
+						return;
+					}
+
+					// Validate token with PocketBase and check instance ownership
+					const pb = new PocketBase(process.env.POCKETBASE_URL);
+					pb.authStore.save(auth.token, null);
+					
+					try {
+						// 1. Validate token is active
+						await pb.collection('users').authRefresh();
+						
+						// 2. Query to verify if the user has access to this instance by its IP, hostname or dns_name
+						const cleanHost = host.replace(/"/g, '\\"');
+						const filter = `IP = "${cleanHost}" || hostname = "${cleanHost}" || dns_name = "${cleanHost}"`;
+						const instance = await pb.collection('instances').getFirstListItem(filter);
+						
+						console.log(`[SSH-WS Auth] Success. User ${auth.userId} authorized for instance ${instance.hostname} (${instance.IP})`);
+					} catch (err: any) {
+						console.error(`[SSH-WS Auth] Access denied for host ${host}:`, err.message);
+						ws.send(JSON.stringify({ type: 'error', message: 'Forbidden. You do not have access to this instance.' }));
 						ws.close();
 						return;
 					}

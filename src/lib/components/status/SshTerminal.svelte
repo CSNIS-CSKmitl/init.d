@@ -282,7 +282,8 @@
 							bind:value={IP}
 							placeholder="192.168.1.100"
 							required
-							class="mt-1 w-full rounded border border-app bg-elevated px-3 py-2 text-sm text-app transition-colors hover:border-strong-app focus:border-accent focus:outline-none"
+							readonly
+							class="mt-1 w-full rounded border border-app bg-elevated px-3 py-2 text-sm text-app transition-colors opacity-70 cursor-not-allowed focus:outline-none"
 						/>
 					</div>
 					<div class="col-span-1">
