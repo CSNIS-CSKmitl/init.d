@@ -19,6 +19,13 @@ import { AUTH_COOKIE } from '$lib/constants';
 // when their record has no type yet. Must already exist in PB.
 const DEFAULT_USER_TYPE_ID = '000000000000001';
 
+const ROLE_MAP: Record<string, string> = {
+	student: '000000000000001',
+	teacher: '000000000000002',
+	guest: '000000000000003',
+	staff: '000000000000004'
+};
+
 interface RecordModel {
 	id: string;
 	collectionId?: string;
@@ -32,6 +39,13 @@ interface RecordModel {
 interface OAuthCompletePayload {
 	token: string;
 	record: RecordModel;
+	meta?: {
+		rawUser?: {
+			role?: string;
+			[key: string]: unknown;
+		};
+		[key: string]: unknown;
+	};
 }
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
@@ -54,9 +68,18 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 				env.PB_ADMIN_EMAIL,
 				env.PB_ADMIN_PASSWORD
 			);
+
+			let userTypeId = DEFAULT_USER_TYPE_ID;
+			if (payload.meta?.rawUser?.role) {
+				const rawRole = payload.meta.rawUser.role.toLowerCase();
+				if (ROLE_MAP[rawRole]) {
+					userTypeId = ROLE_MAP[rawRole];
+				}
+			}
+
 			const updated = (await pbAdmin
 				.collection('users')
-				.update(record.id, { user_type: DEFAULT_USER_TYPE_ID })) as RecordModel;
+				.update(record.id, { user_type: userTypeId })) as RecordModel;
 			record = updated;
 		} catch (e) {
 			console.error('[auth/oidc] failed to set default user_type:', e);

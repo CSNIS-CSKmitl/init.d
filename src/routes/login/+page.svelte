@@ -22,7 +22,11 @@
 			const res = await fetch('/auth/oidc', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ token: result.token, record: result.record })
+				body: JSON.stringify({
+					token: result.token,
+					record: result.record,
+					meta: (result as any).meta
+				})
 			});
 			if (!res.ok) throw new Error('failed to persist session');
 			// Hard reload so every layout/page load re-runs on the
