@@ -40,6 +40,7 @@ interface OAuthCompletePayload {
 	token: string;
 	record: RecordModel;
 	meta?: {
+		accessToken?: string;
 		rawUser?: {
 			role?: string;
 			[key: string]: unknown;
@@ -70,7 +71,32 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			);
 
 			let userTypeId = DEFAULT_USER_TYPE_ID;
-			if (payload.meta?.rawUser?.role) {
+
+			// 🔒 Secure verification: fetch user info directly from IAM server using the access token
+			if (payload.meta?.accessToken) {
+				try {
+					const userInfoUrl = env.GOOGLE_USERINFO_URL || 'https://openidconnect.googleapis.com/v1/userinfo';
+					const res = await fetch(userInfoUrl, {
+						headers: {
+							Authorization: `Bearer ${payload.meta.accessToken}`
+						}
+					});
+					if (res.ok) {
+						const rawUser = await res.json() as { role?: string };
+						if (rawUser.role) {
+							const rawRole = rawUser.role.toLowerCase();
+							if (ROLE_MAP[rawRole]) {
+								userTypeId = ROLE_MAP[rawRole];
+							}
+						}
+					} else {
+						console.warn(`[auth/oidc] OIDC provider returned status ${res.status} when fetching user info`);
+					}
+				} catch (fetchErr) {
+					console.error('[auth/oidc] Failed to fetch userinfo from OIDC provider:', fetchErr);
+				}
+			} else if (payload.meta?.rawUser?.role) {
+				// Fallback to client-provided metadata if no access token exists
 				const rawRole = payload.meta.rawUser.role.toLowerCase();
 				if (ROLE_MAP[rawRole]) {
 					userTypeId = ROLE_MAP[rawRole];
