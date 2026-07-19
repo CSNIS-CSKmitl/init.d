@@ -71,37 +71,68 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			);
 
 			let userTypeId = DEFAULT_USER_TYPE_ID;
+			console.log('[auth/oidc] Initializing OIDC role mapping. Incoming meta:', JSON.stringify(payload.meta));
+
+			let rawRole: string | null = null;
 
 			// 🔒 Secure verification: fetch user info directly from IAM server using the access token
 			if (payload.meta?.accessToken) {
 				try {
 					const userInfoUrl = env.GOOGLE_USERINFO_URL || 'https://openidconnect.googleapis.com/v1/userinfo';
+					console.log('[auth/oidc] Fetching userinfo from OIDC provider URL:', userInfoUrl);
 					const res = await fetch(userInfoUrl, {
 						headers: {
 							Authorization: `Bearer ${payload.meta.accessToken}`
 						}
 					});
 					if (res.ok) {
-						const rawUser = await res.json() as { role?: string };
-						if (rawUser.role) {
-							const rawRole = rawUser.role.toLowerCase();
-							if (ROLE_MAP[rawRole]) {
-								userTypeId = ROLE_MAP[rawRole];
-							}
+						const rawUser = await res.json() as Record<string, any>;
+						console.log('[auth/oidc] Successfully fetched userinfo from OIDC provider. Data:', JSON.stringify(rawUser));
+						if (rawUser.profile?.role) {
+							rawRole = String(rawUser.profile.role);
+						} else if (rawUser.role) {
+							rawRole = String(rawUser.role);
 						}
 					} else {
-						console.warn(`[auth/oidc] OIDC provider returned status ${res.status} when fetching user info`);
+						const errText = await res.text().catch(() => '');
+						console.error(`[auth/oidc] OIDC provider returned status ${res.status} when fetching user info. Body:`, errText);
 					}
 				} catch (fetchErr) {
 					console.error('[auth/oidc] Failed to fetch userinfo from OIDC provider:', fetchErr);
 				}
-			} else if (payload.meta?.rawUser?.role) {
-				// Fallback to client-provided metadata if no access token exists
-				const rawRole = payload.meta.rawUser.role.toLowerCase();
-				if (ROLE_MAP[rawRole]) {
-					userTypeId = ROLE_MAP[rawRole];
+			} else {
+				console.warn('[auth/oidc] No accessToken found in meta payload!');
+			}
+
+			// Fallback to client-provided metadata if backend fetch failed or accessToken is missing
+			if (!rawRole) {
+				const fallbackProfileRole = (payload.meta?.rawUser as Record<string, any>)?.profile?.role;
+				console.log('[DEBUG] Fallback evaluation. rawUser type:', typeof payload.meta?.rawUser, 'rawUser.profile.role:', fallbackProfileRole, 'rawUser.role:', payload.meta?.rawUser?.role, 'meta.role:', payload.meta?.role);
+				
+				if (fallbackProfileRole) {
+					rawRole = String(fallbackProfileRole);
+					console.log(`[auth/oidc] Fallback: Using client-provided rawUser.profile.role: "${rawRole}"`);
+				} else if (payload.meta?.rawUser?.role) {
+					rawRole = String(payload.meta.rawUser.role);
+					console.log(`[auth/oidc] Fallback: Using client-provided rawUser.role: "${rawRole}"`);
+				} else if (payload.meta?.role) {
+					rawRole = String(payload.meta.role);
+					console.log(`[auth/oidc] Fallback: Using client-provided meta.role: "${rawRole}"`);
 				}
 			}
+
+			if (rawRole) {
+				const lowerRole = rawRole.toLowerCase();
+				if (ROLE_MAP[lowerRole]) {
+					userTypeId = ROLE_MAP[lowerRole];
+				} else {
+					console.warn(`[auth/oidc] Role "${lowerRole}" not found in ROLE_MAP. Keys are:`, Object.keys(ROLE_MAP));
+				}
+			} else {
+				console.warn('[auth/oidc] Could not determine user role from either backend fetch or client metadata!');
+			}
+
+			console.log(`[auth/oidc] Assigning user_type: "${userTypeId}" to user ID: "${record.id}"`);
 
 			const updated = (await pbAdmin
 				.collection('users')
