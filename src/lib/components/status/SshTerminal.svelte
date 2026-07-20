@@ -7,6 +7,7 @@
 		KeyRound,
 		Terminal,
 	} from "lucide-svelte";
+	import "@xterm/xterm/css/xterm.css";
 
 	let {
 		defaultHost = "",
@@ -134,7 +135,6 @@
 	async function initTerminal() {
 		const { Terminal: Xterm } = await import("@xterm/xterm");
 		const { FitAddon } = await import("@xterm/addon-fit");
-		await import("@xterm/xterm/css/xterm.css");
 
 		const term = new Xterm({
 			cursorBlink: true,

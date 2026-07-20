@@ -8,16 +8,31 @@ import type { Actions, PageServerLoad } from './$types';
 import type { LeaseInstance } from '$lib/types';
 import { createCT, createVM, startProvisioning } from '$lib/proxmox';
 import { sendDiscordNotification } from '$lib/discord';
+import PocketBase from 'pocketbase';
+import { env } from '$env/dynamic/private';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
 	if (locals.user.role !== 'admin') throw error(403, 'Admin access required.');
 
 	try {
-		const list = await locals.pb.collection('instances').getList<LeaseInstance>(1, 500, {
+		// Use PocketBase superuser client because regular clients cannot see 
+		// the email field of other users when emailVisibility is set to false.
+		const pbAdmin = new PocketBase(env.POCKETBASE_URL);
+		pbAdmin.autoCancellation(false);
+		let loggedIn = false;
+		try {
+			await pbAdmin.collection('_superusers').authWithPassword(env.PB_ADMIN_EMAIL, env.PB_ADMIN_PASSWORD);
+			loggedIn = true;
+		} catch (e) {
+			await pbAdmin.admins.authWithPassword(env.PB_ADMIN_EMAIL, env.PB_ADMIN_PASSWORD);
+		}
+
+		const list = await pbAdmin.collection('instances').getList<LeaseInstance>(1, 500, {
 			sort: '-created',
 			expand: 'passion_group,email'
 		});
+
 		return { items: list.items };
 	} catch (e) {
 		console.error('admin load failed', e);

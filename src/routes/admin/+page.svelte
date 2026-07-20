@@ -15,6 +15,11 @@
 	let connectionState = $state<'connecting' | 'live' | 'offline'>('connecting');
 	let progressMap = $state<Record<string, { status: string; error?: string }>>({});
 
+	// Keep items synchronized when data.items updates (e.g. after invalidateAll)
+	$effect(() => {
+		items = [...data.items];
+	});
+
 	$effect(() => {
 		let active = true;
 		const poll = async () => {
@@ -77,17 +82,30 @@
 					'*',
 					(event) => {
 						if (event.action === 'create') {
-							const rec = event.record as unknown as LeaseInstance;
-							items = [rec, ...items.filter((i) => i.id !== rec.id)];
+							// Invalidate to trigger page reload using superuser client so we get expanded email
+							invalidateAll();
 						} else if (event.action === 'update') {
 							const rec = event.record as unknown as LeaseInstance;
+							
+							// If the update event does not have expanded email (due to client permissions),
+							// preserve the existing expanded email from our list.
+							const old = items.find((i) => i.id === rec.id);
+							if (old && old.expand?.email && !rec.expand?.email?.email) {
+								rec.expand = {
+									...rec.expand,
+									email: {
+										...old.expand.email,
+										...(rec.expand?.email || {})
+									}
+								};
+							}
 							items = items.map((i) => (i.id === rec.id ? rec : i));
 						} else if (event.action === 'delete') {
 							const id = event.record.id;
 							items = items.filter((i) => i.id !== id);
 						}
 					},
-					{ expand: 'passion_group' }
+					{ expand: 'passion_group,email' }
 				);
 				connectionState = 'live';
 			} catch (err) {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from "svelte";
+	import "@xterm/xterm/css/xterm.css";
 
 	let {
 		wsUrl,
@@ -13,7 +14,6 @@
 	onMount(async () => {
 		const { Terminal } = await import("@xterm/xterm");
 		const { FitAddon } = await import("@xterm/addon-fit");
-		await import("@xterm/xterm/css/xterm.css");
 
 		const term = new Terminal({
 			cursorBlink: true,

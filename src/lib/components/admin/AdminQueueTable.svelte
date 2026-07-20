@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { LeaseInstance } from "$lib/types";
-	import { passionGroupName, creatorEmail } from "$lib/types";
+	import { passionGroupName, creatorEmail, creatorName } from "$lib/types";
 	import { enhance } from "$app/forms";
 	import SshTerminal from "$lib/components/status/SshTerminal.svelte";
 	import ProxmoxTerminal from "$lib/components/status/ProxmoxTerminal.svelte";
@@ -373,6 +373,11 @@
 									class="text-sm font-bold text-app"
 								>
 									{passionGroupName(item)}
+								</div>
+								<div
+									class="text-xs font-semibold text-secondary-app mt-1"
+								>
+									{creatorName(item)}
 								</div>
 								<div
 									class="font-mono-app text-xs text-muted-app mt-0.5"
