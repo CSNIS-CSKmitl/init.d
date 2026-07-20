@@ -74,7 +74,9 @@ export const createCT = async (
     disk: string,
     node: string,
     id: number,
-    onProgress?: (msg: string) => Promise<void>
+    onProgress?: (msg: string) => Promise<void>,
+    pb?: any,
+    recordId?: string
 ) => {
     console.log('Finding CT template ID for OS:', detail.os_template);
     const baseCTId = CT_ID.get(detail.os_template.toLowerCase());
@@ -136,8 +138,47 @@ export const createCT = async (
             console.log('Resize response:', resizeResponse);
         }
 
+        if (onProgress) await onProgress('Starting container to retrieve IP address...');
+        console.log('Starting container on target node');
+        await proxmox.nodes.$(node).lxc.$(id).status.start.$post();
+
+        // Wait a few seconds for DHCP to allocate an IP
+        await new Promise(resolve => setTimeout(resolve, 15000));
+
+        console.log('Get container IP address');
+        let ipAddress = '';
+        try {
+            const interfaces = await proxmox.nodes.$(node).lxc.$(id).interfaces.$get() as any;
+            const list = Array.isArray(interfaces) ? interfaces : (interfaces?.data || interfaces?.result || []);
+            for (const iface of list) {
+                if (iface.name === 'lo') continue;
+                if (iface.inet) {
+                    const cleanIp = iface.inet.split('/')[0].trim();
+                    if (cleanIp) {
+                        ipAddress = cleanIp;
+                        break;
+                    }
+                }
+            }
+        } catch (err: any) {
+            console.error('Failed to retrieve CT IP address from interfaces:', err);
+        }
+        console.log('Retrieved CT IP address:', ipAddress);
+
+        if (ipAddress && pb && recordId) {
+            try {
+                await pb.collection('instances').update(recordId, { IP: ipAddress });
+                console.log(`Updated PocketBase record ${recordId} with IP: ${ipAddress}`);
+            } catch (pbErr) {
+                console.error('Failed to update PocketBase with IP address:', pbErr);
+            }
+        }
+
+        if (onProgress) await onProgress('Shutting down container...');
+        await proxmox.nodes.$(node).lxc.$(id).status.shutdown.$post();
+
         if (onProgress) await onProgress('Configuration done');
-        return "Container created successfully";
+        return { message: "Container created successfully", ipAddress };
     } catch (error) {
         console.error('Error creating container:', error);
         throw error;
@@ -297,7 +338,10 @@ export const startProvisioning = (
 
             let ipAddress = '';
             if (type === 'container') {
-                await createCT(detail, network, disk, node, id, onProgress);
+                const ctRes = await createCT(detail, network, disk, node, id, onProgress, pb, recordId);
+                if (ctRes?.ipAddress) {
+                    ipAddress = ctRes.ipAddress;
+                }
             } else {
                 const vmRes = await createVM(detail, network, disk, node, id, onProgress, pb, recordId);
                 if (vmRes?.ipAddress) {
