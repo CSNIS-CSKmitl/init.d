@@ -199,7 +199,7 @@ export const createVM = async (
             console.log(`Resizing VM disk to ${detail.specs.disk}G on ${baseNode}`);
             const resizeResponse = await proxmox.nodes.$(baseNode).qemu.$(id).resize.$put({
                 disk: 'scsi0',
-                size: `${detail.specs.disk - 2}G`,
+                size: `+${detail.specs.disk - 2}G`,
             });
             await waitForTask(baseNode, resizeResponse)
             console.log('Resize response:', resizeResponse);
