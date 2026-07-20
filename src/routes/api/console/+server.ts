@@ -30,8 +30,8 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 			return json({ error: 'Instance not found.' }, { status: 404 });
 		}
 
-		// Owner check: creator_email matches currently authenticated user's email (admins bypass)
-		if (record.creator_email !== locals.user.email && locals.user.role !== 'admin') {
+		// Owner check: email (relation user ID) matches currently authenticated user's ID (admins bypass)
+		if (record.email !== locals.user.id && locals.user.role !== 'admin') {
 			return json({ error: 'Forbidden. You do not own this instance.' }, { status: 403 });
 		}
 

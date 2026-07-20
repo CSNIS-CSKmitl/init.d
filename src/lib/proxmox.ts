@@ -1,12 +1,21 @@
 import proxmoxApi from 'proxmox-api';
 import * as dotenv from 'dotenv';
 import { CT_ID, VM_ID } from '$static/constant';
+import { sendDiscordNotification } from './discord';
 
 dotenv.config();
 
 if (process.env.PROXMOX_SKIP_TLS_VERIFY === 'true') {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 }
+
+const customFetch = (url: any, init: any) => {
+    if (init && init.headers) {
+        delete init.headers['Content-Length'];
+        delete init.headers['content-length'];
+    }
+    return fetch(url, init);
+};
 
 // Lazy getter — avoids UUID-format validation at module load time.
 // createCT / createVM use this; getProxmoxVncTicket creates its own client.
@@ -16,11 +25,13 @@ function getProxmox() {
         port: process.env.PROXMOX_PORT ? Number.parseInt(process.env.PROXMOX_PORT, 10) : 8006,
         tokenID: `${process.env.PROXMOX_USER}!${process.env.PROXMOX_TOKEN}`,
         tokenSecret: process.env.PROXMOX_TOKEN_SECRET || '',
+        fetch: customFetch as any,
     } : {
         host: process.env.PROXMOX_HOST || '',
         port: process.env.PROXMOX_PORT ? Number.parseInt(process.env.PROXMOX_PORT, 10) : 8006,
         username: process.env.PROXMOX_USER || '',
         password: process.env.PROXMOX_TOKEN_SECRET || '',
+        fetch: customFetch as any,
     });
 }
 
@@ -260,6 +271,10 @@ export const startProvisioning = (
     // Run asynchronously without awaiting so the action returns immediately
     (async () => {
         try {
+            sendDiscordNotification('provision_started', detail, { node, vmid: id }).catch(e =>
+                console.error('[Discord Webhook] Failed to send provision_started alert:', e)
+            );
+
             const onProgress = async (msg: string) => {
                 provisioningProgress.set(recordId, { status: msg });
             };
@@ -277,11 +292,15 @@ export const startProvisioning = (
             const nodeNum = Number.parseInt(node.replace(/[^\d]/g, ''), 10);
 
             // Update status in PocketBase. Make sure comments/replies are NOT modified!
-            await pb.collection('instances').update(recordId, {
+            const updatedRecord = await pb.collection('instances').update(recordId, {
                 status: 'completed',
                 vmid: id,
                 node: Number.isNaN(nodeNum) ? null : nodeNum
             });
+
+            sendDiscordNotification('completed', updatedRecord, { node, vmid: id }).catch(e =>
+                console.error('[Discord Webhook] Failed to send completed alert:', e)
+            );
 
             // Clean up progress after 2 minutes
             setTimeout(() => {
@@ -292,6 +311,10 @@ export const startProvisioning = (
             console.error(`Provisioning failed for ${recordId}:`, err);
             const errMsg = err?.message || String(err);
             provisioningProgress.set(recordId, { status: 'Failed', error: errMsg });
+
+            sendDiscordNotification('failed', detail, { node, vmid: id, error: errMsg }).catch(e =>
+                console.error('[Discord Webhook] Failed to send failure alert:', e)
+            );
         }
     })();
 };

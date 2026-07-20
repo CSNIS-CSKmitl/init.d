@@ -15,6 +15,7 @@ import type {
 import { fetchPresets } from '$lib/presets';
 import PocketBase from 'pocketbase';
 import { env } from '$env/dynamic/private';
+import { sendDiscordNotification } from '$lib/discord';
 
 const TYPES: InstanceType[] = ['vm', 'container'];
 const NETWORKS: NetworkType[] = ['local', 'public'];
@@ -35,8 +36,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	let editRecord: LeaseInstance | null = null;
 	if (editId) {
 		try {
-			editRecord = await locals.pb.collection('instances').getOne<LeaseInstance>(editId);
-			if (editRecord.creator_email !== locals.user.email && locals.user.role !== 'admin') {
+			editRecord = await locals.pb.collection('instances').getOne<LeaseInstance>(editId, { expand: 'email' });
+			if (editRecord.email !== locals.user.id && locals.user.role !== 'admin') {
 				throw error(403, 'Unauthorized');
 			}
 			if (editRecord.status !== 'pending') {
@@ -180,7 +181,7 @@ export const actions: Actions = {
 		if (editId) {
 			try {
 				const existing = await locals.pb.collection('instances').getOne<LeaseInstance>(editId);
-				if (existing.creator_email !== locals.user.email && locals.user.role !== 'admin') {
+				if (existing.email !== locals.user.id && locals.user.role !== 'admin') {
 					return fail(403, { errors: { global: 'Unauthorized' } });
 				}
 				if (existing.status !== 'pending') {
@@ -204,6 +205,8 @@ export const actions: Actions = {
 					start_date: new Date(start_date).toISOString(),
 					end_date: new Date(end_date).toISOString(),
 					quantity
+				}, {
+					expand: 'email'
 				});
 			} catch (e) {
 				console.error('Update failed:', e);
@@ -211,6 +214,7 @@ export const actions: Actions = {
 			}
 		} else {
 			record = await locals.pb.collection('instances').create<LeaseInstance>({
+				email: locals.user.id,
 				creator_email: locals.user.email,
 				passion_group,
 				type,
@@ -225,7 +229,12 @@ export const actions: Actions = {
 				end_date: new Date(end_date).toISOString(),
 				quantity,
 				status: 'pending'
+			}, {
+				expand: 'email'
 			});
+			sendDiscordNotification('created', record).catch((err) =>
+				console.error('Failed to send discord notification:', err)
+			);
 		}
 
 		throw redirect(303, `/status#${record.id}`);

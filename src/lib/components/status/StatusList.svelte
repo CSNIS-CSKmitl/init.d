@@ -3,6 +3,7 @@
 	import { passionGroupName } from "$lib/types";
 	import StatusBadge from "$lib/components/StatusBadge.svelte";
 	import ProxmoxTerminal from "$lib/components/status/ProxmoxTerminal.svelte";
+	import SshTerminal from "$lib/components/status/SshTerminal.svelte";
 	import {
 		Inbox,
 		Cpu,
@@ -27,8 +28,10 @@
 	let consoleUser = $state<string | null>(null);
 	let consoleLoading = $state<boolean>(false);
 	let consoleError = $state<string | null>(null);
+	let terminalType = $state<"console" | "ssh" | null>(null);
 
 	async function openConsole(item: LeaseInstance) {
+		terminalType = "console";
 		consoleTarget = item;
 		consoleWsUrl = null;
 		consoleTicket = null;
@@ -70,6 +73,12 @@
 		consoleUser = null;
 		consoleLoading = false;
 		consoleError = null;
+		terminalType = null;
+	}
+
+	function openSsh(item: LeaseInstance) {
+		consoleTarget = item;
+		terminalType = "ssh";
 	}
 
 	// Automatically collapse deleted items if they were expanded
@@ -405,12 +414,19 @@
 							<div
 								class="mt-4 flex gap-2 border-t border-app pt-4"
 							>
-								<button
+								<!-- <button
 									type="button"
 									onclick={() => openConsole(item)}
 									class="inline-flex h-8 items-center justify-center rounded bg-accent border border-accent/20 px-3 font-mono text-[11px] uppercase tracking-wider text-zinc-950 transition-colors duration-200 hover:opacity-90 cursor-pointer"
 								>
 									Console
+								</button> -->
+								<button
+									type="button"
+									onclick={() => openSsh(item)}
+									class="inline-flex h-8 items-center justify-center rounded border border-app bg-elevated px-3 font-mono text-[11px] uppercase tracking-wider text-app transition-colors duration-200 hover:border-strong-app hover:text-accent cursor-pointer"
+								>
+									SSH (WebTTY)
 								</button>
 								{#if powerStates[item.id]}
 									{@const pState = powerStates[item.id]}
@@ -722,6 +738,13 @@
 										>
 											Console
 										</button>
+										<button
+											type="button"
+											onclick={() => openSsh(item)}
+											class="inline-flex h-8 items-center justify-center rounded border border-app bg-elevated px-3 font-mono text-[11px] uppercase tracking-wider text-app transition-colors duration-200 hover:border-strong-app hover:text-accent cursor-pointer"
+										>
+											SSH (WebTTY)
+										</button>
 										{#if powerStates[item.id]}
 											{@const pState = powerStates[item.id]}
 											{#if pState.status === "loading"}
@@ -782,7 +805,7 @@
 	</div>
 {/if}
 
-{#if consoleTarget}
+{#if consoleTarget && terminalType}
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm p-4 sm:p-6 transition-all duration-300"
 	>
@@ -799,7 +822,10 @@
 						<h3
 							class="font-mono-app text-sm font-semibold text-app truncate"
 						>
-							{consoleTarget.hostname} Console
+							{consoleTarget.hostname}
+							{terminalType === "ssh"
+								? "SSH Terminal"
+								: "Console"}
 						</h3>
 						<p
 							class="font-mono text-[10px] text-muted-app uppercase tracking-wider"
@@ -813,17 +839,24 @@
 					type="button"
 					onclick={closeConsole}
 					class="rounded-md p-1.5 text-secondary-app hover:bg-surface hover:text-app transition-colors duration-200 cursor-pointer"
-					aria-label="Close console"
+					aria-label="Close terminal"
 				>
 					<X class="h-4 w-4" />
 				</button>
 			</header>
 
-			<!-- Modal Body (Iframe) -->
+			<!-- Modal Body -->
 			<div
 				class="relative flex-1 bg-zinc-950 flex items-center justify-center p-1"
 			>
-				{#if consoleLoading}
+				{#if terminalType === "ssh"}
+					<SshTerminal
+						defaultHost={consoleTarget.dns_name ||
+							consoleTarget.hostname}
+						defaultIP={consoleTarget.IP}
+						defaultUsername="root"
+					/>
+				{:else if consoleLoading}
 					<div
 						class="flex flex-col items-center gap-3 text-center p-8"
 					>

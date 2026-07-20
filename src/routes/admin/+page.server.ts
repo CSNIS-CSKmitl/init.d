@@ -7,6 +7,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { LeaseInstance } from '$lib/types';
 import { createCT, createVM, startProvisioning } from '$lib/proxmox';
+import { sendDiscordNotification } from '$lib/discord';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -15,7 +16,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	try {
 		const list = await locals.pb.collection('instances').getList<LeaseInstance>(1, 500, {
 			sort: '-created',
-			expand: 'passion_group'
+			expand: 'passion_group,email'
 		});
 		return { items: list.items };
 	} catch (e) {
@@ -91,7 +92,7 @@ export const actions: Actions = {
 					return fail(400, { error: 'Node must be a valid number.', recordId: id });
 				}
 
-				const record = await locals.pb.collection('instances').getOne<LeaseInstance>(id);
+				const record = await locals.pb.collection('instances').getOne<LeaseInstance>(id, { expand: 'email' });
 				const network = 'vmbr1';
 				const detail = {
 					...record,
@@ -104,7 +105,10 @@ export const actions: Actions = {
 				return { ok: true, id, recordId: id, mode, started: true };
 			}
 
-			await locals.pb.collection('instances').update(id, { status: 'completed' });
+			const record = await locals.pb.collection('instances').update<LeaseInstance>(id, { status: 'completed' }, { expand: 'email' });
+			sendDiscordNotification('completed', record).catch((err) =>
+				console.error('Failed to send discord notification:', err)
+			);
 			return { ok: true, id, recordId: id, mode };
 		} catch (e) {
 			console.error('resolve failed', e);

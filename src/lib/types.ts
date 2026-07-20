@@ -16,21 +16,31 @@ export interface PassionGroupRef {
 	name: string;
 }
 
+export interface PbUser {
+	id: string;
+	email: string;
+	name?: string;
+	username?: string;
+}
+
 export interface LeaseInstance {
 	id: string;
 	collectionId: string;
 	collectionName: string;
 	created: string;
 	updated: string;
-	creator_email: string;
+	email: string; // The user ID of the creator (relation field named email)
 	// Passion group is a relation in the actual PB schema — the field may
 	// be a bare ID string (list API) or an expanded object (when `?expand`
 	// is used). The display layer normalises both.
 	passion_group: string | PassionGroupRef;
-	expand?: { passion_group?: PassionGroupRef };
+	expand?: {
+		passion_group?: PassionGroupRef;
+		email?: PbUser;
+	};
 	type: InstanceType;
 	vmid?: number;
-	node?: string;
+	node?: string | number;
 	hostname: string;
 	os_template: string;
 	specs: InstanceSpecs;
@@ -42,12 +52,20 @@ export interface LeaseInstance {
 	end_date: string;
 	quantity: number;
 	status: LeaseStatus;
-	vmid?: number;
-	node?: number;
+	IP?: string;
+	provision_state?: string;
 	// Optional admin reply shown back on /status. Populated by admins from
 	// the `/admin` dashboard; users never set these directly.
 	admin_reply?: string;
 	admin_reply_at?: string;
+}
+
+export function creatorEmail(item: LeaseInstance): string {
+	return item.expand?.email?.email ?? item.email;
+}
+
+export function creatorName(item: LeaseInstance): string {
+	return item.expand?.email?.name ?? item.expand?.email?.username ?? 'Unknown';
 }
 
 export function passionGroupName(item: LeaseInstance): string {

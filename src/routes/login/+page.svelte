@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { LogIn, AlertCircle, User, Lock } from '@lucide/svelte';
-	import { pbBrowser } from '$lib/pb/client';
-	import type { ActionData } from './$types';
+	import { LogIn, AlertCircle, User, Lock, KeyRound } from "@lucide/svelte";
+	import { pbBrowser } from "$lib/pb/client";
+	import type { ActionData } from "./$types";
 
 	let { form }: { form: ActionData } = $props();
 
 	let oauthLoading = $state(false);
 	let oauthError = $state<string | null>(null);
 
-	async function signInWithGoogle() {
+	async function signInWithOidc() {
 		oauthLoading = true;
 		oauthError = null;
 		try {
@@ -17,23 +17,29 @@
 			// provider, completes the round-trip, and returns the
 			// freshly-authenticated record. PB auto-creates the user
 			// record on first login.
-			const result = await pb.collection('users').authWithOAuth2({ provider: 'google' });
+			const result = await pb
+				.collection("users")
+				.authWithOAuth2({ provider: "oidc" });
 
-			const res = await fetch('/auth/google', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ token: result.token, record: result.record })
+			const res = await fetch("/auth/oidc", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					token: result.token,
+					record: result.record,
+					meta: (result as any).meta,
+				}),
 			});
-			if (!res.ok) throw new Error('failed to persist session');
+			if (!res.ok) throw new Error("failed to persist session");
 			// Hard reload so every layout/page load re-runs on the
 			// server with the freshly-set `pb_auth` cookie (and the
 			// just-assigned `user_type`) — `goto()` keeps the client
 			// router state and can miss the new auth.
-			window.location.assign('/');
+			window.location.assign("/");
 		} catch (e: unknown) {
 			oauthError =
 				(e as { message?: string })?.message ??
-				'Google sign-in failed. Please try again.';
+				"KMITL IAM sign-in failed. Please try again.";
 		} finally {
 			oauthLoading = false;
 		}
@@ -42,19 +48,22 @@
 
 <div class="mx-auto max-w-md">
 	<header class="mb-8">
-		<p class="font-mono text-xs uppercase tracking-[0.2em] text-accent">// sign in</p>
+		<p class="font-mono text-xs uppercase tracking-[0.2em] text-accent">
+			// sign in
+		</p>
 		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Access LEASE</h1>
 		<p class="mt-2 text-sm text-secondary-app">
-			Authenticate with the operator directory username. The email on the lease request is
-			pulled from the session — you cannot change it here.
+			Authenticate with the operator directory username. The email on the
+			lease request is pulled from the session — you cannot change it
+			here.
 		</p>
 	</header>
 
 	<button
 		type="button"
-		onclick={signInWithGoogle}
+		onclick={signInWithOidc}
 		disabled={oauthLoading}
-		class="mb-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-app bg-surface px-5 font-mono text-xs uppercase tracking-widest text-app transition-colors duration-300 hover:border-strong-app disabled:cursor-not-allowed disabled:opacity-50"
+		class="mb-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-app bg-surface px-5 font-mono text-xs uppercase tracking-widest text-app transition-colors duration-300 hover:border-strong-app disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
 	>
 		<svg class="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
 			<path
@@ -74,7 +83,7 @@
 				d="M12 4.75c1.62 0 3.06.56 4.21 1.65l3.15-3.15C17.45 1.55 14.97.5 12 .5A11 11 0 0 0 2.18 7.07l3.66 2.83C6.71 6.66 9.14 4.75 12 4.75Z"
 			/>
 		</svg>
-		{oauthLoading ? 'Signing in…' : 'Continue with Google'}
+		{oauthLoading ? "Signing in…" : "Continue with GOOGLE"}
 	</button>
 
 	<div class="my-4 flex items-center gap-3 text-muted-app">
@@ -83,9 +92,14 @@
 		<div class="h-px flex-1 bg-app"></div>
 	</div>
 
-	<form method="POST" class="space-y-4 rounded-lg border border-app bg-surface p-6">
+	<form
+		method="POST"
+		class="space-y-4 rounded-lg border border-app bg-surface p-6"
+	>
 		<label class="block">
-			<span class="mb-1 block font-mono text-[11px] uppercase tracking-widest text-muted-app">
+			<span
+				class="mb-1 block font-mono text-[11px] uppercase tracking-widest text-muted-app"
+			>
 				Username or email
 			</span>
 			<div class="relative">
@@ -97,7 +111,7 @@
 					name="identity"
 					autocomplete="username"
 					required
-					value={form?.username ?? ''}
+					value={form?.username ?? ""}
 					class="w-full pl-8 font-mono-app"
 					placeholder="e.g. log  or  someone@kmitl.ac.th"
 				/>
@@ -105,7 +119,9 @@
 		</label>
 
 		<label class="block">
-			<span class="mb-1 block font-mono text-[11px] uppercase tracking-widest text-muted-app">
+			<span
+				class="mb-1 block font-mono text-[11px] uppercase tracking-widest text-muted-app"
+			>
 				Password
 			</span>
 			<div class="relative">
@@ -150,5 +166,7 @@
 			Sign in
 		</button>
 	</form>
-	<p class="text-center text-xs text-zinc-500">พบปัญหา ติดต่อ 66050160@kmitl.ac.th หรือ bornzi</p>
+	<p class="text-center text-xs text-zinc-500">
+		พบปัญหา ติดต่อ 66050160@kmitl.ac.th หรือ bornzi
+	</p>
 </div>
