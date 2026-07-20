@@ -150,7 +150,9 @@ export const createVM = async (
     disk: string,
     node: string,
     id: number,
-    onProgress?: (msg: string) => Promise<void>
+    onProgress?: (msg: string) => Promise<void>,
+    pb?: any,
+    recordId?: string
 ) => {
     try {
         console.log('Create VM with spec: ', { detail, network, disk, node, id });
@@ -194,17 +196,18 @@ export const createVM = async (
             ipconfig0: 'ip=dhcp',
         });
 
-        if (detail.specs?.disk && detail.specs.disk > 2) {
+        if (detail.specs?.disk && detail.specs.disk > 4) {
             if (onProgress) await onProgress(`Resizing VM disk to ${detail.specs.disk}G...`);
             console.log(`Resizing VM disk to ${detail.specs.disk}G on ${baseNode}`);
             const resizeResponse = await proxmox.nodes.$(baseNode).qemu.$(id).resize.$put({
                 disk: 'scsi0',
-                size: `+${detail.specs.disk - 2}G`,
+                size: `+${detail.specs.disk - 4}G`,
             });
             await waitForTask(baseNode, resizeResponse)
             console.log('Resize response:', resizeResponse);
         }
 
+        let ipAddress = '';
         if (needsMigration) {
             if (onProgress) await onProgress('Starting VM for online migration...');
             console.log('Starting VM on baseNode for online migration');
@@ -225,10 +228,42 @@ export const createVM = async (
             await waitForTask(baseNode, migrateResponse);
             console.log('Migration response:', migrateResponse);
 
+            console.log('Get VM IP address');
+            ipAddress = await proxmox.nodes.$(node).qemu.$(id).agent['network-get-interfaces'].$get().then((res: any) => {
+                let ip = '';
+                if (Array.isArray(res?.result)) {
+                    for (const iface of res.result) {
+                        if (iface.name === 'lo') continue;
+                        const ipv4Obj = iface['ip-addresses']?.find((a: any) => a['ip-address-type'] === 'ipv4');
+                        if (ipv4Obj?.['ip-address']) {
+                            ip = ipv4Obj['ip-address'];
+                            break;
+                        }
+                    }
+                }
+                if (!ip && res?.result?.[1]?.['ip-addresses']?.[0]?.['ip-address']) {
+                    ip = res.result[1]['ip-addresses'][0]['ip-address'];
+                }
+                return ip;
+            }).catch((err: any) => {
+                console.error('Failed to retrieve VM IP address from agent:', err);
+                return '';
+            });
+            console.log('Retrieved IP address:', ipAddress);
+
+            if (ipAddress && pb && recordId) {
+                try {
+                    await pb.collection('instances').update(recordId, { IP: ipAddress });
+                    console.log(`Updated PocketBase record ${recordId} with IP: ${ipAddress}`);
+                } catch (pbErr) {
+                    console.error('Failed to update PocketBase with IP address:', pbErr);
+                }
+            }
+
             if (onProgress) await onProgress('Shutting down VM on destination node...');
             await proxmox.nodes.$(node).qemu.$(id).status.shutdown.$post();
         }
-        return "VM created successfully";
+        return { message: "VM created successfully", ipAddress };
     } catch (error) {
         console.error('Error creating VM:', error);
         throw error;
@@ -260,10 +295,14 @@ export const startProvisioning = (
                 provisioningProgress.set(recordId, { status: msg });
             };
 
+            let ipAddress = '';
             if (type === 'container') {
                 await createCT(detail, network, disk, node, id, onProgress);
             } else {
-                await createVM(detail, network, disk, node, id, onProgress);
+                const vmRes = await createVM(detail, network, disk, node, id, onProgress, pb, recordId);
+                if (vmRes?.ipAddress) {
+                    ipAddress = vmRes.ipAddress;
+                }
             }
 
             // Provision complete!
@@ -272,12 +311,17 @@ export const startProvisioning = (
             // Parse node number (e.g. "pve3" -> 3)
             const nodeNum = Number.parseInt(node.replace(/[^\d]/g, ''), 10);
 
-            // Update status in PocketBase. Make sure comments/replies are NOT modified!
-            const updatedRecord = await pb.collection('instances').update(recordId, {
+            const updateData: Record<string, any> = {
                 status: 'completed',
                 vmid: id,
                 node: Number.isNaN(nodeNum) ? null : nodeNum
-            });
+            };
+            if (ipAddress) {
+                updateData.IP = ipAddress;
+            }
+
+            // Update status in PocketBase. Make sure comments/replies are NOT modified!
+            const updatedRecord = await pb.collection('instances').update(recordId, updateData);
 
             sendDiscordNotification('completed', updatedRecord, { node, vmid: id }).catch(e =>
                 console.error('[Discord Webhook] Failed to send completed alert:', e)
