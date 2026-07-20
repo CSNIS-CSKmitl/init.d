@@ -52,25 +52,6 @@ function buildVmNet0(network: string): string {
     return value.includes('=') ? value : `virtio,bridge=${value},tag=15`;
 }
 
-async function getTemplate(templateName: string): Promise<string | undefined> {
-    const contents = await proxmox.nodes.$('pve6').storage.$('ct-vm-pool').content.$get();
-    const matchedTemplate = contents
-        .filter((item: any) => item.content === 'vztmpl')
-        .find((item: any) => item.volid.toLowerCase().includes(templateName.toLowerCase()));
-    //Return the full Proxmox volume path (e.g., "ct-vm-pool:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst")
-    return matchedTemplate ? matchedTemplate.volid : undefined;
-}
-
-async function getCTTemplateId(osName: string): Promise<number | undefined> {
-    const node = process.env.CT_TEMPLATE_NODE || 'pve6';
-    const storage = process.env.CT_TEMPLATE_STORAGE || 'disk4';
-    const contents = await proxmox.nodes.$(node).storage.$(storage).content.$get();
-    const matchedTemplate = contents
-        .filter((item: any) => item.content === 'vztmpl')
-        .find((item: any) => item.volid.toLowerCase().includes(osName.toLowerCase()));
-    return matchedTemplate ? Number.parseInt(matchedTemplate.volid.split(':')[1], 10) : undefined;
-}
-
 async function waitForTask(node: string, upid: string): Promise<void> {
     console.log(`Waiting for task ${upid} on node ${node} to complete...`);
     while (true) {
@@ -103,7 +84,7 @@ export const createCT = async (
     try {
         if (onProgress) await onProgress('Cloning container from template...');
         console.log('Cloning container');
-        const baseNode = process.env.CT_TEMPLATE_NODE || 'pve6';
+        const baseNode = process.env.TEMPLATE_NODE || 'pve6';
         const needsMigration = node !== baseNode;
 
         const cloneParams: any = {
@@ -174,7 +155,7 @@ export const createVM = async (
     try {
         console.log('Create VM with spec: ', { detail, network, disk, node, id });
         console.log('Finding VM from template');
-        const baseNode = process.env.VM_TEMPLATE_NODE || 'pve6';
+        const baseNode = process.env.TEMPLATE_NODE || 'pve6';
         const baseVMID = VM_ID.get(detail.os_template.toLowerCase());
         if (baseVMID == undefined) {
             return Promise.reject(new Error(`Template for ${detail.os_template} not found.`));
