@@ -52,6 +52,25 @@ function buildVmNet0(network: string): string {
     return value.includes('=') ? value : `virtio,bridge=${value},tag=15`;
 }
 
+/**
+ * Monitors and waits for an asynchronous Proxmox VE task to finish executing.
+ *
+ * **How it works:**
+ * 1. Accepts a target node name and task UPID (Unique Process ID string returned by Proxmox API actions).
+ * 2. Polls `GET /api2/json/nodes/{node}/tasks/{upid}/status` every 2 seconds in a loop.
+ * 3. When `status` becomes `'stopped'`, inspects `exitstatus`:
+ *    - If `'OK'`, resolves successfully.
+ *    - If not `'OK'`, throws an Error with details on why the task failed.
+ *
+ * @param node - Target Proxmox node name (e.g., `"pve6"`).
+ * @param upid - Task UPID string returned by an asynchronous Proxmox API call (e.g., `UPID:pve1:000B25B9:0423BAD8:6A60BEBA:resize:1232:user@pve:token:`).
+ * @returns {Promise<void>} Resolves when task finishes with exit status `OK`.
+ * @throws {Error} Throws an error if task completes with a non-OK exit status.
+ *
+ * @example
+ * const upid = await proxmox.nodes.$('pve6').qemu.$(706).status.stop.$post();
+ * await waitForTask('pve6', upid);
+ */
 async function waitForTask(node: string, upid: string): Promise<void> {
     console.log(`Waiting for task ${upid} on node ${node} to complete...`);
     while (true) {
@@ -92,6 +111,7 @@ export const createCT = async (
         const cloneParams: any = {
             newid: id,
             hostname: detail.hostname,
+            full: true // Must be a full clone to allow migration across nodes without shared storage
         };
 
         if (!needsMigration) {
@@ -142,16 +162,9 @@ export const createCT = async (
         console.log('Starting container on target node');
         await proxmox.nodes.$(node).lxc.$(id).status.start.$post();
 
-        // Restart container to ensure it not used IP from template
-        await proxmox.nodes.$(node).lxc.$(id).status.stop.$post();
-        await waitForTask(node, `lxc/${id}/status/stop`);
-        await proxmox.nodes.$(node).lxc.$(id).status.start.$post();
-        await waitForTask(node, `lxc/${id}/status/start`);
-
+        console.log('Get container IP address');
         // Wait a few seconds for DHCP to allocate an IP
         await new Promise(resolve => setTimeout(resolve, 15000));
-
-        console.log('Get container IP address');
         let ipAddress = '';
         try {
             const interfaces = await proxmox.nodes.$(node).lxc.$(id).interfaces.$get() as any;
@@ -275,47 +288,54 @@ export const createVM = async (
             await waitForTask(baseNode, migrateResponse);
             console.log('Migration response:', migrateResponse);
 
-            // Restart Virtual machine to ensure it not used IP from template
-            await proxmox.nodes.$(node).qemu.$(id).status.stop.$post();
-            await waitForTask(node, `qemu/${id}/status/stop`);
-            await proxmox.nodes.$(node).qemu.$(id).status.start.$post();
-            await waitForTask(node, `qemu/${id}/status/start`);
 
-            console.log('Get VM IP address');
-            ipAddress = await proxmox.nodes.$(node).qemu.$(id).agent['network-get-interfaces'].$get().then((res: any) => {
-                let ip = '';
-                if (Array.isArray(res?.result)) {
-                    for (const iface of res.result) {
-                        if (iface.name === 'lo') continue;
-                        const ipv4Obj = iface['ip-addresses']?.find((a: any) => a['ip-address-type'] === 'ipv4');
-                        if (ipv4Obj?.['ip-address']) {
-                            ip = ipv4Obj['ip-address'];
-                            break;
-                        }
+
+        }
+
+        // Restart Virtual machine to ensure it not used IP from template
+        if (onProgress) await onProgress('Restarting VM to ensure fresh IP allocation...');
+        const stopTask = await proxmox.nodes.$(node).qemu.$(id).status.stop.$post();
+        await waitForTask(node, stopTask);
+        const startTask = await proxmox.nodes.$(node).qemu.$(id).status.start.$post();
+        await waitForTask(node, startTask);
+
+        console.log('Get VM IP address');
+        if (onProgress) await onProgress('Retrieving IP address from QEMU Guest Agent...');
+        await new Promise(resolve => setTimeout(resolve, 30000)); // Wait a few seconds for DHCP to allocate an IP
+        ipAddress = await proxmox.nodes.$(node).qemu.$(id).agent['network-get-interfaces'].$get().then((res: any) => {
+            let ip = '';
+            if (Array.isArray(res?.result)) {
+                for (const iface of res.result) {
+                    if (iface.name === 'lo') continue;
+                    const ipv4Obj = iface['ip-addresses']?.find((a: any) => a['ip-address-type'] === 'ipv4');
+                    if (ipv4Obj?.['ip-address']) {
+                        ip = ipv4Obj['ip-address'];
+                        break;
                     }
                 }
-                if (!ip && res?.result?.[1]?.['ip-addresses']?.[0]?.['ip-address']) {
-                    ip = res.result[1]['ip-addresses'][0]['ip-address'];
-                }
-                return ip;
-            }).catch((err: any) => {
-                console.error('Failed to retrieve VM IP address from agent:', err);
-                return '';
-            });
-            console.log('Retrieved IP address:', ipAddress);
-
-            if (ipAddress && pb && recordId) {
-                try {
-                    await pb.collection('instances').update(recordId, { IP: ipAddress });
-                    console.log(`Updated PocketBase record ${recordId} with IP: ${ipAddress}`);
-                } catch (pbErr) {
-                    console.error('Failed to update PocketBase with IP address:', pbErr);
-                }
             }
+            if (!ip && res?.result?.[1]?.['ip-addresses']?.[0]?.['ip-address']) {
+                ip = res.result[1]['ip-addresses'][0]['ip-address'];
+            }
+            return ip;
+        }).catch((err: any) => {
+            console.error('Failed to retrieve VM IP address from agent:', err);
+            return '';
+        });
+        console.log('Retrieved IP address:', ipAddress);
 
-            if (onProgress) await onProgress('Shutting down VM on destination node...');
-            await proxmox.nodes.$(node).qemu.$(id).status.shutdown.$post();
+        if (ipAddress && pb && recordId) {
+            try {
+                await pb.collection('instances').update(recordId, { IP: ipAddress });
+                console.log(`Updated PocketBase record ${recordId} with IP: ${ipAddress}`);
+            } catch (pbErr) {
+                console.error('Failed to update PocketBase with IP address:', pbErr);
+            }
         }
+
+        if (onProgress) await onProgress('Shutting down VM on destination node...');
+        await proxmox.nodes.$(node).qemu.$(id).status.shutdown.$post();
+
         return { message: "VM created successfully", ipAddress };
     } catch (error) {
         console.error('Error creating VM:', error);
