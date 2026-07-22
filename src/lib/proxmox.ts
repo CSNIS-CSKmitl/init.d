@@ -228,12 +228,6 @@ export const createVM = async (
         await waitForTask(baseNode, cloneResponse);
         console.log('Clone response:', cloneResponse);
 
-        // Restart Virtual machine to ensure it not used IP from template
-        await proxmox.nodes.$(node).qemu.$(id).status.stop.$post();
-        await waitForTask(node, `qemu/${id}/status/stop`);
-        await proxmox.nodes.$(node).qemu.$(id).status.start.$post();
-        await waitForTask(node, `qemu/${id}/status/start`);
-
         if (onProgress) await onProgress('Configuring VM...');
         console.log('Configuring VM with details:', { detail, network, disk, node: baseNode, id });
         const configResponse = await proxmox.nodes.$(baseNode).qemu.$(id).config.$put({
@@ -280,6 +274,12 @@ export const createVM = async (
             } as any);
             await waitForTask(baseNode, migrateResponse);
             console.log('Migration response:', migrateResponse);
+
+            // Restart Virtual machine to ensure it not used IP from template
+            await proxmox.nodes.$(node).qemu.$(id).status.stop.$post();
+            await waitForTask(node, `qemu/${id}/status/stop`);
+            await proxmox.nodes.$(node).qemu.$(id).status.start.$post();
+            await waitForTask(node, `qemu/${id}/status/start`);
 
             console.log('Get VM IP address');
             ipAddress = await proxmox.nodes.$(node).qemu.$(id).agent['network-get-interfaces'].$get().then((res: any) => {
