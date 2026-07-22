@@ -142,6 +142,12 @@ export const createCT = async (
         console.log('Starting container on target node');
         await proxmox.nodes.$(node).lxc.$(id).status.start.$post();
 
+        // Restart container to ensure it not used IP from template
+        await proxmox.nodes.$(node).lxc.$(id).status.stop.$post();
+        await waitForTask(node, `lxc/${id}/status/stop`);
+        await proxmox.nodes.$(node).lxc.$(id).status.start.$post();
+        await waitForTask(node, `lxc/${id}/status/start`);
+
         // Wait a few seconds for DHCP to allocate an IP
         await new Promise(resolve => setTimeout(resolve, 15000));
 
@@ -221,6 +227,12 @@ export const createVM = async (
         const cloneResponse = await proxmox.nodes.$(baseNode).qemu.$(baseVMID).clone.$post(cloneParams);
         await waitForTask(baseNode, cloneResponse);
         console.log('Clone response:', cloneResponse);
+
+        // Restart Virtual machine to ensure it not used IP from template
+        await proxmox.nodes.$(node).qemu.$(id).status.stop.$post();
+        await waitForTask(node, `qemu/${id}/status/stop`);
+        await proxmox.nodes.$(node).qemu.$(id).status.start.$post();
+        await waitForTask(node, `qemu/${id}/status/start`);
 
         if (onProgress) await onProgress('Configuring VM...');
         console.log('Configuring VM with details:', { detail, network, disk, node: baseNode, id });
