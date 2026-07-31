@@ -13,7 +13,6 @@
 		start_date = "",
 		end_date = "",
 		leaseDays = null,
-		quantity = $bindable(1),
 		isEdit = false,
 	}: {
 		hostname: string;
@@ -29,7 +28,6 @@
 		start_date: string;
 		end_date: string;
 		leaseDays: number | null;
-		quantity: number;
 		isEdit?: boolean;
 	} = $props();
 
@@ -52,8 +50,6 @@
 		const dt = new Date(d);
 		return `${dt.getDate()} ${TH_MONTHS[dt.getMonth()]} ${dt.getFullYear()}`;
 	};
-
-	const pad3 = (n: number) => String(n).padStart(3, "0");
 </script>
 
 <aside
@@ -154,33 +150,8 @@
 		</div>
 	</div>
 
-	<div
-		class="rounded-lg border p-3 text-center"
-		style="background-color: var(--accent-soft); border-color: color-mix(in oklab, var(--accent) 30%, transparent);"
-	>
-		<span class="text-muted-app">Instance Count:</span>
-		<span class="ml-1 font-mono-app text-sm font-bold text-accent"
-			>{pad3(quantity)}</span
-		>
-	</div>
-
-	<div class="flex items-center gap-4">
-		<label
-			for="quantity"
-			class="text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
-		>
-			Quantity
-		</label>
-		<input
-			id="quantity"
-			type="number"
-			name="quantity"
-			bind:value={quantity}
-			min="1"
-			max="10"
-			class="w-16 rounded-lg border border-app bg-elevated p-1.5 text-center font-mono-app text-sm font-bold text-accent focus:border-strong-app focus:outline-none"
-			required
-		/>
+	<div class="flex items-center justify-center gap-4">
+		<input type="hidden" name="quantity" value="1" />
 		{#if isEdit}
 			<a
 				href="/status"

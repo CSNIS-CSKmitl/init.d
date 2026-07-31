@@ -99,7 +99,7 @@ export const actions: Actions = {
 		const cpu = asInt(fd.get('cpu'), NaN);
 		const ram = asInt(fd.get('ram'), NaN);
 		const disk = asInt(fd.get('disk'), NaN);
-		const quantity = asInt(fd.get('quantity'), NaN);
+		const quantity = asInt(fd.get('quantity'), 1) || 1;
 
 		const errors: Record<string, string> = {};
 

@@ -628,7 +628,6 @@
 		{start_date}
 		{end_date}
 		{leaseDays}
-		bind:quantity
 		isEdit={!!data.editRecord}
 	/>
 </form>
