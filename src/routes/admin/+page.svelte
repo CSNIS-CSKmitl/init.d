@@ -6,6 +6,8 @@
 	import { invalidateAll } from '$app/navigation';
 	import AdminStats from '$lib/components/admin/AdminStats.svelte';
 	import AdminQueueTable from '$lib/components/admin/AdminQueueTable.svelte';
+	import { Badge } from '$lib/components/ui/badge';
+	import { leaseBadgeStatus } from '$lib/leaseStatus';
 
 	let { data, form }: { data: PageData; form: { error?: string; id?: string; recordId?: string } | null } = $props();
 
@@ -55,10 +57,15 @@
 		};
 	});
 
-	const stats = $derived({
-		total: items.length,
-		pending: items.filter((i) => i.status === 'pending').length,
-		completed: items.filter((i) => i.status === 'completed').length
+	// Same classifier the table uses for its badges, so this bar can never
+	// disagree with what the admin sees row-by-row (it used to: this only
+	// checked `item.status`, while the table also folds in live progress).
+	const stats = $derived.by(() => {
+		const counts = { total: items.length, pending: 0, provisioning: 0, failed: 0, completed: 0 };
+		for (const item of items) {
+			counts[leaseBadgeStatus(item, progressMap[item.id])]++;
+		}
+		return counts;
 	});
 
 	$effect(() => {
@@ -86,7 +93,7 @@
 							invalidateAll();
 						} else if (event.action === 'update') {
 							const rec = event.record as unknown as LeaseInstance;
-							
+
 							// If the update event does not have expanded email (due to client permissions),
 							// preserve the existing expanded email from our list.
 							const old = items.find((i) => i.id === rec.id);
@@ -124,30 +131,27 @@
 	});
 </script>
 
-<div class="space-y-12">
+<div class="flex flex-col gap-12">
 	<!-- Header — INFRASTRUCTURE_QUEUE -->
 	<div
-		class="flex flex-col items-start justify-between gap-4 border-b border-app pb-6 sm:flex-row sm:items-center"
+		class="flex flex-col items-start justify-between gap-4 border-b border-border pb-6 sm:flex-row sm:items-center"
 	>
-		<div class="space-y-1">
-			<h1 class="font-mono-app text-xl font-medium tracking-tight text-app">
+		<div class="flex flex-col gap-1">
+			<h1 class="font-mono text-xl font-medium tracking-tight text-foreground">
 				// INFRASTRUCTURE_QUEUE
 			</h1>
-			<p class="text-sm text-secondary-app">
+			<p class="text-sm text-foreground/70">
 				รายการคิวสเปค ระยะเวลา และพอร์ตที่ขอใช้งานเซิร์ฟเวอร์จาก PocketBase
 			</p>
 		</div>
 
-		<div
-			class="flex items-center gap-2 rounded-full border border-app bg-elevated px-3 py-1 font-mono-app text-xs text-secondary-app"
-		>
+		<Badge variant="outline" class="gap-2 font-mono text-xs text-muted-foreground">
 			<span
 				class="h-1.5 w-1.5 animate-pulse rounded-full {connectionState === 'live'
-					? 'bg-accent'
+					? 'bg-success'
 					: connectionState === 'connecting'
-						? 'bg-muted-app'
-						: ''}"
-				style={connectionState === 'offline' ? 'background-color: var(--danger)' : ''}
+						? 'bg-warning'
+						: 'bg-destructive'}"
 			></span>
 			<span
 				>PB_STREAM: {connectionState === 'live'
@@ -156,7 +160,7 @@
 						? 'SYNCING'
 						: 'OFFLINE'}</span
 			>
-		</div>
+		</Badge>
 	</div>
 
 	<!-- Mini Dashboard Analytics -->
@@ -165,4 +169,3 @@
 	<!-- Data Table -->
 	<AdminQueueTable {items} {form} {progressMap} />
 </div>
-

@@ -1,28 +1,10 @@
 <!doctype html>
-<html lang="en" class="theme-midnight">
+<html lang="en">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
 		<meta name="color-scheme" content="light dark" />
-		<script>
-			// Apply the persisted theme synchronously to avoid a flash of
-			// the wrong palette on first paint.
-			(function () {
-				try {
-					var stored = localStorage.getItem('lease-theme');
-					if (stored === 'light') {
-						document.documentElement.classList.remove('theme-midnight');
-						document.documentElement.classList.add('theme-light');
-					} else {
-						document.documentElement.classList.remove('theme-light');
-						document.documentElement.classList.add('theme-midnight');
-					}
-				} catch (_) {
-					/* localStorage unavailable */
-				}
-			})();
-		</script>
 		<!-- PocketBase client — loaded as a UMD bundle from the local static
 		     directory. We avoid the npm ESM build on the client because Vite's
 		     HMR transform mangles a class method literally named `import(...)`
@@ -30,7 +12,7 @@
 		<script src="/pocketbase.umd.js"></script>
 		%sveltekit.head%
 	</head>
-	<body data-sveltekit-preload-data="hover" class="bg-app text-app antialiased">
+	<body data-sveltekit-preload-data="hover" class="bg-background text-foreground antialiased">
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>

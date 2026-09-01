@@ -3,6 +3,13 @@
 	import { untrack } from "svelte";
 	import PresetCombobox from "$lib/components/request/PresetCombobox.svelte";
 	import RequestSidebarPreview from "$lib/components/request/RequestSidebarPreview.svelte";
+	import * as Field from "$lib/components/ui/field";
+	import * as Select from "$lib/components/ui/select";
+	import * as ToggleGroup from "$lib/components/ui/toggle-group";
+	import { Input } from "$lib/components/ui/input";
+	import { Textarea } from "$lib/components/ui/textarea";
+	import { Separator } from "$lib/components/ui/separator";
+	import { Lock, Globe } from "@lucide/svelte";
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -24,8 +31,8 @@
 	// server-side defaults. We use `untrack` because the form fields are
 	// intentionally a one-time copy of `data.defaults`; the user's typing
 	// should not be invalidated by reactive prop churn.
-	let passion_group = $state(
-		untrack(() => data.editRecord?.passion_group ?? ""),
+	let passion_group = $state<string>(
+		untrack(() => (data.editRecord?.passion_group as string) ?? ""),
 	);
 	let type = $state<"vm" | "container">(
 		untrack(() => data.editRecord?.type ?? data.defaults.type),
@@ -179,6 +186,13 @@
 	const passionGroupName = $derived(
 		data.passionGroups.find((g) => g.id === passion_group)?.name ?? "—",
 	);
+
+	// Text shown in the Passion Group select trigger — mirrors the old
+	// native <select>'s placeholder/selected-option display.
+	const passionGroupLabel = $derived(
+		data.passionGroups.find((g) => g.id === passion_group)?.name ??
+			"— pick a group —",
+	);
 </script>
 
 <form
@@ -186,20 +200,18 @@
 	class="mx-auto grid max-w-6xl grid-cols-1 gap-12 lg:grid-cols-3 lg:gap-16 xl:max-w-7xl 2xl:max-w-[1600px] 2xl:gap-20"
 >
 	<!-- LEFT: form fields (~70%) -------------------------------------------- -->
-	<div class="space-y-10 lg:col-span-2">
+	<div class="flex flex-col gap-10 lg:col-span-2">
 		<!-- Header -->
 		{#if data.editRecord}
 			<input type="hidden" name="id" value={data.editRecord.id} />
 		{/if}
-		<div class="space-y-2">
-			<h1
-				class="font-mono-app text-xl font-medium tracking-tight text-app"
-			>
+		<div class="flex flex-col gap-2">
+			<h1 class="font-mono text-xl font-medium tracking-tight text-foreground">
 				{data.editRecord
 					? "// EDIT_INSTANCE_REQUEST"
 					: "// PROVISION_NEW_INSTANCE"}
 			</h1>
-			<p class="text-sm text-secondary-app">
+			<p class="text-sm text-foreground/70">
 				ระบุข้อมูลสเปคระบบ ช่วงเวลา และวัตถุประสงค์เพื่อบันทึกคำขอลง
 				PocketBase
 			</p>
@@ -213,158 +225,163 @@
 			onClear={handlePresetClear}
 		/>
 
-		<!-- Section 1: Ownership & Environment Type -->
-		<div class="space-y-6">
+		<Field.FieldGroup class="gap-10">
+			<!-- Section 1: Ownership & Environment Type -->
 			<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-				<div class="space-y-2">
-					<label
+				<Field.Field>
+					<Field.FieldLabel
 						for="creator-email"
-						class="block text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
+						class="font-mono text-xs uppercase tracking-wider text-foreground/70"
 					>
 						Creator
-					</label>
-					<input
+					</Field.FieldLabel>
+					<Input
 						id="creator-email"
 						type="email"
 						value={data.email}
 						disabled
-						class="w-full cursor-not-allowed rounded-lg border border-app bg-elevated px-3 py-2 font-mono-app text-sm text-muted-app focus:outline-none"
+						class="font-mono"
 					/>
-				</div>
-				<div class="space-y-2">
-					<label
+				</Field.Field>
+				<Field.Field data-invalid={!!errors.passion_group}>
+					<Field.FieldLabel
 						for="passion_group"
-						class="block text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
+						class="font-mono text-xs uppercase tracking-wider text-foreground/70"
 					>
 						Passion Group
-					</label>
-					<select
-						id="passion_group"
-						name="passion_group"
+					</Field.FieldLabel>
+					<Select.Root
+						type="single"
 						bind:value={passion_group}
+						name="passion_group"
 						required
-						class="w-full appearance-none rounded-lg border border-app bg-elevated px-3 py-2 font-mono-app text-sm text-app focus:border-strong-app focus:outline-none"
 					>
-						<option value="" disabled>— pick a group —</option>
-						{#each data.passionGroups as group (group.id)}
-							<option value={group.id}>{group.name}</option>
-						{/each}
-					</select>
+						<Select.Trigger
+							id="passion_group"
+							class="w-full font-mono"
+							aria-invalid={!!errors.passion_group}
+						>
+							{passionGroupLabel}
+						</Select.Trigger>
+						<Select.Content>
+							<Select.Group>
+								{#each data.passionGroups as group (group.id)}
+									<Select.Item
+										value={group.id}
+										label={group.name}
+									>
+										{group.name}
+									</Select.Item>
+								{/each}
+							</Select.Group>
+						</Select.Content>
+					</Select.Root>
 					{#if errors.passion_group}
-						<p class="mt-1 text-xs" style="color: var(--danger)">
-							{errors.passion_group}
-						</p>
+						<Field.FieldError>{errors.passion_group}</Field.FieldError>
 					{/if}
-				</div>
+				</Field.Field>
 			</div>
 
 			<!-- Environment Type toggle (VM / Container) -->
-			<fieldset class="space-y-2">
-				<legend
-					class="block text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
+			<Field.FieldSet>
+				<Field.FieldLegend
+					variant="label"
+					class="font-mono text-xs uppercase tracking-wider text-foreground/70"
 				>
 					Environment Type
-				</legend>
-				<div
-					class="flex max-w-xs rounded-lg border border-app bg-surface p-1"
-					role="radiogroup"
+				</Field.FieldLegend>
+				<ToggleGroup.Root
+					type="single"
+					variant="outline"
+					value={type}
+					onValueChange={(v) => {
+						if (v) type = v as "vm" | "container";
+					}}
+					class="max-w-xs"
 				>
-					<button
-						type="button"
-						role="radio"
-						aria-checked={type === "vm"}
-						onclick={() => (type = "vm")}
-						class="flex-1 rounded-md py-1.5 font-mono-app text-xs font-medium transition {type ===
-						'vm'
-							? 'border border-strong-app bg-elevated text-accent shadow-sm'
-							: 'text-muted-app hover:text-app'}"
-					>
+					<ToggleGroup.Item value="vm" class="flex-1 font-mono text-xs">
 						Virtual Machine
-					</button>
-					<button
-						type="button"
-						role="radio"
-						aria-checked={type === "container"}
-						onclick={() => (type = "container")}
-						class="flex-1 rounded-md py-1.5 font-mono-app text-xs font-medium transition {type ===
-						'container'
-							? 'border border-strong-app bg-elevated text-accent shadow-sm'
-							: 'text-muted-app hover:text-app'}"
+					</ToggleGroup.Item>
+					<ToggleGroup.Item
+						value="container"
+						class="flex-1 font-mono text-xs"
 					>
 						Container
-					</button>
-				</div>
+					</ToggleGroup.Item>
+				</ToggleGroup.Root>
 				<!-- Buttons don't submit values, so the toggle state rides on a hidden input. -->
 				<input type="hidden" name="type" value={type} />
-			</fieldset>
-		</div>
+			</Field.FieldSet>
 
-		<!-- Section 2: Hardware Resources -->
-		<div class="space-y-6 border-t border-app pt-4">
+			<Separator />
+
+			<!-- Section 2: Hardware Resources -->
 			<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-				<div class="space-y-2">
-					<label
+				<Field.Field data-invalid={!!errors.hostname}>
+					<Field.FieldLabel
 						for="hostname"
-						class="block text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
+						class="font-mono text-xs uppercase tracking-wider text-foreground/70"
 					>
 						Hostname
-					</label>
-					<input
+					</Field.FieldLabel>
+					<Input
 						id="hostname"
 						type="text"
 						name="hostname"
 						bind:value={hostname}
-						class="w-full rounded-lg border border-app bg-elevated px-3 py-2 font-mono-app text-sm text-app focus:border-strong-app focus:outline-none"
+						class="font-mono"
 						placeholder="web-01"
 						pattern="[a-z0-9-]+"
+						aria-invalid={!!errors.hostname}
 						required
 					/>
 					{#if errors.hostname}
-						<p class="mt-1 text-xs" style="color: var(--danger)">
-							{errors.hostname}
-						</p>
+						<Field.FieldError>{errors.hostname}</Field.FieldError>
 					{/if}
-				</div>
-				<div class="space-y-2">
-					<label
+				</Field.Field>
+				<Field.Field data-invalid={!!errors.os_template}>
+					<Field.FieldLabel
 						for="os_template"
-						class="block text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
+						class="font-mono text-xs uppercase tracking-wider text-foreground/70"
 					>
 						OS Template
-					</label>
-					<input
+					</Field.FieldLabel>
+					<Input
 						id="os_template"
 						type="text"
 						name="os_template"
 						bind:value={os_template}
-						class="w-full rounded-lg border border-app bg-elevated px-3 py-2 font-mono-app text-sm text-app focus:border-strong-app focus:outline-none"
+						class="font-mono"
 						placeholder="e.g. ubuntu-24.04"
+						aria-invalid={!!errors.os_template}
 						required
 					/>
 					{#if errors.os_template}
-						<p class="mt-1 text-xs" style="color: var(--danger)">
-							{errors.os_template}
-						</p>
+						<Field.FieldError>{errors.os_template}</Field.FieldError>
 					{/if}
-				</div>
+				</Field.Field>
 			</div>
 
 			<!-- Spec sliders -->
-			<div class="space-y-5 pt-2">
-				<div class="space-y-2">
-					<div
-						class="flex justify-between items-center font-mono-app text-xs"
-					>
-						<span class="text-muted-app">CPU Cores</span>
+			<Field.FieldGroup class="gap-5">
+				<Field.Field>
+					<div class="flex items-center justify-between gap-2">
+						<Field.FieldLabel
+							class="font-mono text-xs text-muted-foreground"
+						>
+							CPU Cores
+						</Field.FieldLabel>
 						<div class="flex items-center gap-1.5">
-							<input
+							<Input
 								type="number"
 								min="1"
 								max="32"
 								bind:value={cpu}
-								class="w-16 rounded border border-app bg-elevated px-1.5 py-0.5 text-right font-bold text-accent focus:border-strong-app focus:outline-none"
+								class="h-7 w-16 px-1.5 py-0.5 text-right font-mono text-xs font-bold text-primary"
 							/>
-							<span class="font-bold text-accent">Cores</span>
+							<span class="font-mono text-xs font-bold text-primary"
+								>Cores</span
+							>
 						</div>
 					</div>
 					<input
@@ -373,25 +390,29 @@
 						min="1"
 						max="16"
 						bind:value={cpu}
-						style="accent-color: var(--accent)"
-						class="h-1.5 w-full cursor-pointer rounded-lg bg-elevated"
+						style="accent-color: var(--primary)"
+						class="h-1.5 w-full cursor-pointer rounded-lg bg-muted"
 						required
 					/>
-				</div>
-				<div class="space-y-2">
-					<div
-						class="flex justify-between items-center font-mono-app text-xs"
-					>
-						<span class="text-muted-app">Memory (RAM)</span>
+				</Field.Field>
+				<Field.Field>
+					<div class="flex items-center justify-between gap-2">
+						<Field.FieldLabel
+							class="font-mono text-xs text-muted-foreground"
+						>
+							Memory (RAM)
+						</Field.FieldLabel>
 						<div class="flex items-center gap-1.5">
-							<input
+							<Input
 								type="number"
 								min="1"
 								max="16"
 								bind:value={ram}
-								class="w-16 rounded border border-app bg-elevated px-1.5 py-0.5 text-right font-bold text-accent focus:border-strong-app focus:outline-none"
+								class="h-7 w-16 px-1.5 py-0.5 text-right font-mono text-xs font-bold text-primary"
 							/>
-							<span class="font-bold text-accent">GB</span>
+							<span class="font-mono text-xs font-bold text-primary"
+								>GB</span
+							>
 						</div>
 					</div>
 					<input
@@ -400,25 +421,29 @@
 						min="1"
 						max="24"
 						bind:value={ram}
-						style="accent-color: var(--accent)"
-						class="h-1.5 w-full cursor-pointer rounded-lg bg-elevated"
+						style="accent-color: var(--primary)"
+						class="h-1.5 w-full cursor-pointer rounded-lg bg-muted"
 						required
 					/>
-				</div>
-				<div class="space-y-2">
-					<div
-						class="flex justify-between items-center font-mono-app text-xs"
-					>
-						<span class="text-muted-app">Storage (Disk)</span>
+				</Field.Field>
+				<Field.Field>
+					<div class="flex items-center justify-between gap-2">
+						<Field.FieldLabel
+							class="font-mono text-xs text-muted-foreground"
+						>
+							Storage (Disk)
+						</Field.FieldLabel>
 						<div class="flex items-center gap-1.5">
-							<input
+							<Input
 								type="number"
 								min="1"
 								max="16384"
 								bind:value={disk}
-								class="w-20 rounded border border-app bg-elevated px-1.5 py-0.5 text-right font-bold text-accent focus:border-strong-app focus:outline-none"
+								class="h-7 w-20 px-1.5 py-0.5 text-right font-mono text-xs font-bold text-primary"
 							/>
-							<span class="font-bold text-accent">GB</span>
+							<span class="font-mono text-xs font-bold text-primary"
+								>GB</span
+							>
 						</div>
 					</div>
 					<input
@@ -427,190 +452,175 @@
 						min="1"
 						max="1000"
 						bind:value={disk}
-						style="accent-color: var(--accent)"
-						class="h-1.5 w-full cursor-pointer rounded-lg bg-elevated"
+						style="accent-color: var(--primary)"
+						class="h-1.5 w-full cursor-pointer rounded-lg bg-muted"
 						required
 					/>
-				</div>
-			</div>
-		</div>
+				</Field.Field>
+			</Field.FieldGroup>
 
-		<!-- Section 3: Networking & Custom Ports -->
-		<div class="space-y-6 border-t border-app pt-4">
+			<Separator />
+
+			<!-- Section 3: Networking & Custom Ports -->
 			<!-- Network Access toggle -->
-			<fieldset class="space-y-2">
-				<legend
-					class="block text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
+			<Field.FieldSet>
+				<Field.FieldLegend
+					variant="label"
+					class="font-mono text-xs uppercase tracking-wider text-foreground/70"
 				>
 					Network Access
-				</legend>
-				<div
-					class="flex max-w-xs rounded-lg border border-app bg-surface p-1"
-					role="radiogroup"
+				</Field.FieldLegend>
+				<ToggleGroup.Root
+					type="single"
+					variant="outline"
+					value={network_type}
+					onValueChange={(v) => {
+						if (v) network_type = v as "local" | "public";
+					}}
+					class="max-w-xs"
 				>
-					<button
-						type="button"
-						role="radio"
-						aria-checked={network_type === "local"}
-						onclick={() => (network_type = "local")}
-						class="flex-1 rounded-md py-1.5 font-mono-app text-xs font-medium transition {network_type ===
-						'local'
-							? 'border border-strong-app bg-elevated text-app shadow-sm'
-							: 'text-muted-app hover:text-app'}"
+					<ToggleGroup.Item
+						value="local"
+						class="flex-1 font-mono text-xs"
 					>
-						🔒 Local IP
-					</button>
-					<button
-						type="button"
-						role="radio"
-						aria-checked={network_type === "public"}
-						onclick={() => (network_type = "public")}
-						class="flex-1 rounded-md py-1.5 font-mono-app text-xs font-medium transition {network_type ===
-						'public'
-							? 'border border-strong-app bg-elevated text-app shadow-sm'
-							: 'text-muted-app hover:text-app'}"
+						<Lock data-icon="inline-start" />
+						Local IP
+					</ToggleGroup.Item>
+					<ToggleGroup.Item
+						value="public"
+						class="flex-1 font-mono text-xs"
 					>
-						🌐 Public IP
-					</button>
-				</div>
+						<Globe data-icon="inline-start" />
+						Public IP
+					</ToggleGroup.Item>
+				</ToggleGroup.Root>
 				<input type="hidden" name="network_type" value={network_type} />
-			</fieldset>
+			</Field.FieldSet>
 
 			<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-				<div class="space-y-2">
-					<label
+				<Field.Field>
+					<Field.FieldLabel
 						for="dns_prefix"
-						class="block text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
+						class="font-mono text-xs uppercase tracking-wider text-foreground/70"
 					>
 						DNS Request
-					</label>
-					<div
-						class="flex items-center rounded-lg border border-app bg-elevated pr-3 transition-colors focus-within:border-strong-app"
-					>
-						<input
+					</Field.FieldLabel>
+					<div class="relative">
+						<Input
 							id="dns_prefix"
 							type="text"
 							bind:value={dnsPrefix}
-							class="w-full border-0 bg-transparent px-3 py-2 font-mono-app text-sm text-app focus:outline-none"
+							class="pr-24 font-mono"
 							placeholder="api-gateway-prod"
 						/>
 						<span
-							class="whitespace-nowrap font-mono-app text-xs text-muted-app"
-							>{DNS_SUFFIX}</span
+							class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-xs whitespace-nowrap text-muted-foreground"
 						>
+							{DNS_SUFFIX}
+						</span>
 					</div>
 					<!-- Composed DNS rides on a hidden field -->
 					<input type="hidden" name="dns_name" value={dns_name} />
-				</div>
-				<div class="space-y-2">
-					<label
+				</Field.Field>
+				<Field.Field data-invalid={!!errors.ports}>
+					<Field.FieldLabel
 						for="ports"
-						class="block text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
+						class="font-mono text-xs uppercase tracking-wider text-foreground/70"
 					>
 						Custom Open Ports
-					</label>
-					<input
+					</Field.FieldLabel>
+					<Input
 						id="ports"
 						type="text"
 						name="ports"
 						bind:value={ports}
-						class="w-full rounded-lg border border-app bg-elevated px-3 py-2 font-mono-app text-sm text-app focus:border-strong-app focus:outline-none"
+						class="font-mono"
 						placeholder="e.g. 8080, 3000"
+						aria-invalid={!!errors.ports}
 					/>
 					{#if errors.ports}
-						<p class="mt-1 text-xs" style="color: var(--danger)">
-							{errors.ports}
-						</p>
+						<Field.FieldError>{errors.ports}</Field.FieldError>
 					{/if}
-				</div>
+				</Field.Field>
 			</div>
-		</div>
 
-		<!-- Section 4: Timeline Retention -->
-		<div class="space-y-6 border-t border-app pt-4">
+			<Separator />
+
+			<!-- Section 4: Timeline Retention -->
 			<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-				<div class="space-y-2">
-					<label
+				<Field.Field data-invalid={!!errors.start_date}>
+					<Field.FieldLabel
 						for="start_date"
-						class="block text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
+						class="font-mono text-xs uppercase tracking-wider text-foreground/70"
 					>
-						Start Date <span class="text-muted-app"
+						Start Date <span class="text-muted-foreground"
 							>(วันเริ่มใช้)</span
 						>
-					</label>
-					<input
+					</Field.FieldLabel>
+					<Input
 						id="start_date"
 						type="date"
 						name="start_date"
 						bind:value={start_date}
-						style="color-scheme: dark"
-						class="w-full rounded-lg border border-app bg-elevated px-3 py-2 font-mono-app text-sm text-app focus:border-strong-app focus:outline-none"
+						class="font-mono"
+						aria-invalid={!!errors.start_date}
 						required
 					/>
 					{#if errors.start_date}
-						<p class="mt-1 text-xs" style="color: var(--danger)">
-							{errors.start_date}
-						</p>
+						<Field.FieldError>{errors.start_date}</Field.FieldError>
 					{/if}
-				</div>
-				<div class="space-y-2">
-					<label
+				</Field.Field>
+				<Field.Field data-invalid={!!errors.end_date}>
+					<Field.FieldLabel
 						for="end_date"
-						class="block text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
+						class="font-mono text-xs uppercase tracking-wider text-foreground/70"
 					>
-						End Date <span class="text-muted-app">(วันสิ้นสุด)</span
+						End Date <span class="text-muted-foreground"
+							>(วันสิ้นสุด)</span
 						>
-					</label>
-					<input
+					</Field.FieldLabel>
+					<Input
 						id="end_date"
 						type="date"
 						name="end_date"
 						bind:value={end_date}
-						style="color-scheme: dark"
-						class="w-full rounded-lg border border-app bg-elevated px-3 py-2 font-mono-app text-sm font-bold text-accent focus:border-strong-app focus:outline-none"
+						class="font-mono font-bold text-primary"
+						aria-invalid={!!errors.end_date}
 						required
 					/>
 					{#if errors.end_date}
-						<p class="mt-1 text-xs" style="color: var(--danger)">
-							{errors.end_date}
-						</p>
+						<Field.FieldError>{errors.end_date}</Field.FieldError>
 					{/if}
-				</div>
+				</Field.Field>
 			</div>
-		</div>
 
-		<!-- Section 5: Purpose / Notes -->
-		<div class="space-y-4 border-t border-app pt-4">
-			<div class="space-y-2">
-				<label
+			<Separator />
+
+			<!-- Section 5: Purpose / Notes -->
+			<Field.Field data-invalid={!!errors.purpose_notes}>
+				<Field.FieldLabel
 					for="purpose_notes"
-					class="block text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
+					class="font-mono text-xs uppercase tracking-wider text-foreground/70"
 				>
-					Purpose / Notes <span class="text-muted-app"
+					Purpose / Notes <span class="text-muted-foreground"
 						>(อธิบายวัตถุประสงค์เพิ่มเติม)</span
 					>
-				</label>
-				<textarea
+				</Field.FieldLabel>
+				<Textarea
 					id="purpose_notes"
 					name="purpose_notes"
 					bind:value={purpose_notes}
-					rows="3"
-					class="w-full rounded-lg border border-app bg-elevated px-3 py-2 font-mono-app text-sm text-secondary-app focus:border-strong-app focus:outline-none"
+					rows={3}
+					class="font-mono text-foreground/70"
 					placeholder="ระบุเหตุผลในการขอใช้เครื่อง เช่น ใช้เป็น API Gateway สเปคสำหรับโปรเจกต์ AuthWeb คอนฟิก VLAN 10..."
+					aria-invalid={!!errors.purpose_notes}
 					required
-				></textarea>
+				></Textarea>
 				{#if errors.purpose_notes}
-					<p class="mt-1 text-xs" style="color: var(--danger)">
-						{errors.purpose_notes}
-					</p>
+					<Field.FieldError>{errors.purpose_notes}</Field.FieldError>
 				{/if}
-			</div>
-		</div>
-
-		<!-- Section 6: Quantity & Submit -->
-		<div
-			class="flex flex-col items-center justify-between gap-4 border-t border-app pt-6 sm:flex-row"
-		></div>
+			</Field.Field>
+		</Field.FieldGroup>
 	</div>
 
 	<!-- RIGHT: Live Summary Sidebar (~30%) -->

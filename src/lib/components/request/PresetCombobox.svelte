@@ -1,6 +1,11 @@
 <script lang="ts">
 	import type { Preset } from '$lib/presets';
 	import { TriangleAlert, Search, X } from '@lucide/svelte';
+	import { Input } from '$lib/components/ui/input';
+	import { Button } from '$lib/components/ui/button';
+	import { Badge } from '$lib/components/ui/badge';
+	import * as Alert from '$lib/components/ui/alert';
+	import * as Field from '$lib/components/ui/field';
 
 	let {
 		presets = [],
@@ -70,20 +75,23 @@
 	{@const showDevelopWarning =
 		selectedPresetRecord?.status === 'Develop' &&
 		acknowledgedDevelopSlug !== selectedPreset}
-	<div class="space-y-4 rounded-lg border border-dashed border-app bg-surface/40 p-5">
-		<div class="space-y-2">
-			<label
+	<div class="flex flex-col gap-4 rounded-lg border border-dashed border-border bg-card/40 p-5">
+		<Field.Field>
+			<Field.FieldLabel
 				for="preset-combobox"
-				class="block text-xs font-medium uppercase tracking-wider text-secondary-app font-mono-app"
+				class="font-mono text-xs uppercase tracking-wider text-foreground/70"
 			>
 				Quick Preset
-				<span class="text-muted-app">
+				<span class="text-muted-foreground">
 					· optional · auto-fills from catalog ({presets.length}) · type to search
 				</span>
-			</label>
+			</Field.FieldLabel>
 
-			<div class="relative preset-combobox">
-				<input
+			<div class="preset-combobox relative">
+				<Search
+					class="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground"
+				/>
+				<Input
 					id="preset-combobox"
 					type="text"
 					role="combobox"
@@ -100,39 +108,38 @@
 						presetDropdownOpen = true;
 					}}
 					onfocus={() => (presetDropdownOpen = true)}
-					class="w-full rounded-lg border border-app bg-elevated py-2 pl-9 pr-9 font-mono-app text-sm text-app focus:border-strong-app focus:outline-none ml-5"
-				/>
-				<Search
-					class="pointer-events-none absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-app"
+					class="pr-9 pl-9 font-mono"
 				/>
 
 				{#if selectedPreset}
-					<button
+					<Button
 						type="button"
+						variant="ghost"
+						size="icon-xs"
 						aria-label="Clear preset selection"
 						onclick={clearPreset}
-						class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-app transition hover:bg-surface hover:text-app"
+						class="absolute top-1/2 right-2 -translate-y-1/2"
 					>
-						<X class="h-3.5 w-3.5" />
-					</button>
+						<X data-icon="inline-start" />
+					</Button>
 				{/if}
 
 				{#if presetDropdownOpen}
 					<ul
 						id="preset-listbox"
 						role="listbox"
-						class="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-app bg-elevated shadow-xl"
+						class="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-md"
 					>
 						<li
 							role="option"
 							aria-selected={selectedPreset === ''}
 							onmousedown={() => selectPreset('')}
-							class="cursor-pointer px-3 py-2 font-mono-app text-xs text-muted-app transition hover:bg-surface hover:text-app"
+							class="cursor-pointer px-3 py-2 font-mono text-xs text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
 						>
 							— blank / start from scratch —
 						</li>
 						{#if filteredPresets.length === 0}
-							<li class="px-3 py-2 font-mono-app text-xs text-muted-app">
+							<li class="px-3 py-2 font-mono text-xs text-muted-foreground">
 								No matches for "{presetQuery}".
 							</li>
 						{:else}
@@ -142,25 +149,20 @@
 									role="option"
 									aria-selected={selectedPreset === preset.slug}
 									onmousedown={() => selectPreset(preset.slug)}
-									class="flex cursor-pointer items-center justify-between gap-2 border-t border-app px-3 py-2 font-mono-app text-xs transition hover:bg-surface"
+									class="flex cursor-pointer items-center justify-between gap-2 border-t border-border px-3 py-2 font-mono text-xs transition hover:bg-accent hover:text-accent-foreground"
 								>
 									<span class="flex flex-col gap-0.5">
-										<span class="flex items-center gap-2 text-app">
+										<span class="flex items-center gap-2 text-foreground">
 											{preset.name}
 											{#if isDevelop}
-												<span
-													class="rounded-sm border px-1 py-px text-[9px] font-bold uppercase tracking-wider text-accent"
-													style="border-color: var(--accent);"
-												>
-													dev
-												</span>
+												<Badge variant="outline" class="text-primary">dev</Badge>
 											{/if}
 										</span>
-										<span class="text-muted-app">
+										<span class="text-muted-foreground">
 											{preset.type} · {preset.os_template} · {preset.slug}
 										</span>
 									</span>
-									<span class="shrink-0 text-muted-app">
+									<span class="shrink-0 text-muted-foreground">
 										{preset.default_cpu}C / {preset.default_ram}G / {preset.default_disk}G
 									</span>
 								</li>
@@ -169,42 +171,37 @@
 					</ul>
 				{/if}
 			</div>
-		</div>
+		</Field.Field>
 
 		{#if showDevelopWarning}
-			<div
-				role="alert"
-				class="rounded-lg border-2 p-4"
-				style="background-color: color-mix(in oklab, var(--accent) 12%, var(--bg-surface)); border-color: var(--accent);"
-			>
-				<div class="flex items-start gap-3">
-					<TriangleAlert class="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
-					<div class="flex-1 space-y-2">
-						<p class="font-mono-app text-sm font-bold uppercase tracking-wider text-accent">
-							Development script
-						</p>
-						<p class="text-xs leading-relaxed text-secondary-app">
-							This script is in active development and may be unstable, incomplete, or subject to
-							breaking changes. It is
-							<span class="font-semibold text-app">not recommended for production use</span>.
-						</p>
-						<button
-							type="button"
-							onclick={() => (acknowledgedDevelopSlug = selectedPreset)}
-							class="rounded-md border-2 px-3 py-1.5 font-mono-app text-[10px] font-bold uppercase tracking-wider text-accent transition hover:bg-accent hover:text-zinc-950"
-							style="border-color: var(--accent);"
-						>
-							I understand — show install command →
-						</button>
-					</div>
-				</div>
-			</div>
+			<Alert.Root class="border-primary/40 bg-primary/5 text-primary">
+				<TriangleAlert />
+				<Alert.Title
+					class="font-mono text-sm font-bold uppercase tracking-wider"
+				>
+					Development script
+				</Alert.Title>
+				<Alert.Description class="text-foreground/70">
+					This script is in active development and may be unstable, incomplete, or subject to
+					breaking changes. It is
+					<span class="font-semibold text-foreground">not recommended for production use</span>.
+				</Alert.Description>
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					onclick={() => (acknowledgedDevelopSlug = selectedPreset)}
+					class="col-start-2 mt-2 w-fit border-primary/40 font-mono text-[10px] font-bold tracking-wider text-primary uppercase hover:bg-primary/10"
+				>
+					I understand — show install command →
+				</Button>
+			</Alert.Root>
 		{/if}
 
 		{#if selectedPresetRecord}
-			<div class="space-y-2 border-t border-app pt-3 text-xs">
+			<div class="flex flex-col gap-2 border-t border-border pt-3 text-xs">
 				<div class="flex items-start justify-between gap-3">
-					<p class="flex-1 leading-relaxed text-secondary-app">
+					<p class="flex-1 leading-relaxed text-foreground/70">
 						{selectedPresetRecord.description || 'No description provided.'}
 					</p>
 					{#if selectedPresetRecord.source_url}
@@ -212,31 +209,31 @@
 							href={selectedPresetRecord.source_url}
 							target="_blank"
 							rel="noopener noreferrer"
-							class="shrink-0 whitespace-nowrap font-mono-app text-[10px] uppercase tracking-wider text-accent hover:underline"
+							class="shrink-0 font-mono text-[10px] tracking-wider text-primary uppercase whitespace-nowrap hover:underline"
 						>
 							community-scripts →
 						</a>
 					{/if}
 				</div>
-				<div class="flex flex-wrap gap-x-2 gap-y-1 font-mono-app text-[10px] uppercase tracking-wider text-muted-app">
-					<span>type: <span class="text-app">{selectedPresetRecord.type}</span></span>
+				<div class="flex flex-wrap gap-x-2 gap-y-1 font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+					<span>type: <span class="text-foreground">{selectedPresetRecord.type}</span></span>
 					<span>·</span>
-					<span>os: <span class="text-app">{selectedPresetRecord.os_template}</span></span>
+					<span>os: <span class="text-foreground">{selectedPresetRecord.os_template}</span></span>
 					<span>·</span>
-					<span>net: <span class="text-app">{selectedPresetRecord.default_network}</span></span>
+					<span>net: <span class="text-foreground">{selectedPresetRecord.default_network}</span></span>
 					{#if selectedPresetRecord.default_ports}
 						<span>·</span>
-						<span>port: <span class="text-app">{selectedPresetRecord.default_ports}</span></span>
+						<span>port: <span class="text-foreground">{selectedPresetRecord.default_ports}</span></span>
 					{/if}
 					{#if selectedPresetRecord.category}
 						<span>·</span>
-						<span>cat: <span class="text-app">{selectedPresetRecord.category}</span></span>
+						<span>cat: <span class="text-foreground">{selectedPresetRecord.category}</span></span>
 					{/if}
 					{#if selectedPresetRecord.status}
 						<span>·</span>
 						<span>
 							status:
-							<span class={selectedPresetRecord.status === 'Develop' ? 'font-bold text-accent' : 'text-app'}>
+							<span class={selectedPresetRecord.status === 'Develop' ? 'font-bold text-primary' : 'text-foreground'}>
 								{selectedPresetRecord.status}
 							</span>
 						</span>

@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount, onDestroy } from "svelte";
-	import {
-		RefreshCw,
-		Play,
-		ShieldAlert,
-		KeyRound,
-		Terminal,
-	} from "lucide-svelte";
+	import { Play, ShieldAlert, KeyRound } from "@lucide/svelte";
+	import * as Card from "$lib/components/ui/card";
+	import * as Field from "$lib/components/ui/field";
+	import * as Alert from "$lib/components/ui/alert";
+	import { Input } from "$lib/components/ui/input";
+	import { Textarea } from "$lib/components/ui/textarea";
+	import { Button } from "$lib/components/ui/button";
+	import { Spinner } from "$lib/components/ui/spinner";
 	import "@xterm/xterm/css/xterm.css";
 
 	let {
@@ -231,144 +232,111 @@
 	});
 </script>
 
-<div
-	class="flex h-full w-full flex-col bg-zinc-950 font-mono-app text-sm text-app"
->
+<div class="flex h-full w-full flex-col bg-background font-mono text-sm text-foreground">
 	{#if status === "disconnected" || status === "error"}
-		<div
-			class="m-auto w-full max-w-md rounded-xl border border-app bg-surface p-6 shadow-2xl transition-all duration-300"
-		>
-			<div class="mb-5 flex items-center gap-3">
-				<div
-					class="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent"
-				>
-					<KeyRound class="h-5 w-5" />
-				</div>
-				<div>
-					<h4 class="font-bold tracking-tight text-app">
-						Connect via Web SSH
-					</h4>
-					<p
-						class="text-[11px] uppercase tracking-wider text-muted-app"
-					>
-						// Enter credentials below
-					</p>
-				</div>
-			</div>
-
-			{#if status === "error"}
-				<div
-					class="mb-4 flex items-start gap-2.5 rounded-lg border border-red-500/20 bg-red-500/5 p-3.5 text-xs text-red-400"
-				>
-					<ShieldAlert class="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-					<div class="min-w-0 flex-1 leading-relaxed">
-						<span class="font-bold">Connection Failed:</span>
-						{errorMessage}
+		<Card.Root class="m-auto w-full max-w-md shadow-2xl">
+			<Card.Header>
+				<div class="flex items-center gap-3">
+					<div class="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+						<KeyRound class="size-5" />
+					</div>
+					<div>
+						<Card.Title>Connect via Web SSH</Card.Title>
+						<Card.Description class="font-mono text-[11px] uppercase tracking-wider">
+							// Enter credentials below
+						</Card.Description>
 					</div>
 				</div>
-			{/if}
+			</Card.Header>
+			<Card.Content>
+				{#if status === "error"}
+					<Alert.Root variant="destructive" class="mb-4">
+						<ShieldAlert />
+						<Alert.Title>Connection Failed</Alert.Title>
+						<Alert.Description>{errorMessage}</Alert.Description>
+					</Alert.Root>
+				{/if}
 
-			<form onsubmit={handleConnect} class="space-y-4">
-				<div class="grid grid-cols-4 gap-3">
-					<div class="col-span-3">
-						<label
-							for="host"
-							class="block text-[10px] font-bold uppercase tracking-wider text-muted-app"
-							>Host / IP</label
+				<form onsubmit={handleConnect}>
+					<Field.FieldGroup>
+						<div class="grid grid-cols-4 gap-3">
+							<Field.Field class="col-span-3">
+								<Field.FieldLabel for="host">Host / IP</Field.FieldLabel>
+								<Input
+									type="text"
+									id="host"
+									bind:value={IP}
+									placeholder="192.168.1.100"
+									required
+									readonly
+									class="opacity-70"
+								/>
+							</Field.Field>
+							<Field.Field class="col-span-1">
+								<Field.FieldLabel for="port">Port</Field.FieldLabel>
+								<Input
+									type="text"
+									id="port"
+									bind:value={port}
+									placeholder="22"
+									required
+									class="text-center"
+								/>
+							</Field.Field>
+						</div>
+
+						<Field.Field>
+							<Field.FieldLabel for="username">Username</Field.FieldLabel>
+							<Input
+								type="text"
+								id="username"
+								bind:value={username}
+								placeholder="root"
+								required
+							/>
+						</Field.Field>
+
+						<Field.Field>
+							<Field.FieldLabel for="password">Password</Field.FieldLabel>
+							<Input
+								type="password"
+								id="password"
+								bind:value={password}
+								placeholder="••••••••"
+							/>
+						</Field.Field>
+
+						<Field.Field>
+							<Field.FieldLabel for="privateKey">Private Key (Optional)</Field.FieldLabel>
+							<Textarea
+								id="privateKey"
+								bind:value={privateKey}
+								placeholder={"-----BEGIN OPENSSH PRIVATE KEY-----\n..."}
+								rows={3}
+								class="font-mono text-xs"
+							/>
+						</Field.Field>
+
+						<Button
+							type="submit"
+							class="w-full font-mono text-xs font-bold uppercase tracking-wider"
 						>
-						<input
-							type="text"
-							id="host"
-							bind:value={IP}
-							placeholder="192.168.1.100"
-							required
-							readonly
-							class="mt-1 w-full rounded border border-app bg-elevated px-3 py-2 text-sm text-app transition-colors opacity-70 cursor-not-allowed focus:outline-none"
-						/>
-					</div>
-					<div class="col-span-1">
-						<label
-							for="port"
-							class="block text-[10px] font-bold uppercase tracking-wider text-muted-app"
-							>Port</label
-						>
-						<input
-							type="text"
-							id="port"
-							bind:value={port}
-							placeholder="22"
-							required
-							class="mt-1 w-full rounded border border-app bg-elevated px-3 py-2 text-sm text-app text-center transition-colors hover:border-strong-app focus:border-accent focus:outline-none"
-						/>
-					</div>
-				</div>
-
-				<div>
-					<label
-						for="username"
-						class="block text-[10px] font-bold uppercase tracking-wider text-muted-app"
-						>Username</label
-					>
-					<input
-						type="text"
-						id="username"
-						bind:value={username}
-						placeholder="root"
-						required
-						class="mt-1 w-full rounded border border-app bg-elevated px-3 py-2 text-sm text-app transition-colors hover:border-strong-app focus:border-accent focus:outline-none"
-					/>
-				</div>
-
-				<div>
-					<label
-						for="password"
-						class="block text-[10px] font-bold uppercase tracking-wider text-muted-app"
-						>Password</label
-					>
-					<input
-						type="password"
-						id="password"
-						bind:value={password}
-						placeholder="••••••••"
-						class="mt-1 w-full rounded border border-app bg-elevated px-3 py-2 text-sm text-app transition-colors hover:border-strong-app focus:border-accent focus:outline-none"
-					/>
-				</div>
-
-				<div>
-					<label
-						for="privateKey"
-						class="block text-[10px] font-bold uppercase tracking-wider text-muted-app"
-						>Private Key (Optional)</label
-					>
-					<textarea
-						id="privateKey"
-						bind:value={privateKey}
-						placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..."
-						rows="3"
-						class="mt-1 w-full rounded border border-app bg-elevated px-3 py-2 text-xs font-mono text-app transition-colors hover:border-strong-app focus:border-accent focus:outline-none resize-none"
-					></textarea>
-				</div>
-
-				<button
-					type="submit"
-					class="flex w-full items-center justify-center gap-2 rounded bg-accent py-2.5 font-mono text-xs font-bold uppercase tracking-wider text-zinc-950 shadow-md transition-all hover:bg-accent/90 active:scale-[0.98] cursor-pointer"
-				>
-					<Play class="h-3.5 w-3.5 fill-current" />
-					Connect Session
-				</button>
-			</form>
-		</div>
+							<Play data-icon="inline-start" />
+							Connect Session
+						</Button>
+					</Field.FieldGroup>
+				</form>
+			</Card.Content>
+		</Card.Root>
 	{/if}
 
 	{#if status === "connecting"}
-		<div class="m-auto flex flex-col items-center gap-3 text-center p-8">
-			<RefreshCw class="h-8 w-8 text-accent animate-spin" />
-			<p
-				class="font-mono text-xs uppercase tracking-widest text-secondary-app animate-pulse"
-			>
+		<div class="m-auto flex flex-col items-center gap-3 p-8 text-center">
+			<Spinner class="size-8 text-primary" />
+			<p class="animate-pulse font-mono text-xs uppercase tracking-widest text-foreground/70">
 				// Connecting to target SSH server...
 			</p>
-			<p class="text-[10px] text-muted-app max-w-xs truncate">
+			<p class="max-w-xs truncate text-[10px] text-muted-foreground">
 				{username}@{host}:{port}
 			</p>
 		</div>
@@ -376,7 +344,7 @@
 
 	<div
 		bind:this={terminalContainer}
-		class="h-full w-full p-1 bg-zinc-950"
+		class="h-full w-full bg-zinc-950 p-1"
 		class:hidden={status !== "connected"}
 	></div>
 </div>

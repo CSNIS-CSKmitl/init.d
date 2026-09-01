@@ -4,6 +4,7 @@
 	import type { LeaseInstance } from '$lib/types';
 	import { untrack } from 'svelte';
 	import StatusList from '$lib/components/status/StatusList.svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	let { data }: { data: PageData } = $props();
 
@@ -60,20 +61,20 @@
 
 <header class="mb-8 flex flex-wrap items-end justify-between gap-4">
 	<div>
-		<p class="font-mono text-xs uppercase tracking-[0.2em] text-accent">// init.d</p>
+		<p class="font-mono text-xs uppercase tracking-[0.2em] text-primary">// init.d</p>
 		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Status</h1>
-		<p class="mt-1 text-sm text-secondary-app">
+		<p class="mt-1 text-sm text-foreground/70">
 			Everything you have requested, scoped to
-			<span class="font-mono-app text-app">{data.email}</span>.
+			<span class="font-mono text-foreground">{data.email}</span>.
 		</p>
 	</div>
-	<a
+	<Button
 		href="/request"
-		class="inline-flex h-9 items-center gap-1.5 rounded-md border border-app bg-surface px-3 font-mono text-xs uppercase tracking-widest text-secondary-app transition-colors duration-300 hover:border-strong-app hover:text-app"
+		variant="outline"
+		class="font-mono text-xs uppercase tracking-widest"
 	>
 		+ new request
-	</a>
+	</Button>
 </header>
 
 <StatusList {items} />
-

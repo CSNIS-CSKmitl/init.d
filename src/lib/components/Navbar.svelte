@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from "$app/state";
 	import ThemeSwitcher from "./ThemeSwitcher.svelte";
+	import { Button } from "$lib/components/ui/button";
 	import {
 		Server,
 		FilePlus2,
@@ -40,7 +41,7 @@
 </script>
 
 <header
-	class="sticky top-0 z-30 border-b border-app bg-app/80 backdrop-blur transition-colors duration-300"
+	class="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur transition-colors duration-300"
 >
 	<div
 		class="mx-auto flex h-14 max-w-[1400px] items-center justify-between gap-4 px-4 sm:gap-6 sm:px-6"
@@ -48,16 +49,12 @@
 		<div class="flex flex-col justify-center">
 			<a
 				href="/"
-				class="flex items-center gap-2 font-mono text-sm tracking-tight text-app"
+				class="flex items-center gap-2 font-mono text-sm tracking-tight text-foreground"
 			>
-				<Server class="h-4 w-4 text-accent" />
+				<Server class="text-primary" />
 				<span class="font-semibold">init.d</span>
-
-				<!-- Brand suffix only shows from md up — keeps the row from
-				     getting crowded on phones where every pixel counts. -->
-				<!-- <span class="hidden text-muted-app md:inline">/ infrastructure provisioning</span> -->
 			</a>
-			<p class="text-[10px] leading-tight text-zinc-500 sm:text-xs">
+			<p class="text-[10px] leading-tight text-muted-foreground sm:text-xs">
 				พบปัญหา ติดต่อ 66050160@kmitl.ac.th หรือ bornzi
 			</p>
 		</div>
@@ -66,38 +63,42 @@
 			{#each links as link (link.href)}
 				{@const active = page.url.pathname.startsWith(link.href)}
 				{@const Icon = link.icon}
-				<a
+				<Button
 					href={link.href}
-					class="inline-flex h-8 items-center gap-1.5 rounded-md px-3 font-mono text-xs uppercase tracking-widest transition-colors duration-200 {active
-						? 'bg-elevated text-app'
-						: 'text-secondary-app hover:bg-elevated hover:text-app'}"
+					variant={active ? "secondary" : "ghost"}
+					size="sm"
+					class="font-mono text-xs uppercase tracking-widest"
 				>
-					<Icon class="h-3.5 w-3.5 {active ? 'text-accent' : ''}" />
+					<Icon data-icon="inline-start" class={active ? "text-primary" : ""} />
 					{link.label}
-				</a>
+				</Button>
 			{/each}
 
 			<div class="ml-2 flex items-center gap-2">
 				<ThemeSwitcher />
 				{#if user}
 					<form action="/logout" method="POST">
-						<button
+						<Button
 							type="submit"
-							class="inline-flex h-9 items-center gap-1.5 rounded-md border border-app bg-surface px-3 font-mono text-xs uppercase tracking-widest text-secondary-app transition-colors duration-200 hover:border-strong-app hover:text-app"
+							variant="outline"
+							size="sm"
+							class="font-mono text-xs uppercase tracking-widest"
 							title={user.email}
 						>
-							<LogOut class="h-3.5 w-3.5" />
+							<LogOut data-icon="inline-start" />
 							<span class="hidden xl:inline">Sign out</span>
-						</button>
+						</Button>
 					</form>
 				{:else}
-					<a
+					<Button
 						href="/login"
-						class="inline-flex h-9 items-center gap-1.5 rounded-md border border-app bg-surface px-3 font-mono text-xs uppercase tracking-widest text-secondary-app transition-colors duration-200 hover:border-strong-app hover:text-app"
+						variant="outline"
+						size="sm"
+						class="font-mono text-xs uppercase tracking-widest"
 					>
-						<LogIn class="h-3.5 w-3.5" />
+						<LogIn data-icon="inline-start" />
 						<span class="hidden xl:inline">Sign in</span>
-					</a>
+					</Button>
 				{/if}
 			</div>
 		</nav>
@@ -108,37 +109,34 @@
 			<ThemeSwitcher />
 			{#if user}
 				<form action="/logout" method="POST">
-					<button
+					<Button
 						type="submit"
+						variant="outline"
+						size="icon"
 						aria-label="Sign out"
 						title={user.email}
-						class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-app bg-surface text-secondary-app transition-colors duration-200 hover:border-strong-app hover:text-app"
 					>
-						<LogOut class="h-3.5 w-3.5" />
-					</button>
+						<LogOut />
+					</Button>
 				</form>
 			{:else}
-				<a
-					href="/login"
-					aria-label="Sign in"
-					class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-app bg-surface text-secondary-app transition-colors duration-200 hover:border-strong-app hover:text-app"
-				>
-					<LogIn class="h-3.5 w-3.5" />
-				</a>
+				<Button href="/login" variant="outline" size="icon" aria-label="Sign in">
+					<LogIn />
+				</Button>
 			{/if}
-			<button
-				type="button"
+			<Button
+				variant="outline"
+				size="icon"
 				aria-label={mobileOpen ? "Close menu" : "Open menu"}
 				aria-expanded={mobileOpen}
 				onclick={() => (mobileOpen = !mobileOpen)}
-				class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-app bg-surface text-secondary-app transition-colors duration-200 hover:border-strong-app hover:text-app"
 			>
 				{#if mobileOpen}
-					<X class="h-4 w-4" />
+					<X />
 				{:else}
-					<Menu class="h-4 w-4" />
+					<Menu />
 				{/if}
-			</button>
+			</Button>
 		</div>
 	</div>
 
@@ -147,30 +145,27 @@
 	     svelte:window click-outside handler closes it when the user
 	     taps anywhere else. -->
 	{#if mobileOpen}
-		<div class="border-t border-app bg-surface lg:hidden">
-			<nav
-				class="mx-auto flex max-w-[1400px] flex-col gap-1 px-4 py-3 sm:px-6"
-			>
+		<div class="border-t border-border bg-card lg:hidden">
+			<nav class="mx-auto flex max-w-[1400px] flex-col gap-1 px-4 py-3 sm:px-6">
 				{#each links as link (link.href)}
 					{@const active = page.url.pathname.startsWith(link.href)}
 					{@const Icon = link.icon}
-					<a
+					<Button
 						href={link.href}
-						class="inline-flex h-10 items-center gap-2 rounded-md px-3 font-mono text-xs uppercase tracking-widest transition-colors duration-200 {active
-							? 'bg-elevated text-app'
-							: 'text-secondary-app hover:bg-elevated hover:text-app'}"
+						variant={active ? "secondary" : "ghost"}
+						class="justify-start font-mono text-xs uppercase tracking-widest"
 					>
-						<Icon class="h-4 w-4 {active ? 'text-accent' : ''}" />
+						<Icon data-icon="inline-start" class={active ? "text-primary" : ""} />
 						{link.label}
-					</a>
+					</Button>
 				{:else}
-					<p class="px-3 py-4 text-center text-xs text-muted-app">
+					<p class="px-3 py-4 text-center text-xs text-muted-foreground">
 						Sign in to access Request and Status.
 					</p>
 				{/each}
 				{#if user}
 					<p
-						class="mt-2 truncate border-t border-app pt-2 font-mono text-[11px] text-muted-app"
+						class="mt-2 truncate border-t border-border pt-2 font-mono text-[11px] text-muted-foreground"
 					>
 						{user.email}
 					</p>

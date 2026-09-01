@@ -1,9 +1,16 @@
 <script lang="ts">
 	import type { LeaseInstance } from "$lib/types";
 	import { passionGroupName } from "$lib/types";
+	import { cn } from "$lib/utils";
 	import StatusBadge from "$lib/components/StatusBadge.svelte";
 	import ProxmoxTerminal from "$lib/components/status/ProxmoxTerminal.svelte";
 	import SshTerminal from "$lib/components/status/SshTerminal.svelte";
+	import * as Empty from "$lib/components/ui/empty";
+	import * as Table from "$lib/components/ui/table";
+	import * as Dialog from "$lib/components/ui/dialog";
+	import { Badge } from "$lib/components/ui/badge";
+	import { Button } from "$lib/components/ui/button";
+	import { Spinner } from "$lib/components/ui/spinner";
 	import {
 		Inbox,
 		Cpu,
@@ -189,201 +196,154 @@
 </script>
 
 {#if items.length === 0}
-	<div
-		class="rounded-lg border border-dashed border-app bg-surface p-8 text-center transition-colors duration-300 sm:p-12"
-	>
-		<Inbox class="mx-auto h-8 w-8 text-muted-app" />
-		<p
-			class="mt-3 font-mono text-xs uppercase tracking-widest text-muted-app"
-		>
-			No requests yet
-		</p>
-		<p class="mt-1 text-sm text-secondary-app">
-			Once you file a lease it will appear here in real time.
-		</p>
-		<a
-			href="/request"
-			class="mt-6 inline-flex h-9 items-center gap-1.5 rounded-md bg-accent px-4 font-mono text-xs uppercase tracking-widest text-app transition-colors duration-300 hover:bg-accent-soft hover:text-accent"
-		>
-			File a lease
-		</a>
-	</div>
+	<Empty.Root class="border border-dashed border-border bg-card">
+		<Empty.Header>
+			<Empty.Media variant="icon"><Inbox /></Empty.Media>
+			<Empty.Title class="font-mono text-xs uppercase tracking-widest">
+				No requests yet
+			</Empty.Title>
+			<Empty.Description>
+				Once you file a lease it will appear here in real time.
+			</Empty.Description>
+		</Empty.Header>
+		<Empty.Content>
+			<Button href="/request" class="font-mono text-xs uppercase tracking-widest">
+				File a lease
+			</Button>
+		</Empty.Content>
+	</Empty.Root>
 {:else}
 	<!-- Mobile cards (below md) — same data as the table but stacked. -->
 	<div class="space-y-3 md:hidden">
 		{#each items as item (item.id)}
 			{@const isOpen = expanded === item.id}
-			<div
-				class="rounded-lg border border-app bg-surface transition-colors duration-300"
-			>
+			<div class="rounded-lg border border-border bg-card transition-colors duration-300">
 				<button
 					type="button"
 					onclick={() => (expanded = isOpen ? null : item.id)}
 					aria-expanded={isOpen}
 					class="flex w-full items-start gap-3 p-4 text-left"
 				>
-					<div class="mt-0.5 text-muted-app">
+					<div class="mt-0.5 text-muted-foreground">
 						{#if isOpen}
-							<ChevronDown class="h-4 w-4" />
+							<ChevronDown class="size-4" />
 						{:else}
-							<ChevronRight class="h-4 w-4" />
+							<ChevronRight class="size-4" />
 						{/if}
 					</div>
 					<div class="min-w-0 flex-1 space-y-1">
 						<div class="flex items-start justify-between gap-2">
-							<span
-								class="truncate font-mono-app text-sm text-app"
-								>{item.hostname}</span
-							>
+							<span class="truncate font-mono text-sm text-foreground">
+								{item.hostname}
+							</span>
 							<StatusBadge status={item.status} />
 						</div>
-						<div class="font-mono-app text-xs text-muted-app">
+						<div class="font-mono text-xs text-muted-foreground">
 							{item.os_template}
 						</div>
-						<div
-							class="flex flex-wrap gap-x-3 gap-y-1 font-mono-app text-xs"
-						>
-							<span
-								class="inline-flex items-center gap-1 text-app"
-							>
-								<Cpu class="h-3 w-3 text-muted-app" />
-								<span class="text-accent">{item.specs.cpu}</span
-								>C
+						<div class="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">
+							<span class="inline-flex items-center gap-1 text-foreground">
+								<Cpu class="size-3 text-muted-foreground" />
+								<span class="text-primary">{item.specs.cpu}</span>C
 							</span>
-							<span
-								class="inline-flex items-center gap-1 text-app"
-							>
-								<MemoryStick class="h-3 w-3 text-muted-app" />
-								<span class="text-accent">{item.specs.ram}</span
-								>G
+							<span class="inline-flex items-center gap-1 text-foreground">
+								<MemoryStick class="size-3 text-muted-foreground" />
+								<span class="text-primary">{item.specs.ram}</span>G
 							</span>
-							<span
-								class="inline-flex items-center gap-1 text-app"
-							>
-								<HardDrive class="h-3 w-3 text-muted-app" />
-								<span class="text-accent"
-									>{item.specs.disk}</span
-								>G
+							<span class="inline-flex items-center gap-1 text-foreground">
+								<HardDrive class="size-3 text-muted-foreground" />
+								<span class="text-primary">{item.specs.disk}</span>G
 							</span>
-							<span class="text-muted-app">×{item.quantity}</span>
+							<span class="text-muted-foreground">×{item.quantity}</span>
 						</div>
 					</div>
 				</button>
 				{#if isOpen}
-					<div class="space-y-4 border-t border-app p-4 text-xs">
+					<div class="space-y-4 border-t border-border p-4 text-xs">
 						{#if item.admin_reply}
-							<div
-								class="rounded-md border border-app bg-elevated p-3"
-							>
-								<div
-									class="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-accent"
-								>
-									<MessageSquareText class="h-3 w-3" />
+							<div class="rounded-md border border-border bg-muted p-3">
+								<div class="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
+									<MessageSquareText class="size-3" />
 									ตอบกลับจากแอดมิน
 								</div>
-								<p
-									class="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-app"
-								>
+								<p class="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
 									{item.admin_reply}
 								</p>
 								{#if item.admin_reply_at}
-									<p
-										class="mt-1.5 font-mono-app text-[10px] text-muted-app"
-									>
+									<p class="mt-1.5 font-mono text-[10px] text-muted-foreground">
 										{fmt(item.admin_reply_at)}
 									</p>
 								{/if}
 							</div>
 						{/if}
 						<div>
-							<p
-								class="font-mono text-[11px] uppercase tracking-widest text-muted-app"
-							>
+							<p class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
 								Type
 							</p>
-							<p class="mt-0.5 font-mono-app text-app">
-								{item.type} · {item.network_type}
+							<p class="mt-1 flex items-center gap-1.5 font-mono text-foreground">
+								<Badge variant="outline">{item.type}</Badge>
+								<span class="text-muted-foreground">{item.network_type}</span>
 							</p>
 						</div>
 						<div>
-							<p
-								class="font-mono text-[11px] uppercase tracking-widest text-muted-app"
-							>
+							<p class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
 								Lease
 							</p>
-							<p
-								class="mt-0.5 flex items-center gap-1 font-mono-app text-app"
-							>
-								<Calendar class="h-3 w-3 text-muted-app" />
+							<p class="mt-0.5 flex items-center gap-1 font-mono text-foreground">
+								<Calendar class="size-3 text-muted-foreground" />
 								{fmt(item.start_date)} → {fmt(item.end_date)}
 							</p>
 						</div>
 						{#if item.dns_name}
 							<div>
-								<p
-									class="font-mono text-[11px] uppercase tracking-widest text-muted-app"
-								>
+								<p class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
 									Network
 								</p>
-								<p
-									class="mt-0.5 break-all font-mono-app text-secondary-app"
-								>
+								<p class="mt-0.5 break-all font-mono text-foreground/70">
 									{item.dns_name}
 								</p>
 							</div>
 						{/if}
 						<div>
-							<p
-								class="font-mono text-[11px] uppercase tracking-widest text-muted-app"
-							>
+							<p class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
 								Open ports
 							</p>
-							<p
-								class="mt-1 flex flex-wrap gap-1.5 font-mono-app"
-							>
+							<p class="mt-1 flex flex-wrap gap-1.5 font-mono">
 								{#each portsFor(item.ports) as port (port)}
-									<span
-										class="rounded border border-app bg-surface px-2 py-0.5 text-accent"
-									>
+									<Badge variant="outline" class="font-mono text-primary">
 										{port}
-									</span>
+									</Badge>
 								{:else}
-									<span class="text-secondary-app">—</span>
+									<span class="text-foreground/70">—</span>
 								{/each}
 							</p>
 						</div>
 						<div>
-							<p
-								class="font-mono text-[11px] uppercase tracking-widest text-muted-app"
-							>
+							<p class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
 								Group
 							</p>
-							<p class="mt-0.5 font-mono-app text-app">
+							<p class="mt-0.5 font-mono text-foreground">
 								{passionGroupName(item)}
 							</p>
 						</div>
 						<div>
-							<p
-								class="font-mono text-[11px] uppercase tracking-widest text-muted-app"
-							>
+							<p class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
 								Purpose notes
 							</p>
-							<p
-								class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-secondary-app"
-							>
+							<p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground/70">
 								{item.purpose_notes}
 							</p>
 						</div>
 						{#if item.status === "pending"}
-							<div
-								class="mt-4 flex gap-2 border-t border-app pt-4"
-							>
-								<a
+							<div class="mt-4 flex gap-2 border-t border-border pt-4">
+								<Button
 									href="/request?edit={item.id}"
-									class="inline-flex h-8 items-center justify-center rounded bg-elevated border border-app px-3 font-mono text-[11px] uppercase tracking-wider text-app transition-colors duration-200 hover:border-strong-app hover:text-accent"
+									variant="outline"
+									size="sm"
+									class="font-mono text-[11px] uppercase tracking-wider"
 								>
 									Edit
-								</a>
+								</Button>
 								<form
 									method="POST"
 									action="?/cancel"
@@ -401,19 +361,19 @@
 										name="id"
 										value={item.id}
 									/>
-									<button
+									<Button
 										type="submit"
-										class="inline-flex h-8 items-center justify-center rounded bg-elevated border border-app px-3 font-mono text-[11px] uppercase tracking-wider text-secondary-app transition-colors duration-200 hover:border-strong-app hover:text-[var(--danger)]"
+										variant="outline"
+										size="sm"
+										class="font-mono text-[11px] uppercase tracking-wider hover:text-destructive"
 									>
 										Cancel
-									</button>
+									</Button>
 								</form>
 							</div>
 						{/if}
 						{#if item.status === "completed" && item.vmid && item.node}
-							<div
-								class="mt-4 flex gap-2 border-t border-app pt-4"
-							>
+							<div class="mt-4 flex gap-2 border-t border-border pt-4">
 								<!-- <button
 									type="button"
 									onclick={() => openConsole(item)}
@@ -421,60 +381,73 @@
 								>
 									Console
 								</button> -->
-								<button
-									type="button"
+								<Button
+									variant="outline"
+									size="sm"
 									onclick={() => openSsh(item)}
-									class="inline-flex h-8 items-center justify-center rounded border border-app bg-elevated px-3 font-mono text-[11px] uppercase tracking-wider text-app transition-colors duration-200 hover:border-strong-app hover:text-accent cursor-pointer"
+									class="font-mono text-[11px] uppercase tracking-wider"
 								>
 									SSH (WebTTY)
-								</button>
+								</Button>
 								{#if powerStates[item.id]}
 									{@const pState = powerStates[item.id]}
 									{#if pState.status === "loading"}
-										<button
-											type="button"
+										<Button
+											variant="outline"
+											size="sm"
 											disabled
-											class="inline-flex h-8 items-center justify-center rounded bg-elevated border border-app px-3 font-mono text-[11px] uppercase tracking-wider text-muted-app"
+											class="font-mono text-[11px] uppercase tracking-wider"
 										>
-											<RefreshCw class="mr-1 h-3 w-3 animate-spin text-muted-app" />
+											<Spinner data-icon="inline-start" />
 											Syncing
-										</button>
+										</Button>
 									{:else if pState.status === "running"}
-										<button
-											type="button"
+										<Button
+											variant="outline"
+											size="sm"
 											onclick={() => togglePower(item)}
 											disabled={pState.actionLoading}
-											class="inline-flex h-8 items-center justify-center rounded border px-3 font-mono text-[11px] uppercase tracking-wider transition-colors duration-200 cursor-pointer {pState.actionLoading ? 'bg-elevated border-app text-muted-app cursor-not-allowed' : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20'}"
+											class={cn(
+												"font-mono text-[11px] uppercase tracking-wider",
+												!pState.actionLoading &&
+													"border-destructive/20 bg-destructive/10 text-destructive hover:bg-destructive/20",
+											)}
 										>
 											{#if pState.actionLoading}
-												<RefreshCw class="mr-1 h-3 w-3 animate-spin text-red-400" />
+												<Spinner data-icon="inline-start" />
 												Stopping...
 											{:else}
 												Stop
 											{/if}
-										</button>
+										</Button>
 									{:else if pState.status === "stopped"}
-										<button
-											type="button"
+										<Button
+											variant="outline"
+											size="sm"
 											onclick={() => togglePower(item)}
 											disabled={pState.actionLoading}
-											class="inline-flex h-8 items-center justify-center rounded border px-3 font-mono text-[11px] uppercase tracking-wider transition-colors duration-200 cursor-pointer {pState.actionLoading ? 'bg-elevated border-app text-muted-app cursor-not-allowed' : 'bg-green-500/10 border-green-500/20 text-green-400 hover:bg-green-500/20'}"
+											class={cn(
+												"font-mono text-[11px] uppercase tracking-wider",
+												!pState.actionLoading &&
+													"border-success/20 bg-success/10 text-success hover:bg-success/20",
+											)}
 										>
 											{#if pState.actionLoading}
-												<RefreshCw class="mr-1 h-3 w-3 animate-spin text-green-400" />
+												<Spinner data-icon="inline-start" />
 												Starting...
 											{:else}
 												Start
 											{/if}
-										</button>
+										</Button>
 									{:else}
-										<button
-											type="button"
+										<Button
+											variant="outline"
+											size="sm"
 											onclick={() => fetchPowerState(item.id)}
-											class="inline-flex h-8 items-center justify-center rounded bg-elevated border border-app px-3 font-mono text-[11px] uppercase tracking-wider text-secondary-app transition-colors duration-200 hover:border-strong-app cursor-pointer"
+											class="font-mono text-[11px] uppercase tracking-wider"
 										>
 											Retry Power
-										</button>
+										</Button>
 									{/if}
 								{/if}
 							</div>
@@ -486,140 +459,109 @@
 	</div>
 
 	<!-- Table for md and up. -->
-	<div
-		class="hidden overflow-x-auto rounded-lg border border-app bg-surface transition-colors duration-300 md:block"
-	>
-		<table class="w-full min-w-[860px] text-left">
-			<thead>
-				<tr class="border-b border-app text-muted-app">
-					<th class="w-8"></th>
-					<th
-						class="px-4 py-3 font-mono text-[11px] uppercase tracking-widest"
-						>hostname</th
-					>
-					<th
-						class="px-4 py-3 font-mono text-[11px] uppercase tracking-widest"
-						>type</th
-					>
-					<th
-						class="px-4 py-3 font-mono text-[11px] uppercase tracking-widest"
-						>specs</th
-					>
-					<th
-						class="px-4 py-3 font-mono text-[11px] uppercase tracking-widest"
-						>lease</th
-					>
-					<th
-						class="px-4 py-3 font-mono text-[11px] uppercase tracking-widest text-right"
-						>status</th
-					>
-				</tr>
-			</thead>
-			<tbody>
+	<div class="hidden overflow-x-auto rounded-lg border border-border bg-card transition-colors duration-300 md:block">
+		<Table.Root class="min-w-[860px]">
+			<Table.Header>
+				<Table.Row>
+					<Table.Head class="w-8"></Table.Head>
+					<Table.Head class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+						hostname
+					</Table.Head>
+					<Table.Head class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+						type
+					</Table.Head>
+					<Table.Head class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+						specs
+					</Table.Head>
+					<Table.Head class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+						lease
+					</Table.Head>
+					<Table.Head class="text-right font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+						status
+					</Table.Head>
+				</Table.Row>
+			</Table.Header>
+			<Table.Body>
 				{#each items as item (item.id)}
 					{@const isOpen = expanded === item.id}
-					<tr
-						class="border-b border-app align-top transition-colors duration-200 hover:bg-elevated"
-					>
-						<td class="pl-4 pt-4">
+					<Table.Row class="align-top">
+						<Table.Cell class="pt-4">
 							<button
 								type="button"
 								onclick={() =>
 									(expanded = isOpen ? null : item.id)}
 								aria-label="Toggle details"
-								class="text-muted-app hover:text-app"
+								class="text-muted-foreground hover:text-foreground"
 							>
 								{#if isOpen}
-									<ChevronDown class="h-4 w-4" />
+									<ChevronDown class="size-4" />
 								{:else}
-									<ChevronRight class="h-4 w-4" />
+									<ChevronRight class="size-4" />
 								{/if}
 							</button>
-						</td>
-						<td class="px-4 py-4">
-							<div class="font-mono-app text-sm text-app">
+						</Table.Cell>
+						<Table.Cell>
+							<div class="font-mono text-sm text-foreground">
 								{item.hostname}
 							</div>
-							<div
-								class="mt-0.5 font-mono-app text-xs text-muted-app"
-							>
+							<div class="mt-0.5 font-mono text-xs text-muted-foreground">
 								{item.os_template}
 							</div>
-						</td>
-						<td class="px-4 py-4 font-mono-app text-sm text-app">
-							{item.type}
-							<div class="mt-0.5 text-xs text-muted-app">
+						</Table.Cell>
+						<Table.Cell class="font-mono text-sm text-foreground">
+							<Badge variant="outline">{item.type}</Badge>
+							<div class="mt-1 text-xs text-muted-foreground">
 								{item.network_type}
 							</div>
-						</td>
-						<td class="px-4 py-4 font-mono-app text-sm">
-							<div class="flex items-center gap-3 text-app">
+						</Table.Cell>
+						<Table.Cell class="font-mono text-sm">
+							<div class="flex items-center gap-3 text-foreground">
 								<span class="inline-flex items-center gap-1">
-									<Cpu class="h-3 w-3 text-muted-app" />
-									<span class="text-accent"
-										>{item.specs.cpu}</span
-									>
+									<Cpu class="size-3 text-muted-foreground" />
+									<span class="text-primary">{item.specs.cpu}</span>
 								</span>
 								<span class="inline-flex items-center gap-1">
-									<MemoryStick
-										class="h-3 w-3 text-muted-app"
-									/>
-									<span class="text-accent"
-										>{item.specs.ram}G</span
-									>
+									<MemoryStick class="size-3 text-muted-foreground" />
+									<span class="text-primary">{item.specs.ram}G</span>
 								</span>
 								<span class="inline-flex items-center gap-1">
-									<HardDrive class="h-3 w-3 text-muted-app" />
-									<span class="text-accent"
-										>{item.specs.disk}G</span
-									>
+									<HardDrive class="size-3 text-muted-foreground" />
+									<span class="text-primary">{item.specs.disk}G</span>
 								</span>
 							</div>
-							<div class="mt-0.5 text-xs text-muted-app">
+							<div class="mt-0.5 text-xs text-muted-foreground">
 								ports: {portsFor(item.ports).join(", ") || "—"}
 							</div>
-						</td>
-						<td class="px-4 py-4 font-mono-app text-sm">
-							<div class="flex items-center gap-1 text-app">
-								<Calendar class="h-3 w-3 text-muted-app" />
+						</Table.Cell>
+						<Table.Cell class="font-mono text-sm">
+							<div class="flex items-center gap-1 text-foreground">
+								<Calendar class="size-3 text-muted-foreground" />
 								{fmt(item.start_date)} → {fmt(item.end_date)}
 							</div>
-							<div class="mt-0.5 text-xs text-muted-app">
+							<div class="mt-0.5 text-xs text-muted-foreground">
 								×{item.quantity}
 							</div>
-						</td>
-						<td class="px-4 py-4 text-right">
+						</Table.Cell>
+						<Table.Cell class="text-right">
 							<StatusBadge status={item.status} />
-						</td>
-					</tr>
+						</Table.Cell>
+					</Table.Row>
 					{#if isOpen}
-						<tr
-							class="border-b border-app bg-elevated transition-colors duration-200"
-						>
-							<td></td>
-							<td colspan="5" class="px-4 py-5">
+						<Table.Row class="bg-muted transition-colors duration-200">
+							<Table.Cell></Table.Cell>
+							<Table.Cell colspan={5} class="py-5">
 								{#if item.admin_reply}
-									<div
-										class="mb-5 flex gap-3 rounded-md border border-app bg-surface p-4"
-									>
-										<MessageSquareText
-											class="mt-0.5 h-4 w-4 shrink-0 text-accent"
-										/>
+									<div class="mb-5 flex gap-3 rounded-md border border-border bg-card p-4">
+										<MessageSquareText class="mt-0.5 size-4 shrink-0 text-primary" />
 										<div class="min-w-0 flex-1">
-											<div
-												class="font-mono text-[10px] font-bold uppercase tracking-widest text-accent"
-											>
+											<div class="font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
 												ตอบกลับจากแอดมิน
 											</div>
-											<p
-												class="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-app"
-											>
+											<p class="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
 												{item.admin_reply}
 											</p>
 											{#if item.admin_reply_at}
-												<p
-													class="mt-2 font-mono-app text-[10px] text-muted-app"
-												>
+												<p class="mt-2 font-mono text-[10px] text-muted-foreground">
 													{fmt(item.admin_reply_at)}
 												</p>
 											{/if}
@@ -628,79 +570,57 @@
 								{/if}
 								<div class="grid gap-6 sm:grid-cols-3">
 									<div>
-										<p
-											class="font-mono text-[11px] uppercase tracking-widest text-muted-app"
-										>
+										<p class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
 											Network
 										</p>
-										<p
-											class="mt-1 font-mono-app text-sm text-app"
-										>
+										<p class="mt-1 font-mono text-sm text-foreground">
 											{item.network_type}
 										</p>
-										<p
-											class="mt-1 break-all font-mono-app text-sm text-secondary-app"
-										>
+										<p class="mt-1 break-all font-mono text-sm text-foreground/70">
 											{item.dns_name || "—"}
 										</p>
 									</div>
 									<div>
-										<p
-											class="font-mono text-[11px] uppercase tracking-widest text-muted-app"
-										>
+										<p class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
 											Open ports
 										</p>
-										<p
-											class="mt-1 flex flex-wrap gap-1.5 font-mono-app text-sm"
-										>
+										<p class="mt-1 flex flex-wrap gap-1.5 font-mono text-sm">
 											{#each portsFor(item.ports) as port (port)}
-												<span
-													class="rounded border border-app bg-surface px-2 py-0.5 text-accent"
-												>
+												<Badge variant="outline" class="font-mono text-primary">
 													{port}
-												</span>
+												</Badge>
 											{:else}
-												<span class="text-secondary-app"
-													>—</span
-												>
+												<span class="text-foreground/70">—</span>
 											{/each}
 										</p>
 									</div>
 									<div>
-										<p
-											class="font-mono text-[11px] uppercase tracking-widest text-muted-app"
-										>
+										<p class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
 											Group
 										</p>
-										<p
-											class="mt-1 font-mono-app text-sm text-app"
-										>
+										<p class="mt-1 font-mono text-sm text-foreground">
 											{passionGroupName(item)}
 										</p>
 									</div>
 								</div>
 								<div class="mt-5">
-									<p
-										class="font-mono text-[11px] uppercase tracking-widest text-muted-app"
-									>
+									<p class="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
 										Purpose notes
 									</p>
-									<p
-										class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-secondary-app"
-									>
+									<p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground/70">
 										{item.purpose_notes}
 									</p>
 								</div>
 								{#if item.status === "pending"}
-									<div
-										class="mt-5 border-t border-app pt-4 flex gap-2"
-									>
-										<a
+									<div class="mt-5 flex gap-2 border-t border-border pt-4">
+										<Button
 											href="/request?edit={item.id}"
-											class="inline-flex h-8 items-center justify-center rounded bg-elevated border border-app px-3 font-mono text-[11px] uppercase tracking-wider text-app transition-colors duration-200 hover:border-strong-app hover:text-accent"
+											variant="outline"
+											size="sm"
+											class="font-mono text-[11px] uppercase tracking-wider"
 										>
 											Edit
-										</a>
+										</Button>
 										<form
 											method="POST"
 											action="?/cancel"
@@ -718,137 +638,145 @@
 												name="id"
 												value={item.id}
 											/>
-											<button
+											<Button
 												type="submit"
-												class="inline-flex h-8 items-center justify-center rounded bg-elevated border border-app px-3 font-mono text-[11px] uppercase tracking-wider text-secondary-app transition-colors duration-200 hover:border-strong-app hover:text-[var(--danger)]"
+												variant="outline"
+												size="sm"
+												class="font-mono text-[11px] uppercase tracking-wider hover:text-destructive"
 											>
 												Cancel
-											</button>
+											</Button>
 										</form>
 									</div>
 								{/if}
 								{#if item.status === "completed" && item.vmid && item.node}
-									<div
-										class="mt-5 border-t border-app pt-4 flex gap-2"
-									>
-										<button
-											type="button"
+									<div class="mt-5 flex gap-2 border-t border-border pt-4">
+										<Button
+											size="sm"
 											onclick={() => openConsole(item)}
-											class="inline-flex h-8 items-center justify-center rounded bg-accent border border-accent/20 px-3 font-mono text-[11px] uppercase tracking-wider text-zinc-950 transition-colors duration-200 hover:opacity-90 cursor-pointer"
+											class="font-mono text-[11px] uppercase tracking-wider"
 										>
 											Console
-										</button>
-										<button
-											type="button"
+										</Button>
+										<Button
+											variant="outline"
+											size="sm"
 											onclick={() => openSsh(item)}
-											class="inline-flex h-8 items-center justify-center rounded border border-app bg-elevated px-3 font-mono text-[11px] uppercase tracking-wider text-app transition-colors duration-200 hover:border-strong-app hover:text-accent cursor-pointer"
+											class="font-mono text-[11px] uppercase tracking-wider"
 										>
 											SSH (WebTTY)
-										</button>
+										</Button>
 										{#if powerStates[item.id]}
 											{@const pState = powerStates[item.id]}
 											{#if pState.status === "loading"}
-												<button
-													type="button"
+												<Button
+													variant="outline"
+													size="sm"
 													disabled
-													class="inline-flex h-8 items-center justify-center rounded bg-elevated border border-app px-3 font-mono text-[11px] uppercase tracking-wider text-muted-app"
+													class="font-mono text-[11px] uppercase tracking-wider"
 												>
-													<RefreshCw class="mr-1 h-3 w-3 animate-spin text-muted-app" />
+													<Spinner data-icon="inline-start" />
 													Syncing
-												</button>
+												</Button>
 											{:else if pState.status === "running"}
-												<button
-													type="button"
+												<Button
+													variant="outline"
+													size="sm"
 													onclick={() => togglePower(item)}
 													disabled={pState.actionLoading}
-													class="inline-flex h-8 items-center justify-center rounded border px-3 font-mono text-[11px] uppercase tracking-wider transition-colors duration-200 cursor-pointer {pState.actionLoading ? 'bg-elevated border-app text-muted-app cursor-not-allowed' : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20'}"
+													class={cn(
+														"font-mono text-[11px] uppercase tracking-wider",
+														!pState.actionLoading &&
+															"border-destructive/20 bg-destructive/10 text-destructive hover:bg-destructive/20",
+													)}
 												>
 													{#if pState.actionLoading}
-														<RefreshCw class="mr-1 h-3 w-3 animate-spin text-red-400" />
+														<Spinner data-icon="inline-start" />
 														Stopping...
 													{:else}
 														Stop
 													{/if}
-												</button>
+												</Button>
 											{:else if pState.status === "stopped"}
-												<button
-													type="button"
+												<Button
+													variant="outline"
+													size="sm"
 													onclick={() => togglePower(item)}
 													disabled={pState.actionLoading}
-													class="inline-flex h-8 items-center justify-center rounded border px-3 font-mono text-[11px] uppercase tracking-wider transition-colors duration-200 cursor-pointer {pState.actionLoading ? 'bg-elevated border-app text-muted-app cursor-not-allowed' : 'bg-green-500/10 border-green-500/20 text-green-400 hover:bg-green-500/20'}"
+													class={cn(
+														"font-mono text-[11px] uppercase tracking-wider",
+														!pState.actionLoading &&
+															"border-success/20 bg-success/10 text-success hover:bg-success/20",
+													)}
 												>
 													{#if pState.actionLoading}
-														<RefreshCw class="mr-1 h-3 w-3 animate-spin text-green-400" />
+														<Spinner data-icon="inline-start" />
 														Starting...
 													{:else}
 														Start
 													{/if}
-												</button>
+												</Button>
 											{:else}
-												<button
-													type="button"
+												<Button
+													variant="outline"
+													size="sm"
 													onclick={() => fetchPowerState(item.id)}
-													class="inline-flex h-8 items-center justify-center rounded bg-elevated border border-app px-3 font-mono text-[11px] uppercase tracking-wider text-secondary-app transition-colors duration-200 hover:border-strong-app cursor-pointer"
+													class="font-mono text-[11px] uppercase tracking-wider"
 												>
 													Retry Power
-												</button>
+												</Button>
 											{/if}
 										{/if}
 									</div>
 								{/if}
-							</td>
-						</tr>
+							</Table.Cell>
+						</Table.Row>
 					{/if}
 				{/each}
-			</tbody>
-		</table>
+			</Table.Body>
+		</Table.Root>
 	</div>
 {/if}
 
-{#if consoleTarget && terminalType}
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm p-4 sm:p-6 transition-all duration-300"
+<Dialog.Root
+	open={!!(consoleTarget && terminalType)}
+	onOpenChange={(o) => {
+		if (!o) closeConsole();
+	}}
+>
+	<Dialog.Content
+		showCloseButton={false}
+		class="flex h-[80vh] w-full max-w-5xl flex-col gap-0 overflow-hidden rounded-xl border border-border bg-card p-0 shadow-2xl"
 	>
-		<div
-			class="flex h-[80vh] w-full max-w-5xl flex-col rounded-xl border border-app bg-surface shadow-2xl overflow-hidden transition-all duration-300 transform scale-100"
-		>
-			<!-- Modal Header -->
-			<header
-				class="flex items-center justify-between border-b border-app bg-elevated px-4 py-3 sm:px-6"
-			>
-				<div class="flex items-center gap-2.5">
-					<Terminal class="h-4 w-4 text-accent animate-pulse" />
+		{#if consoleTarget && terminalType}
+			<Dialog.Header class="flex-row items-center justify-between gap-2.5 space-y-0 border-b border-border bg-muted px-4 py-3 sm:px-6">
+				<div class="flex min-w-0 items-center gap-2.5">
+					<Terminal class="size-4 animate-pulse text-primary" />
 					<div class="min-w-0">
-						<h3
-							class="font-mono-app text-sm font-semibold text-app truncate"
-						>
+						<Dialog.Title class="truncate font-mono text-sm font-semibold text-foreground">
 							{consoleTarget.hostname}
 							{terminalType === "ssh"
 								? "SSH Terminal"
 								: "Console"}
-						</h3>
-						<p
-							class="font-mono text-[10px] text-muted-app uppercase tracking-wider"
-						>
+						</Dialog.Title>
+						<p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
 							NODE: {consoleTarget.node} · VMID: {consoleTarget.vmid}
 							· TYPE: {consoleTarget.type}
 						</p>
 					</div>
 				</div>
-				<button
-					type="button"
+				<Button
+					variant="ghost"
+					size="icon-sm"
 					onclick={closeConsole}
-					class="rounded-md p-1.5 text-secondary-app hover:bg-surface hover:text-app transition-colors duration-200 cursor-pointer"
 					aria-label="Close terminal"
 				>
-					<X class="h-4 w-4" />
-				</button>
-			</header>
+					<X data-icon="inline-start" />
+				</Button>
+			</Dialog.Header>
 
 			<!-- Modal Body -->
-			<div
-				class="relative flex-1 bg-zinc-950 flex items-center justify-center p-1"
-			>
+			<div class="relative flex flex-1 items-center justify-center bg-zinc-950 p-1">
 				{#if terminalType === "ssh"}
 					<SshTerminal
 						defaultHost={consoleTarget.dns_name ||
@@ -857,46 +785,39 @@
 						defaultUsername="root"
 					/>
 				{:else if consoleLoading}
-					<div
-						class="flex flex-col items-center gap-3 text-center p-8"
-					>
-						<RefreshCw class="h-8 w-8 text-accent animate-spin" />
-						<p
-							class="font-mono text-xs uppercase tracking-widest text-secondary-app animate-pulse"
-						>
+					<div class="flex flex-col items-center gap-3 p-8 text-center">
+						<Spinner class="size-8 text-primary" />
+						<p class="animate-pulse font-mono text-xs uppercase tracking-widest text-zinc-400">
 							// AUTHORIZING CONSOLE SESSION...
 						</p>
 					</div>
 				{:else if consoleError}
-					<div class="max-w-md text-center p-8 space-y-4">
-						<p
-							class="text-sm font-medium"
-							style="color: var(--danger)"
-						>
+					<div class="max-w-md space-y-4 p-8 text-center">
+						<p class="text-sm font-medium text-destructive">
 							{consoleError}
 						</p>
-						<p
-							class="text-xs text-muted-app font-mono leading-relaxed"
-						>
+						<p class="font-mono text-xs leading-relaxed text-zinc-500">
 							Failed to establish connection to the Proxmox
 							console. Please make sure the instance is running
 							and the hypervisor is online.
 						</p>
 						<div class="flex justify-center gap-2 pt-2">
-							<button
-								type="button"
+							<Button
+								variant="outline"
+								size="sm"
 								onclick={() => openConsole(consoleTarget!)}
-								class="inline-flex h-8 items-center justify-center rounded border border-app bg-elevated px-3 font-mono text-[11px] uppercase tracking-wider text-app transition-colors duration-200 hover:border-strong-app hover:text-accent cursor-pointer"
+								class="font-mono text-[11px] uppercase tracking-wider"
 							>
 								Retry
-							</button>
-							<button
-								type="button"
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
 								onclick={closeConsole}
-								class="inline-flex h-8 items-center justify-center rounded border border-app bg-elevated px-3 font-mono text-[11px] uppercase tracking-wider text-secondary-app transition-colors duration-200 hover:border-strong-app cursor-pointer"
+								class="font-mono text-[11px] uppercase tracking-wider"
 							>
 								Close
-							</button>
+							</Button>
 						</div>
 					</div>
 				{:else if consoleWsUrl && consoleTicket && consoleUser}
@@ -907,6 +828,6 @@
 					/>
 				{/if}
 			</div>
-		</div>
-	</div>
-{/if}
+		{/if}
+	</Dialog.Content>
+</Dialog.Root>

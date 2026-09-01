@@ -1,4 +1,7 @@
 <script lang="ts">
+	import * as Card from "$lib/components/ui/card";
+	import { Button } from "$lib/components/ui/button";
+
 	let {
 		hostname = "",
 		type = "vm",
@@ -53,118 +56,134 @@
 </script>
 
 <aside
-	class="space-y-8 font-mono-app text-xs lg:col-span-1 lg:self-start lg:sticky lg:top-20 lg:border-l lg:border-app lg:pl-12"
+	class="flex flex-col gap-8 font-mono text-xs lg:sticky lg:top-20 lg:col-span-1 lg:self-start lg:border-l lg:border-border lg:pl-12"
 >
-	<div class="space-y-1">
+	<div class="flex flex-col gap-1">
 		<div
-			class="text-[10px] font-bold uppercase tracking-widest text-muted-app"
+			class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
 		>
 			System Preview
 		</div>
-		<div class="font-sans text-sm font-bold text-app">
+		<div class="font-sans text-sm font-bold text-foreground">
 			{hostname || "—"}
 		</div>
 	</div>
 
-	<div class="space-y-4">
-		<div class="flex justify-between border-b border-app/50 pb-2">
-			<span class="text-muted-app">Node Type:</span>
-			<span class="font-bold text-accent"
+	<div class="flex flex-col gap-4">
+		<div class="flex justify-between border-b border-border/50 pb-2">
+			<span class="text-muted-foreground">Node Type:</span>
+			<span class="font-bold text-primary"
 				>{type === "vm" ? "VM (KVM)" : "Container (LXC)"}</span
 			>
 		</div>
-		<div class="flex justify-between border-b border-app/50 pb-2">
-			<span class="text-muted-app">Template:</span>
-			<span class="text-secondary-app">{os_template || "—"}</span>
+		<div class="flex justify-between border-b border-border/50 pb-2">
+			<span class="text-muted-foreground">Template:</span>
+			<span class="text-foreground/70">{os_template || "—"}</span>
 		</div>
-		<div class="flex justify-between border-b border-app/50 pb-2">
-			<span class="text-muted-app">Group:</span>
-			<span class="text-secondary-app">{passionGroupName}</span>
-		</div>
-	</div>
-
-	<div class="space-y-2 rounded-lg border border-app/60 bg-elevated/10 p-4">
-		<div
-			class="text-[10px] font-bold uppercase tracking-wider text-muted-app"
-		>
-			Allocated Specs
-		</div>
-		<div class="flex justify-between">
-			<span>• CPU:</span><span class="font-bold text-app border-solid"
-				>{cpu} Cores</span
-			>
-		</div>
-		<div class="flex justify-between">
-			<span>• RAM:</span><span class="font-bold text-app">{ram} GB</span>
-		</div>
-		<div class="flex justify-between">
-			<span>• Disk:</span><span class="font-bold text-app">{disk} GB</span
-			>
+		<div class="flex justify-between border-b border-border/50 pb-2">
+			<span class="text-muted-foreground">Group:</span>
+			<span class="text-foreground/70">{passionGroupName}</span>
 		</div>
 	</div>
 
-	<div class="space-y-2 rounded-lg border border-app/60 bg-elevated/10 p-4">
-		<div
-			class="text-[10px] font-bold uppercase tracking-wider text-muted-app"
-		>
-			Network & Ports
-		</div>
-		<div class="flex justify-between">
-			<span>Access:</span>
-			<span class="text-secondary-app"
-				>{network_type === "local" ? "LOCAL" : "PUBLIC"}</span
+	<Card.Root size="sm">
+		<Card.Header>
+			<Card.Title
+				class="text-[10px] font-bold tracking-wider text-muted-foreground uppercase"
 			>
-		</div>
-		<div class="flex justify-between gap-2">
-			<span>DNS:</span>
-			<span class="text-secondary-app">{dns_name || "—"}</span>
-		</div>
-		<div class="flex justify-between gap-2">
-			<span>Open Ports:</span>
-			<span class="font-bold text-accent">
-				{portsList.length ? portsList.join(", ") : "None"}
-			</span>
-		</div>
-	</div>
+				Allocated Specs
+			</Card.Title>
+		</Card.Header>
+		<Card.Content class="flex flex-col gap-2">
+			<div class="flex justify-between">
+				<span>• CPU:</span><span class="font-bold text-foreground"
+					>{cpu} Cores</span
+				>
+			</div>
+			<div class="flex justify-between">
+				<span>• RAM:</span><span class="font-bold text-foreground"
+					>{ram} GB</span
+				>
+			</div>
+			<div class="flex justify-between">
+				<span>• Disk:</span><span class="font-bold text-foreground"
+					>{disk} GB</span
+				>
+			</div>
+		</Card.Content>
+	</Card.Root>
 
-	<div class="space-y-2 rounded-lg border border-app/60 bg-elevated/10 p-4">
-		<div
-			class="text-[10px] font-bold uppercase tracking-wider text-muted-app"
-		>
-			Lease Duration
-		</div>
-		<div class="flex justify-between">
-			<span>Start Date:</span><span class="text-secondary-app"
-				>{fmtDate(start_date)}</span
+	<Card.Root size="sm">
+		<Card.Header>
+			<Card.Title
+				class="text-[10px] font-bold tracking-wider text-muted-foreground uppercase"
 			>
-		</div>
-		<div class="flex justify-between">
-			<span>End Date:</span><span class="font-bold text-accent"
-				>{fmtDate(end_date)}</span
+				Network & Ports
+			</Card.Title>
+		</Card.Header>
+		<Card.Content class="flex flex-col gap-2">
+			<div class="flex justify-between">
+				<span>Access:</span>
+				<span class="text-foreground/70"
+					>{network_type === "local" ? "LOCAL" : "PUBLIC"}</span
+				>
+			</div>
+			<div class="flex justify-between gap-2">
+				<span>DNS:</span>
+				<span class="text-foreground/70">{dns_name || "—"}</span>
+			</div>
+			<div class="flex justify-between gap-2">
+				<span>Open Ports:</span>
+				<span class="font-bold text-primary">
+					{portsList.length ? portsList.join(", ") : "None"}
+				</span>
+			</div>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root size="sm">
+		<Card.Header>
+			<Card.Title
+				class="text-[10px] font-bold tracking-wider text-muted-foreground uppercase"
 			>
-		</div>
-		<div class="flex justify-between">
-			<span>Duration:</span><span class="text-secondary-app"
-				>{leaseDays ?? "—"} days</span
-			>
-		</div>
-	</div>
+				Lease Duration
+			</Card.Title>
+		</Card.Header>
+		<Card.Content class="flex flex-col gap-2">
+			<div class="flex justify-between">
+				<span>Start Date:</span><span class="text-foreground/70"
+					>{fmtDate(start_date)}</span
+				>
+			</div>
+			<div class="flex justify-between">
+				<span>End Date:</span><span class="font-bold text-primary"
+					>{fmtDate(end_date)}</span
+				>
+			</div>
+			<div class="flex justify-between">
+				<span>Duration:</span><span class="text-foreground/70"
+					>{leaseDays ?? "—"} days</span
+				>
+			</div>
+		</Card.Content>
+	</Card.Root>
 
 	<div class="flex items-center justify-center gap-4">
 		<input type="hidden" name="quantity" value="1" />
 		{#if isEdit}
-			<a
+			<Button
 				href="/status"
-				class="inline-flex h-10 items-center justify-center rounded-lg bg-surface border border-app px-4 font-mono-app text-xs font-bold uppercase tracking-wider text-secondary-app transition hover:border-strong-app hover:text-app"
+				variant="outline"
+				class="font-mono text-xs font-bold tracking-wider uppercase"
 			>
 				cancel
-			</a>
+			</Button>
 		{/if}
-		<button
+		<Button
 			type="submit"
-			class="w-full rounded-lg bg-accent px-6 py-3 font-mono-app text-xs font-bold uppercase tracking-wider text-zinc-950 shadow-md transition hover:opacity-90 sm:w-auto"
+			class="w-full font-mono text-xs font-bold tracking-wider uppercase sm:w-auto"
 		>
 			{isEdit ? "save" : "send"}
-		</button>
+		</Button>
 	</div>
 </aside>
