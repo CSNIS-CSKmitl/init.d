@@ -55,7 +55,7 @@
 				<span class="font-semibold">init.d</span>
 			</a>
 			<p class="text-[10px] leading-tight text-muted-foreground sm:text-xs">
-				พบปัญหาติดต่อที่ Support Server
+				พบปัญหาติดต่อที่ Discord Support Server
 			</p>
 		</div>
 		<!-- Desktop nav — hidden below lg where the hamburger takes over. -->
