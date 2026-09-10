@@ -39,6 +39,7 @@ function parseAuthCookie(cookieHeader) {
 
 server.on('upgrade', (request, socket, head) => {
 	const url = request.url || '';
+	console.log(`[Production Server Upgrade] Incoming upgrade request: ${url}`);
 	if (url.startsWith('/ssh-ws')) {
 		wss.handleUpgrade(request, socket, head, (ws) => {
 			wss.emit('connection', ws, request);
@@ -48,35 +49,45 @@ server.on('upgrade', (request, socket, head) => {
 			proxmoxWss.emit('connection', ws, request);
 		});
 	} else {
-		// Let other upgrades pass through
+		console.log(`[Production Server Upgrade] Unhandled upgrade request path: ${url}`);
 	}
 });
 
 // Proxmox WebSocket Proxy Handler for production
 proxmoxWss.on('connection', (clientWs, request) => {
 	const reqUrl = request.url || '';
-	let targetPath = reqUrl
-		.replace(/^\/proxmox-ws\/cookie\/[^\/]+\//, '/')
-		.replace(/^\/proxmox-ws/, '');
+	console.log(`[Proxmox-WS Prod Proxy] Connection opened for request: ${reqUrl}`);
 
-	const pathMatch = reqUrl.match(/\/cookie\/([^/]+)\//);
+	let targetPath = reqUrl;
+	let pveAuthCookie: string | null = null;
+
+	const cookieMatch = reqUrl.match(/^\/proxmox-ws\/cookie\/([^/]+)\/(.*)/);
 	const urlMatch = reqUrl.match(/[?&]pveauthcookie=([^&]+)/);
 
-	const targetHeaders = {
+	if (cookieMatch) {
+		pveAuthCookie = decodeURIComponent(cookieMatch[1]);
+		targetPath = '/' + cookieMatch[2];
+	} else if (urlMatch) {
+		pveAuthCookie = decodeURIComponent(urlMatch[1]);
+		targetPath = reqUrl
+			.replace(/^\/proxmox-ws/, '')
+			.replace(/([?&])pveauthcookie=[^&]+(&|$)/, (_, g1, g2) => (g1 === '?' && g2 === '&' ? '?' : ''))
+			.replace(/[?&]$/, '');
+	} else {
+		targetPath = reqUrl.replace(/^\/proxmox-ws/, '');
+	}
+
+	if (!targetPath.startsWith('/')) {
+		targetPath = '/' + targetPath;
+	}
+
+	const targetHeaders: Record<string, string> = {
 		Host: `${proxmoxHost}:${proxmoxPort}`
 	};
 
-	if (pathMatch && pathMatch[1]) {
-		const pveAuthCookie = decodeURIComponent(pathMatch[1]);
+	if (pveAuthCookie) {
 		targetHeaders['Cookie'] = `PVEAuthCookie=${pveAuthCookie}`;
-		console.log('[Proxmox-WS Prod Proxy] Authenticated using dynamic PVEAuthCookie from path.');
-	} else if (urlMatch && urlMatch[1]) {
-		const pveAuthCookie = decodeURIComponent(urlMatch[1]);
-		targetHeaders['Cookie'] = `PVEAuthCookie=${pveAuthCookie}`;
-		targetPath = targetPath.replace(/([?&])pveauthcookie=[^&]+(&|$)/, (_, g1, g2) => {
-			return g1 === '?' && g2 === '&' ? '?' : '';
-		}).replace(/[?&]$/, '');
-		console.log('[Proxmox-WS Prod Proxy] Authenticated using dynamic PVEAuthCookie from query.');
+		console.log('[Proxmox-WS Prod Proxy] Authenticated using dynamic PVEAuthCookie.');
 	} else {
 		targetHeaders['Authorization'] = proxmoxAuthHeader;
 		console.log('[Proxmox-WS Prod Proxy] Authenticated using static PVEAPIToken.');
