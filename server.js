@@ -1,13 +1,22 @@
+import 'dotenv/config';
 import { handler } from './build/handler.js';
 import express from 'express';
 import http from 'http';
-import { WebSocketServer } from 'ws';
+import WebSocket, { WebSocketServer } from 'ws';
 import { Client as SshClient } from 'ssh2';
 import PocketBase from 'pocketbase';
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
+const proxmoxWss = new WebSocketServer({ noServer: true });
+
+const proxmoxHost = process.env.PROXMOX_HOST || 'localhost';
+const proxmoxPort = process.env.PROXMOX_PORT || '8006';
+const proxmoxUser = process.env.PROXMOX_USER || '';
+const proxmoxToken = process.env.PROXMOX_TOKEN || '';
+const proxmoxSecret = process.env.PROXMOX_TOKEN_SECRET || '';
+const proxmoxAuthHeader = `PVEAPIToken=${proxmoxUser}!${proxmoxToken}=${proxmoxSecret}`;
 
 function parseAuthCookie(cookieHeader) {
 	if (!cookieHeader) return null;
@@ -29,13 +38,111 @@ function parseAuthCookie(cookieHeader) {
 }
 
 server.on('upgrade', (request, socket, head) => {
-	if (request.url && request.url.startsWith('/ssh-ws')) {
+	const url = request.url || '';
+	if (url.startsWith('/ssh-ws')) {
 		wss.handleUpgrade(request, socket, head, (ws) => {
 			wss.emit('connection', ws, request);
 		});
+	} else if (url.startsWith('/proxmox-ws')) {
+		proxmoxWss.handleUpgrade(request, socket, head, (ws) => {
+			proxmoxWss.emit('connection', ws, request);
+		});
 	} else {
-		// Let other upgrades (if any) or standard HTTP pass through to handler
+		// Let other upgrades pass through
 	}
+});
+
+// Proxmox WebSocket Proxy Handler for production
+proxmoxWss.on('connection', (clientWs, request) => {
+	const reqUrl = request.url || '';
+	let targetPath = reqUrl
+		.replace(/^\/proxmox-ws\/cookie\/[^\/]+\//, '/')
+		.replace(/^\/proxmox-ws/, '');
+
+	const pathMatch = reqUrl.match(/\/cookie\/([^/]+)\//);
+	const urlMatch = reqUrl.match(/[?&]pveauthcookie=([^&]+)/);
+
+	const targetHeaders = {
+		Host: `${proxmoxHost}:${proxmoxPort}`
+	};
+
+	if (pathMatch && pathMatch[1]) {
+		const pveAuthCookie = decodeURIComponent(pathMatch[1]);
+		targetHeaders['Cookie'] = `PVEAuthCookie=${pveAuthCookie}`;
+		console.log('[Proxmox-WS Prod Proxy] Authenticated using dynamic PVEAuthCookie from path.');
+	} else if (urlMatch && urlMatch[1]) {
+		const pveAuthCookie = decodeURIComponent(urlMatch[1]);
+		targetHeaders['Cookie'] = `PVEAuthCookie=${pveAuthCookie}`;
+		targetPath = targetPath.replace(/([?&])pveauthcookie=[^&]+(&|$)/, (_, g1, g2) => {
+			return g1 === '?' && g2 === '&' ? '?' : '';
+		}).replace(/[?&]$/, '');
+		console.log('[Proxmox-WS Prod Proxy] Authenticated using dynamic PVEAuthCookie from query.');
+	} else {
+		targetHeaders['Authorization'] = proxmoxAuthHeader;
+		console.log('[Proxmox-WS Prod Proxy] Authenticated using static PVEAPIToken.');
+	}
+
+	const targetUrl = `wss://${proxmoxHost}:${proxmoxPort}${targetPath}`;
+	console.log(`[Proxmox-WS Prod Proxy] Proxying WebSocket to ${targetUrl}`);
+
+	const targetWs = new WebSocket(targetUrl, {
+		headers: targetHeaders,
+		rejectUnauthorized: false
+	});
+
+	let isTargetOpen = false;
+	const messageQueue = [];
+
+	targetWs.on('open', () => {
+		isTargetOpen = true;
+		console.log('[Proxmox-WS Prod Proxy] Connected to Proxmox target.');
+		while (messageQueue.length > 0) {
+			const item = messageQueue.shift();
+			if (targetWs.readyState === WebSocket.OPEN) {
+				targetWs.send(item.data, { binary: item.isBinary });
+			}
+		}
+	});
+
+	clientWs.on('message', (data, isBinary) => {
+		if (isTargetOpen && targetWs.readyState === WebSocket.OPEN) {
+			targetWs.send(data, { binary: isBinary });
+		} else {
+			messageQueue.push({ data, isBinary });
+		}
+	});
+
+	targetWs.on('message', (data, isBinary) => {
+		if (clientWs.readyState === WebSocket.OPEN) {
+			clientWs.send(data, { binary: isBinary });
+		}
+	});
+
+	clientWs.on('close', (code, reason) => {
+		if (targetWs.readyState === WebSocket.OPEN || targetWs.readyState === WebSocket.CONNECTING) {
+			targetWs.close(code, reason);
+		}
+	});
+
+	targetWs.on('close', (code, reason) => {
+		if (clientWs.readyState === WebSocket.OPEN || clientWs.readyState === WebSocket.CONNECTING) {
+			clientWs.close(code, reason);
+		}
+	});
+
+	clientWs.on('error', (err) => {
+		console.error('[Proxmox-WS Prod Client Error]:', err.message);
+		if (targetWs.readyState === WebSocket.OPEN || targetWs.readyState === WebSocket.CONNECTING) {
+			targetWs.close();
+		}
+	});
+
+	targetWs.on('error', (err) => {
+		console.error('[Proxmox-WS Prod Target Error]:', err.message);
+		if (clientWs.readyState === WebSocket.OPEN || clientWs.readyState === WebSocket.CONNECTING) {
+			clientWs.close();
+		}
+	});
 });
 
 wss.on('connection', (ws, request) => {
