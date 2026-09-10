@@ -2,17 +2,23 @@
 	import type { PageData } from './$types';
 	import { pbBrowser } from '$lib/pb/client';
 	import type { LeaseInstance } from '$lib/types';
-	import { untrack } from 'svelte';
+	import { untrack, onMount } from 'svelte';
 	import StatusList from '$lib/components/status/StatusList.svelte';
+	import DiscordQrModal from '$lib/components/DiscordQrModal.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { page } from '$app/state';
+	import { MessageSquare } from '@lucide/svelte';
 
 	let { data }: { data: PageData } = $props();
 
-	// Live list — starts from the SSR snapshot and grows as the realtime
-	// subscription fires. The viewRule on `instances` already restricts
-	// realtime events to rows the user can see (their own), so we just
-	// merge everything we receive — no client-side creator filter needed.
 	let items = $state<LeaseInstance[]>(untrack(() => [...data.items]));
+	let showDiscordModal = $state<boolean>(false);
+
+	onMount(() => {
+		if (page.url.searchParams.has('submitted')) {
+			showDiscordModal = true;
+		}
+	});
 
 	$effect(() => {
 		const pb = pbBrowser();
@@ -68,13 +74,25 @@
 			<span class="font-mono text-foreground">{data.email}</span>.
 		</p>
 	</div>
-	<Button
-		href="/request"
-		variant="outline"
-		class="font-mono text-xs uppercase tracking-widest"
-	>
-		+ new request
-	</Button>
+	<div class="flex items-center gap-3">
+		<Button
+			variant="outline"
+			onclick={() => (showDiscordModal = true)}
+			class="font-mono text-xs uppercase tracking-wider text-indigo-400 hover:text-indigo-300 border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10"
+		>
+			<MessageSquare class="size-3.5 mr-1.5 text-indigo-400" />
+			Discord Community
+		</Button>
+		<Button
+			href="/request"
+			variant="outline"
+			class="font-mono text-xs uppercase tracking-widest"
+		>
+			+ new request
+		</Button>
+	</div>
 </header>
 
 <StatusList {items} />
+
+<DiscordQrModal bind:open={showDiscordModal} discordUrl={data.discordLink} />

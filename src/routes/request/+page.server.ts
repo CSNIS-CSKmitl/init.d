@@ -237,7 +237,7 @@ export const actions: Actions = {
 			);
 		}
 
-		throw redirect(303, `/status#${record.id}`);
+		throw redirect(303, `/status?submitted=true#${record.id}`);
 	}
 };
 
