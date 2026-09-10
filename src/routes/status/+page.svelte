@@ -81,7 +81,7 @@
 			class="font-mono text-xs uppercase tracking-wider text-indigo-400 hover:text-indigo-300 border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10"
 		>
 			<MessageSquare class="size-3.5 mr-1.5 text-indigo-400" />
-			Discord Community
+			Discord Support
 		</Button>
 		<Button
 			href="/request"
