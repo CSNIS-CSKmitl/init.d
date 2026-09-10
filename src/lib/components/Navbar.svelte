@@ -55,7 +55,7 @@
 				<span class="font-semibold">init.d</span>
 			</a>
 			<p class="text-[10px] leading-tight text-muted-foreground sm:text-xs">
-				พบปัญหา ติดต่อ 66050160@kmitl.ac.th หรือ bornzi
+				พบปัญหาติดต่อที่ Support Server
 			</p>
 		</div>
 		<!-- Desktop nav — hidden below lg where the hamburger takes over. -->

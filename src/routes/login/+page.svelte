@@ -170,6 +170,6 @@
 		</Field.FieldGroup>
 	</form>
 	<p class="mt-4 text-center text-xs text-muted-foreground">
-		พบปัญหา ติดต่อ 66050160@kmitl.ac.th หรือ bornzi
+		พบปัญหาติดต่อที่ Support Server
 	</p>
 </div>
