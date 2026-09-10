@@ -59,7 +59,7 @@ proxmoxWss.on('connection', (clientWs, request) => {
 	console.log(`[Proxmox-WS Prod Proxy] Connection opened for request: ${reqUrl}`);
 
 	let targetPath = reqUrl;
-	let pveAuthCookie: string | null = null;
+	let pveAuthCookie = null;
 
 	const cookieMatch = reqUrl.match(/^\/proxmox-ws\/cookie\/([^/]+)\/(.*)/);
 	const urlMatch = reqUrl.match(/[?&]pveauthcookie=([^&]+)/);
@@ -81,7 +81,7 @@ proxmoxWss.on('connection', (clientWs, request) => {
 		targetPath = '/' + targetPath;
 	}
 
-	const targetHeaders: Record<string, string> = {
+	const targetHeaders = {
 		Host: `${proxmoxHost}:${proxmoxPort}`
 	};
 
