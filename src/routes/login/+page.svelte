@@ -170,6 +170,6 @@
 		</Field.FieldGroup>
 	</form>
 	<p class="mt-4 text-center text-xs text-muted-foreground">
-		พบปัญหาติดต่อที่ Support Server
+		พบปัญหาติดต่อที่ Discord Support Server
 	</p>
 </div>
