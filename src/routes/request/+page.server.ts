@@ -72,9 +72,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			type: 'vm' as InstanceType,
 			network_type: 'local' as NetworkType,
 			quantity: 1,
-			cpu: 2,
-			ram: 4,
-			disk: 40
+			cpu: 1,
+			ram: 2,
+			disk: 20
 		}
 	};
 };
