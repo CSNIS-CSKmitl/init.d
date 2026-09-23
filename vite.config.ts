@@ -5,6 +5,7 @@ import path from 'path';
 import { WebSocketServer } from 'ws';
 import { Client as SshClient } from 'ssh2';
 import PocketBase from 'pocketbase';
+import { startNodeSync } from './scripts/sync-instance-nodes.mjs';
 
 function parseAuthCookie(cookieHeader: string): { token: string; userId: string } | null {
 	if (!cookieHeader) return null;
@@ -44,6 +45,15 @@ export default defineConfig(({ mode }) => {
 		plugins: [
 			tailwindcss(),
 			sveltekit(),
+			{
+				name: 'instance-node-sync',
+				apply: 'serve',
+				configureServer(server) {
+					if (env.NODE_SYNC_ENABLED === 'false') return;
+					const stopNodeSync = startNodeSync({ config: { ...process.env, ...env } });
+					server.httpServer?.once('close', stopNodeSync);
+				}
+			},
 			{
 				name: 'ssh-ws-dev-server',
 				configureServer(server) {

@@ -49,6 +49,18 @@ npm install
 npm run dev
 ```
 
+## VM/CT node synchronization
+
+The dev and production servers check Proxmox every 60 seconds and update the PocketBase `instances.node` field when a VM or CT moves. A record is matched by its guest type and VMID/CTID. The ID remains unchanged; records missing from Proxmox or with ambiguous matches are skipped.
+
+Set `NODE_SYNC_INTERVAL_SECONDS` to a value from 30 to 3600 to change the interval, or set `NODE_SYNC_ENABLED=false` to disable the built-in loop. The loop requires the PocketBase admin and Proxmox credentials in `.env`.
+
+```sh
+npm run sync:nodes             # preview proposed changes
+npm run sync:nodes -- --apply  # synchronize once now
+npm run sync:nodes:watch       # standalone recurring worker
+```
+
 ## First-time bootstrap
 
 If you're standing up a fresh PocketBase, run these from the repo root in order:

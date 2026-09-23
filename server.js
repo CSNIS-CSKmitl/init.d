@@ -5,6 +5,7 @@ import http from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
 import { Client as SshClient } from 'ssh2';
 import PocketBase from 'pocketbase';
+import { startNodeSync } from './scripts/sync-instance-nodes.mjs';
 
 const app = express();
 const server = http.createServer(app);
@@ -259,4 +260,8 @@ app.use(handler);
 const port = process.env.PORT || 3000;
 server.listen(port, () => {
 	console.log(`[Production Server] WebTTY & SvelteKit running on port ${port}`);
+	if (process.env.NODE_SYNC_ENABLED !== 'false') {
+		const stopNodeSync = startNodeSync();
+		server.once('close', stopNodeSync);
+	}
 });
