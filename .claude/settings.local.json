@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('listRule:', repr\\(d.get\\('listRule'\\)\\)\\); print\\('viewRule:', repr\\(d.get\\('viewRule'\\)\\)\\)\")",
+      "Bash(node scripts/debug-auth.mjs)",
+      "Bash(awk 'NR==878 {print NR\": \"$0; print \"---char positions---\"; for\\(i=1;i<=length\\($0\\);i++\\) printf \"%d:%s \", i, substr\\($0,i,1\\); print \"\"}' \"c:/Users/techa/Downloads/init.d/node_modules/.vite/deps/pocketbase.js\")",
+      "Bash(awk 'NR==1' \"c:/Users/techa/Downloads/init.d/node_modules/pocketbase/dist/pocketbase.es.mjs\")"
+    ]
+  }
+}

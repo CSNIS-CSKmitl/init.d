@@ -96,6 +96,7 @@
 	let quantity = $state(
 		untrack(() => data.editRecord?.quantity ?? data.defaults.quantity),
 	);
+	let ownerEmails = $state(untrack(() => form?.values?.owner_emails ?? data.editRecord?.owner_emails?.join(', ') ?? ''));
 
 	let selectedPreset = $state("");
 
@@ -281,6 +282,14 @@
 					{/if}
 				</Field.Field>
 			</div>
+			<Field.Field data-invalid={!!errors.owner_emails}>
+				<Field.FieldLabel for="owner_emails">Co-owner emails (optional)</Field.FieldLabel>
+				<Textarea id="owner_emails" name="owner_emails" bind:value={ownerEmails}
+					rows={2} placeholder="name@example.com, teammate@example.com"
+					aria-invalid={!!errors.owner_emails} />
+				<Field.FieldDescription>Separate emails with commas. You can change co-owners later on the status page.</Field.FieldDescription>
+				{#if errors.owner_emails}<Field.FieldError>{errors.owner_emails}</Field.FieldError>{/if}
+			</Field.Field>
 
 			<!-- Environment Type toggle (VM / Container) -->
 			<Field.FieldSet>

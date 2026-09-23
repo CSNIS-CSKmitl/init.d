@@ -1,7 +1,9 @@
-import { json, error } from '@sveltejs/kit';
+import { json, error, isHttpError } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { proxmox } from '$lib/proxmox';
 import type { LeaseInstance } from '$lib/types';
+import { canAccessInstance } from '$lib/server/instance-owners';
+import { resolveProxmoxGuest, ProxmoxGuestNotFoundError } from '$lib/server/proxmox-guest';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	if (!locals.user) throw error(401, 'Unauthorized');
@@ -11,22 +13,19 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 	try {
 		const record = await locals.pb.collection('instances').getOne<LeaseInstance>(instanceId);
-		if (record.creator_email !== locals.user.email && locals.user.role !== 'admin') {
+		if (!canAccessInstance(record, locals.user.id, locals.user.role === 'admin')) {
 			throw error(403, 'Forbidden');
 		}
 
-		const vmid = record.vmid;
-		const nodeNum = record.node;
-		if (!vmid || !nodeNum) throw error(409, 'Not provisioned');
-
-		const node = `pve${nodeNum}`;
-		const typePath = record.type === 'vm' ? 'qemu' : 'lxc';
-
-		const statusRes = await proxmox.nodes.$(node).$(typePath).$(vmid).status.current.$get() as any;
-		return json({ status: statusRes.status }); // 'running' or 'stopped'
+		const guest = await resolveProxmoxGuest(record);
+		const target = (proxmox.nodes.$(guest.node) as any)[guest.type].$(record.vmid);
+		const statusRes = await target.status.current.$get() as any;
+		return json({ status: statusRes.status, node: guest.node }); // 'running' or 'stopped'
 	} catch (e: any) {
-		console.error('Failed to get instance power status', e);
-		throw error(500, e.message || 'Proxmox communication failed');
+		if (isHttpError(e)) throw e;
+		if (e instanceof ProxmoxGuestNotFoundError) return json({ error: e.message }, { status: 404 });
+		console.error('Failed to get instance power status:', e.message);
+		return json({ error: e.message || 'Proxmox communication failed' }, { status: 502 });
 	}
 };
 
@@ -39,27 +38,25 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const record = await locals.pb.collection('instances').getOne<LeaseInstance>(instanceId);
-		if (record.creator_email !== locals.user.email && locals.user.role !== 'admin') {
+		if (!canAccessInstance(record, locals.user.id, locals.user.role === 'admin')) {
 			throw error(403, 'Forbidden');
 		}
 
-		const vmid = record.vmid;
-		const nodeNum = record.node;
-		if (!vmid || !nodeNum) throw error(409, 'Not provisioned');
-
-		const node = `pve${nodeNum}`;
-		const typePath = record.type === 'vm' ? 'qemu' : 'lxc';
+		const guest = await resolveProxmoxGuest(record);
+		const target = (proxmox.nodes.$(guest.node) as any)[guest.type].$(record.vmid);
 
 		let upid: string;
 		if (action === 'start') {
-			upid = await proxmox.nodes.$(node).$(typePath).$(vmid).status.start.$post() as string;
+			upid = await target.status.start.$post() as string;
 		} else {
-			upid = await proxmox.nodes.$(node).$(typePath).$(vmid).status.shutdown.$post() as string;
+			upid = await target.status.shutdown.$post() as string;
 		}
 
-		return json({ success: true, upid });
+		return json({ success: true, upid, node: guest.node });
 	} catch (e: any) {
-		console.error('Failed to trigger power action', e);
-		throw error(500, e.message || 'Proxmox action failed');
+		if (isHttpError(e)) throw e;
+		if (e instanceof ProxmoxGuestNotFoundError) return json({ error: e.message }, { status: 404 });
+		console.error('Failed to trigger power action:', e.message);
+		return json({ error: e.message || 'Proxmox action failed' }, { status: 502 });
 	}
 };

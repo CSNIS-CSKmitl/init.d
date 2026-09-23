@@ -10,6 +10,7 @@ import { createCT, createVM, startProvisioning } from '$lib/proxmox';
 import { sendDiscordNotification } from '$lib/discord';
 import PocketBase from 'pocketbase';
 import { env } from '$env/dynamic/private';
+import { addOwnerEmails } from '$lib/server/instance-owners';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -30,10 +31,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 		const list = await pbAdmin.collection('instances').getList<LeaseInstance>(1, 500, {
 			sort: '-created',
-			expand: 'passion_group,email'
+			expand: 'passion_group,email,owners'
 		});
 
-		return { items: list.items };
+		return { items: await addOwnerEmails(pbAdmin, list.items) };
 	} catch (e) {
 		console.error('admin load failed', e);
 		return { items: [] };

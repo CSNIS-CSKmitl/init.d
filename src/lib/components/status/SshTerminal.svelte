@@ -100,8 +100,9 @@
 						termInstance?.write(msg.data);
 					} else if (msg.type === "error") {
 						status = "error";
-						errorMessage =
-							msg.message || "SSH connection error occurred.";
+						errorMessage = msg.message?.includes('All configured authentication methods failed')
+							? 'SSH rejected these guest credentials. The website password is separate from the VM/CT password. Root may require an SSH private key; try an authorized guest account or key.'
+							: msg.message || "SSH connection error occurred.";
 						ws?.close();
 					}
 				} catch (err: any) {
@@ -232,7 +233,7 @@
 	});
 </script>
 
-<div class="flex h-full w-full flex-col bg-background font-mono text-sm text-foreground">
+<div class="flex h-full min-h-0 w-full flex-col overflow-y-auto bg-background p-3 font-mono text-sm text-foreground">
 	{#if status === "disconnected" || status === "error"}
 		<Card.Root class="m-auto w-full max-w-md shadow-2xl">
 			<Card.Header>
@@ -297,17 +298,18 @@
 						</Field.Field>
 
 						<Field.Field>
-							<Field.FieldLabel for="password">Password</Field.FieldLabel>
+						<Field.FieldLabel for="password">Guest OS password</Field.FieldLabel>
 							<Input
 								type="password"
 								id="password"
 								bind:value={password}
 								placeholder="••••••••"
 							/>
+							<p class="text-xs text-muted-foreground">Use this VM/CT account's password. Your website login password is separate.</p>
 						</Field.Field>
 
 						<Field.Field>
-							<Field.FieldLabel for="privateKey">Private Key (Optional)</Field.FieldLabel>
+						<Field.FieldLabel for="privateKey">SSH private key (if required)</Field.FieldLabel>
 							<Textarea
 								id="privateKey"
 								bind:value={privateKey}

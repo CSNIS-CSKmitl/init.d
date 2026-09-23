@@ -1,20 +1,22 @@
 import proxmoxApi from 'proxmox-api';
+import { fetch as undiciFetch, Agent } from 'undici';
 import * as dotenv from 'dotenv';
 import { CT_ID, VM_ID } from '$static/constant';
 import { sendDiscordNotification } from './discord';
 
 dotenv.config();
 
-if (process.env.PROXMOX_SKIP_TLS_VERIFY === 'true') {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-}
+const insecureProxmoxAgent = new Agent({ connect: { rejectUnauthorized: false } });
 
 const customFetch = (url: any, init: any) => {
     if (init && init.headers) {
         delete init.headers['Content-Length'];
         delete init.headers['content-length'];
     }
-    return fetch(url, init);
+    return undiciFetch(url, {
+        ...init,
+        dispatcher: process.env.PROXMOX_SKIP_TLS_VERIFY === 'true' ? insecureProxmoxAgent : undefined
+    });
 };
 
 // Lazy getter — avoids UUID-format validation at module load time.
@@ -437,6 +439,7 @@ export interface ProxmoxVncTicketParams {
 export interface ProxmoxVncTicketResponse {
     ticket: string;
     port: number;
+    password?: string;
     upid: string;
     cert: string;
     user: string;
@@ -454,7 +457,7 @@ async function getProxmoxSession(params: {
     const { host, port, user, password, skipTls } = params;
     const url = `https://${host}:${port}/api2/json/access/ticket`;
 
-    const fetchOpts: RequestInit = {
+    const fetchOpts: Parameters<typeof undiciFetch>[1] = {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
@@ -463,14 +466,13 @@ async function getProxmoxSession(params: {
             username: user,
             password: password || ''
         }).toString(),
-        // @ts-expect-error — Node 18+ supports dispatcher via undici
         dispatcher: skipTls
-            ? new (await import('undici').then((m) => m.Agent))({ connect: { rejectUnauthorized: false } })
+            ? insecureProxmoxAgent
             : undefined
     };
 
     console.log(`[Proxmox Auth] Requesting session ticket for ${user} at ${url}`);
-    const res = await fetch(url, fetchOpts);
+    const res = await undiciFetch(url, fetchOpts);
     const responseText = await res.text();
 
     if (!res.ok) {
@@ -509,12 +511,11 @@ async function postProxmoxProxy(
         console.log(`[Proxmox] Using API Token authentication (User: ${user}!${token})`);
     }
 
-    const fetchOpts: RequestInit = {
+    const fetchOpts: Parameters<typeof undiciFetch>[1] = {
         method: 'POST',
         headers,
-        // @ts-expect-error — Node 18+ supports this via undici
         dispatcher: skipTls
-            ? new (await import('undici').then((m) => m.Agent))({ connect: { rejectUnauthorized: false } })
+            ? insecureProxmoxAgent
             : undefined
     };
 
@@ -536,9 +537,9 @@ async function postProxmoxProxy(
             body.set('generate-password', '1');
         }
     }
-    (fetchOpts as any).body = body.toString();
+    fetchOpts.body = body.toString();
 
-    const res = await fetch(url, fetchOpts);
+    const res = await undiciFetch(url, fetchOpts);
     const responseText = await res.text();
 
     console.log(`[Proxmox] Response status: ${res.status}`);

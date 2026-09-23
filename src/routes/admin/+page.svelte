@@ -97,6 +97,11 @@
 							// If the update event does not have expanded email (due to client permissions),
 							// preserve the existing expanded email from our list.
 							const old = items.find((i) => i.id === rec.id);
+							if (old && JSON.stringify(old.owners ?? []) !== JSON.stringify(rec.owners ?? [])) {
+								void invalidateAll();
+							}
+							rec.owner_emails = old?.owner_emails;
+							rec.requester_email = old?.requester_email;
 							if (old && old.expand?.email && !rec.expand?.email?.email) {
 								rec.expand = {
 									...rec.expand,
@@ -112,7 +117,7 @@
 							items = items.filter((i) => i.id !== id);
 						}
 					},
-					{ expand: 'passion_group,email' }
+					{ expand: 'passion_group,email,owners' }
 				);
 				connectionState = 'live';
 			} catch (err) {

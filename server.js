@@ -39,7 +39,7 @@ function parseAuthCookie(cookieHeader) {
 
 server.on('upgrade', (request, socket, head) => {
 	const url = request.url || '';
-	console.log(`[Production Server Upgrade] Incoming upgrade request: ${url}`);
+	console.log(`[Production Server Upgrade] Incoming upgrade request: ${url.split('?')[0]}`);
 	if (url.startsWith('/ssh-ws')) {
 		wss.handleUpgrade(request, socket, head, (ws) => {
 			wss.emit('connection', ws, request);
@@ -56,26 +56,10 @@ server.on('upgrade', (request, socket, head) => {
 // Proxmox WebSocket Proxy Handler for production
 proxmoxWss.on('connection', (clientWs, request) => {
 	const reqUrl = request.url || '';
-	console.log(`[Proxmox-WS Prod Proxy] Connection opened for request: ${reqUrl}`);
+	console.log(`[Proxmox-WS Prod Proxy] Connection opened for request: ${reqUrl.split('?')[0]}`);
 
-	let targetPath = reqUrl;
-	let pveAuthCookie = null;
-
-	const cookieMatch = reqUrl.match(/^\/proxmox-ws\/cookie\/([^/]+)\/(.*)/);
-	const urlMatch = reqUrl.match(/[?&]pveauthcookie=([^&]+)/);
-
-	if (cookieMatch) {
-		pveAuthCookie = decodeURIComponent(cookieMatch[1]);
-		targetPath = '/' + cookieMatch[2];
-	} else if (urlMatch) {
-		pveAuthCookie = decodeURIComponent(urlMatch[1]);
-		targetPath = reqUrl
-			.replace(/^\/proxmox-ws/, '')
-			.replace(/([?&])pveauthcookie=[^&]+(&|$)/, (_, g1, g2) => (g1 === '?' && g2 === '&' ? '?' : ''))
-			.replace(/[?&]$/, '');
-	} else {
-		targetPath = reqUrl.replace(/^\/proxmox-ws/, '');
-	}
+	let targetPath = reqUrl.replace(/^\/proxmox-ws/, '');
+	const pveAuthCookie = request.headers.cookie?.match(/(?:^|;\s*)PVEAuthCookie=([^;]+)/)?.[1];
 
 	if (!targetPath.startsWith('/')) {
 		targetPath = '/' + targetPath;
@@ -86,7 +70,7 @@ proxmoxWss.on('connection', (clientWs, request) => {
 	};
 
 	if (pveAuthCookie) {
-		targetHeaders['Cookie'] = `PVEAuthCookie=${pveAuthCookie}`;
+		targetHeaders['Cookie'] = `PVEAuthCookie=${decodeURIComponent(pveAuthCookie)}`;
 		console.log('[Proxmox-WS Prod Proxy] Authenticated using dynamic PVEAuthCookie.');
 	} else {
 		targetHeaders['Authorization'] = proxmoxAuthHeader;
@@ -94,12 +78,16 @@ proxmoxWss.on('connection', (clientWs, request) => {
 	}
 
 	const targetUrl = `wss://${proxmoxHost}:${proxmoxPort}${targetPath}`;
-	console.log(`[Proxmox-WS Prod Proxy] Proxying WebSocket to ${targetUrl}`);
+	console.log(`[Proxmox-WS Prod Proxy] Proxying WebSocket to ${targetUrl.split('?')[0]}`);
 
 	const targetWs = new WebSocket(targetUrl, {
 		headers: targetHeaders,
-		rejectUnauthorized: false
+		rejectUnauthorized: process.env.PROXMOX_SKIP_TLS_VERIFY !== 'true'
 	});
+	const closeWs = (ws) => {
+		if (ws.readyState === WebSocket.CONNECTING) ws.terminate();
+		else if (ws.readyState === WebSocket.OPEN) ws.close();
+	};
 
 	let isTargetOpen = false;
 	const messageQueue = [];
@@ -129,30 +117,22 @@ proxmoxWss.on('connection', (clientWs, request) => {
 		}
 	});
 
-	clientWs.on('close', (code, reason) => {
-		if (targetWs.readyState === WebSocket.OPEN || targetWs.readyState === WebSocket.CONNECTING) {
-			targetWs.close(code, reason);
-		}
+	clientWs.on('close', () => {
+		closeWs(targetWs);
 	});
 
-	targetWs.on('close', (code, reason) => {
-		if (clientWs.readyState === WebSocket.OPEN || clientWs.readyState === WebSocket.CONNECTING) {
-			clientWs.close(code, reason);
-		}
+	targetWs.on('close', () => {
+		closeWs(clientWs);
 	});
 
 	clientWs.on('error', (err) => {
 		console.error('[Proxmox-WS Prod Client Error]:', err.message);
-		if (targetWs.readyState === WebSocket.OPEN || targetWs.readyState === WebSocket.CONNECTING) {
-			targetWs.close();
-		}
+		closeWs(targetWs);
 	});
 
 	targetWs.on('error', (err) => {
 		console.error('[Proxmox-WS Prod Target Error]:', err.message);
-		if (clientWs.readyState === WebSocket.OPEN || clientWs.readyState === WebSocket.CONNECTING) {
-			clientWs.close();
-		}
+		closeWs(clientWs);
 	});
 });
 
@@ -188,11 +168,16 @@ wss.on('connection', (ws, request) => {
 				try {
 					// 1. Validate token is active
 					await pb.collection('users').authRefresh();
+					const user = await pb.collection('users').getOne(auth.userId, { expand: 'user_type' });
+					const role = String(user.expand?.user_type?.type ?? '').toLowerCase();
+					const isAdmin = ['admin', 'staff', 'superadmin'].includes(role);
 					
 					// 2. Query to verify if the user has access to this instance by its IP, hostname or dns_name
-					const cleanHost = host.replace(/"/g, '\\"');
-					const filter = `IP = "${cleanHost}" || hostname = "${cleanHost}" || dns_name = "${cleanHost}"`;
+					const filter = pb.filter('IP = {:host} || hostname = {:host} || dns_name = {:host}', { host });
 					const instance = await pb.collection('instances').getFirstListItem(filter);
+					if (!isAdmin && instance.email !== auth.userId && !(instance.owners ?? []).includes(auth.userId)) {
+						throw new Error('Instance access denied');
+					}
 					
 					console.log(`[SSH-WS Production Auth] Success. User ${auth.userId} authorized for instance ${instance.hostname} (${instance.IP})`);
 				} catch (err) {

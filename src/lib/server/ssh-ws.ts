@@ -57,11 +57,16 @@ export function setupSshWs(wss: any) {
 					try {
 						// 1. Validate token is active
 						await pb.collection('users').authRefresh();
+						const user = await pb.collection('users').getOne(auth.userId, { expand: 'user_type' });
+						const role = String(user.expand?.user_type?.type ?? '').toLowerCase();
+						const isAdmin = ['admin', 'staff', 'superadmin'].includes(role);
 						
 						// 2. Query to verify if the user has access to this instance by its IP, hostname or dns_name
-						const cleanHost = host.replace(/"/g, '\\"');
-						const filter = `IP = "${cleanHost}" || hostname = "${cleanHost}" || dns_name = "${cleanHost}"`;
+						const filter = pb.filter('IP = {:host} || hostname = {:host} || dns_name = {:host}', { host });
 						const instance = await pb.collection('instances').getFirstListItem(filter);
+						if (!isAdmin && instance.email !== auth.userId && !(instance.owners ?? []).includes(auth.userId)) {
+							throw new Error('Instance access denied');
+						}
 						
 						console.log(`[SSH-WS Auth] Success. User ${auth.userId} authorized for instance ${instance.hostname} (${instance.IP})`);
 					} catch (err: any) {

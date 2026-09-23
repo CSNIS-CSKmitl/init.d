@@ -181,37 +181,22 @@ export default defineConfig(({ mode }) => {
 					target: `https://${proxmoxHost}:${proxmoxPort}`,
 					ws: true,
 					changeOrigin: true, // rewrite the Host header to match the Proxmox target host
-					secure: false, // bypass self-signed cert
-					rewrite: (path) => path.replace(/^\/proxmox-ws\/cookie\/[^\/]+\//, '/').replace(/^\/proxmox-ws/, ''),
+					secure: process.env.PROXMOX_SKIP_TLS_VERIFY !== 'true',
+					rewrite: (path) => path.replace(/^\/proxmox-ws/, ''),
 					configure: (proxy) => {
 						proxy.on('proxyReqWs', (proxyReq, req, socket, options, head) => {
 							console.log('[Vite WS Proxy] Upgrading WebSocket connection...');
 
-							const reqUrl = req.url || '';
-							const pathMatch = reqUrl.match(/\/cookie\/([^/]+)\//);
-							const urlMatch = reqUrl.match(/[?&]pveauthcookie=([^&]+)/);
+							const cookie = req.headers.cookie?.match(/(?:^|;\s*)PVEAuthCookie=([^;]+)/)?.[1];
 
-							if (pathMatch && pathMatch[1]) {
-								const pveAuthCookie = decodeURIComponent(pathMatch[1]);
-								proxyReq.setHeader('Cookie', `PVEAuthCookie=${pveAuthCookie}`);
-								console.log('[Vite WS Proxy] Authenticated using dynamic PVEAuthCookie from path.');
-							} else if (urlMatch && urlMatch[1]) {
-								const pveAuthCookie = decodeURIComponent(urlMatch[1]);
-								proxyReq.setHeader('Cookie', `PVEAuthCookie=${pveAuthCookie}`);
-								console.log('[Vite WS Proxy] Authenticated using dynamic PVEAuthCookie from query.');
-
-								// Remove the custom pveauthcookie param from the path forwarded to Proxmox
-								const cleanPath = proxyReq.path.replace(/([?&])pveauthcookie=[^&]+(&|$)/, (_, g1, g2) => {
-									return g1 === '?' && g2 === '&' ? '?' : '';
-								}).replace(/[?&]$/, '');
-								proxyReq.path = cleanPath;
+							if (cookie) {
+								proxyReq.setHeader('Cookie', `PVEAuthCookie=${decodeURIComponent(cookie)}`);
+								console.log('[Vite WS Proxy] Authenticated using PVEAuthCookie.');
 							} else {
 								// Fallback to static API Token header if no session cookie parameter is present
 								proxyReq.setHeader('Authorization', proxmoxAuthHeader);
 								console.log('[Vite WS Proxy] Authenticated using static PVEAPIToken.');
 							}
-
-							console.log('[Vite WS Proxy] Proxy Request Headers:', proxyReq.getHeaders());
 						});
 						proxy.on('error', (err) => {
 							console.error('[Vite WS Proxy Error]', err.message);

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { LeaseInstance } from "$lib/types";
+	import { untrack } from 'svelte';
 	import { passionGroupName, creatorEmail, creatorName } from "$lib/types";
 	import { enhance } from "$app/forms";
 	import { cn } from "$lib/utils";
@@ -51,20 +52,20 @@
 	const isFailed = $derived(badgeStatus === "failed");
 	const needsResolve = $derived(leaseNeedsResolve(item, progressMap[item.id]));
 
-	let replyDraft = $state(item.admin_reply ?? "");
+	let replyDraft = $state(untrack(() => item.admin_reply ?? ""));
 	// A failed attempt never actually created the VM/CT, so "Manual — already
 	// exists on Proxmox" would be the wrong default; start on Auto so the
 	// visible primary action is the correct one (retry).
-	let resolveMode = $state<"manual" | "auto">(isFailed ? "auto" : "manual");
-	let resolveVmid = $state(item.vmid != null ? String(item.vmid) : "");
-	let resolveNode = $state(item.node != null ? String(item.node) : "");
+	let resolveMode = $state<"manual" | "auto">(untrack(() => isFailed ? "auto" : "manual"));
+	let resolveVmid = $state(untrack(() => item.vmid != null ? String(item.vmid) : ""));
+	let resolveNode = $state(untrack(() => item.node != null ? String(item.node) : ""));
 	let resolveStorage = $state("local-lvm");
-	let editCpu = $state(String(item.specs.cpu));
-	let editRam = $state(String(item.specs.ram));
-	let editDisk = $state(String(item.specs.disk));
-	let editPorts = $state(item.ports ?? "");
-	let editVmid = $state(item.vmid != null ? String(item.vmid) : "");
-	let editNode = $state(item.node != null ? String(item.node) : "");
+	let editCpu = $state(untrack(() => String(item.specs.cpu)));
+	let editRam = $state(untrack(() => String(item.specs.ram)));
+	let editDisk = $state(untrack(() => String(item.specs.disk)));
+	let editPorts = $state(untrack(() => item.ports ?? ""));
+	let editVmid = $state(untrack(() => item.vmid != null ? String(item.vmid) : ""));
+	let editNode = $state(untrack(() => item.node != null ? String(item.node) : ""));
 	let provisionNode = $state("pve3");
 	let provisionNetwork = $state("vmbr1");
 	let provisionId = $state("");
@@ -119,6 +120,12 @@
 				<div class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Requester</div>
 				<div class="font-bold text-foreground">{creatorName(item)}</div>
 				<div class="font-mono text-[11px] text-muted-foreground">{creatorEmail(item)}</div>
+			</div>
+			<div>
+				<div class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Co-owners</div>
+				<div class="break-all font-mono text-xs text-foreground">
+					{(item.owner_emails ?? []).join(', ') || '—'}
+				</div>
 			</div>
 			<div>
 				<div class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Type</div>

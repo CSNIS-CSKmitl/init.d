@@ -30,6 +30,9 @@ export interface LeaseInstance {
 	created: string;
 	updated: string;
 	email: string; // The user ID of the creator (relation field named email)
+	owners?: string[]; // Additional users with access to this instance
+	owner_emails?: string[]; // Resolved on the server for display/editing
+	requester_email?: string;
 	// Passion group is a relation in the actual PB schema — the field may
 	// be a bare ID string (list API) or an expanded object (when `?expand`
 	// is used). The display layer normalises both.
@@ -37,6 +40,7 @@ export interface LeaseInstance {
 	expand?: {
 		passion_group?: PassionGroupRef;
 		email?: PbUser;
+		owners?: PbUser[];
 	};
 	type: InstanceType;
 	vmid?: number;

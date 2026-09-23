@@ -1,10 +1,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { getProxmoxTermTicket } from '$lib/proxmox';
+import { getProxmoxTermTicket, getProxmoxVncTicket } from '$lib/proxmox';
 import type { LeaseInstance } from '$lib/types';
+import { canAccessInstance } from '$lib/server/instance-owners';
+import { resolveProxmoxGuest, ProxmoxGuestNotFoundError } from '$lib/server/proxmox-guest';
 
-export const POST: RequestHandler = async ({ request, locals, cookies }) => {
+export const POST: RequestHandler = async ({ request, locals, cookies, url }) => {
 	// 1. Verify user is logged in
 	if (!locals.user) {
 		return json({ error: 'Unauthorized. Please sign in.' }, { status: 401 });
@@ -31,27 +33,22 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 		}
 
 		// Owner check: email (relation user ID) matches currently authenticated user's ID (admins bypass)
-		if (record.email !== locals.user.id && locals.user.role !== 'admin') {
+		if (!canAccessInstance(record, locals.user.id, locals.user.role === 'admin')) {
 			return json({ error: 'Forbidden. You do not own this instance.' }, { status: 403 });
 		}
 
 		// 4. Extract vmid, node, and type
-		const { vmid, type, hostname } = record;
-		// DB stores node as a bare number (e.g. "3"); Proxmox expects "pve3"
-		const node = /^\d+$/.test(String(record.node ?? ''))
-			? `pve${record.node}`
-			: String(record.node ?? '');
-		if (!vmid || !node) {
+		const { vmid, hostname } = record;
+		if (!vmid) {
 			return json(
-				{ error: 'Instance is not fully provisioned yet (missing vmid or node assignment).' },
+				{ error: 'Instance is not fully provisioned yet (missing VMID).' },
 				{ status: 409 }
 			);
 		}
 
-		// 5. Map the 'type' value (case-insensitive and supports lxc/ct/container)
-		const typeLower = String(type || '').trim().toLowerCase();
-		const typePath = (typeLower === 'container' || typeLower === 'lxc' || typeLower === 'ct') ? 'lxc' : 'qemu';
-		console.log('[API Console Debug] ID:', instanceId, 'vmid:', vmid, 'node:', node, 'db type:', type, 'typeLower:', typeLower, 'typePath:', typePath);
+		const guest = await resolveProxmoxGuest(record);
+		const node = guest.node;
+		const typePath = guest.type;
 
 		// Read Proxmox credentials from environment
 		const host = env.PROXMOX_HOST;
@@ -69,8 +66,8 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 			);
 		}
 
-		// 6. Call Proxmox termproxy to get a PTY ticket (xterm.js compatible)
-		const ticketResponse = await getProxmoxTermTicket({
+		// VMs expose a graphical display; CTs expose a PTY terminal.
+		const ticketResponse = await (typePath === 'qemu' ? getProxmoxVncTicket : getProxmoxTermTicket)({
 			host,
 			port,
 			user,
@@ -83,37 +80,36 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 			skipTls
 		});
 
-		// 8. Build WebSocket URL routed through the Vite /proxmox-ws proxy.
-		//    Proxmox uses /vncwebsocket for BOTH vncproxy and termproxy tickets.
-		//    The ticket type determines what protocol the server uses (RFB vs PTY).
-		let wsUrl: string;
+		// Proxmox uses /vncwebsocket for both RFB and PTY tickets.
+		// Keep the Proxmox session in a same-origin, HTTP-only cookie for the WS proxy.
 		if (ticketResponse.pveAuthCookie) {
 			cookies.set('PVEAuthCookie', ticketResponse.pveAuthCookie, {
-				path: '/',
-				secure: true,
+				path: '/proxmox-ws',
+				secure: url.protocol === 'https:',
 				httpOnly: true,
-				sameSite: 'lax',
-				encode: (val) => val
+				sameSite: 'strict'
 			});
-			wsUrl = `/proxmox-ws/cookie/${encodeURIComponent(ticketResponse.pveAuthCookie)}/api2/json/nodes/${node}/${typePath}/${vmid}/vncwebsocket?port=${ticketResponse.port}&vncticket=${encodeURIComponent(ticketResponse.ticket)}`;
-		} else {
-			wsUrl = `/proxmox-ws/api2/json/nodes/${node}/${typePath}/${vmid}/vncwebsocket?port=${ticketResponse.port}&vncticket=${encodeURIComponent(ticketResponse.ticket)}`;
 		}
+		const wsUrl = `/proxmox-ws/api2/json/nodes/${encodeURIComponent(node)}/${typePath}/${encodeURIComponent(vmid)}/vncwebsocket?port=${ticketResponse.port}&vncticket=${encodeURIComponent(ticketResponse.ticket)}`;
 
 		return json({
 			success: true,
+			consoleType: typePath === 'qemu' ? 'vnc' : 'terminal',
 			wsUrl,
 			ticket: ticketResponse.ticket,
+			vncPassword: typePath === 'qemu' ? ticketResponse.password || ticketResponse.ticket : undefined,
 			port: ticketResponse.port,
 			vmid,
 			node,
 			hostname,
-			user: ticketResponse.user,
-			pveAuthCookie: ticketResponse.pveAuthCookie
-		});
+			user: ticketResponse.user
+		}, { headers: { 'Cache-Control': 'no-store' } });
 
 	} catch (e: any) {
-		console.error('[API Console Error]:', e);
+		if (e instanceof ProxmoxGuestNotFoundError) {
+			return json({ error: e.message }, { status: 404 });
+		}
+		console.error('[API Console Error]:', e.message);
 
 		if (e.status === 404) {
 			return json({ error: 'Instance not found in database.' }, { status: 404 });

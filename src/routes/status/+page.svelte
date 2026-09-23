@@ -1,18 +1,20 @@
 <script lang="ts">
-	import type { PageData } from './$types';
+	import type { ActionData, PageData } from './$types';
 	import { pbBrowser } from '$lib/pb/client';
 	import type { LeaseInstance } from '$lib/types';
 	import { untrack, onMount } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import StatusList from '$lib/components/status/StatusList.svelte';
 	import DiscordQrModal from '$lib/components/DiscordQrModal.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { page } from '$app/state';
 	import { MessageSquare } from '@lucide/svelte';
 
-	let { data }: { data: PageData } = $props();
+	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let items = $state<LeaseInstance[]>(untrack(() => [...data.items]));
 	let showDiscordModal = $state<boolean>(false);
+	$effect(() => { items = [...data.items]; });
 
 	onMount(() => {
 		if (page.url.searchParams.has('submitted')) {
@@ -37,18 +39,10 @@
 				}).collection('instances');
 				unsub = await col.subscribe(
 					'*',
-					(event) => {
-						const rec = event.record as unknown as LeaseInstance;
-						if (event.action === 'create') {
-							items = [rec, ...items.filter((i) => i.id !== rec.id)];
-						} else if (event.action === 'update') {
-							items = items.map((i) => (i.id === rec.id ? rec : i));
-						} else if (event.action === 'delete') {
-							const id = rec.id;
-							items = items.filter((i) => i.id !== id);
-						}
+					() => {
+						void invalidateAll();
 					},
-					{ expand: 'passion_group' }
+						{ expand: 'passion_group,email,owners' }
 				);
 			} catch (err) {
 				console.error('status subscribe failed', err);
@@ -93,6 +87,6 @@
 	</div>
 </header>
 
-<StatusList {items} />
+<StatusList {items} {form} userId={data.userId} />
 
 <DiscordQrModal bind:open={showDiscordModal} discordUrl={data.discordLink} />

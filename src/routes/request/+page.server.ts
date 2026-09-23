@@ -13,8 +13,7 @@ import type {
 	PassionGroupRef
 } from '$lib/types';
 import { fetchPresets } from '$lib/presets';
-import PocketBase from 'pocketbase';
-import { env } from '$env/dynamic/private';
+import { adminPb, addOwnerEmails, resolveOwnerIds } from '$lib/server/instance-owners';
 import { sendDiscordNotification } from '$lib/discord';
 
 const TYPES: InstanceType[] = ['vm', 'container'];
@@ -43,6 +42,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			if (editRecord.status !== 'pending') {
 				throw error(400, 'Only pending requests can be edited.');
 			}
+			[editRecord] = await addOwnerEmails(await adminPb(), [editRecord]);
 		} catch (e) {
 			console.error('Failed to load record for edit:', e);
 			throw error(404, 'Lease request not found.');
@@ -100,8 +100,15 @@ export const actions: Actions = {
 		const ram = asInt(fd.get('ram'), NaN);
 		const disk = asInt(fd.get('disk'), NaN);
 		const quantity = asInt(fd.get('quantity'), 1) || 1;
+		const ownerEmails = asString(fd.get('owner_emails'));
+		let owners: string[] = [];
 
 		const errors: Record<string, string> = {};
+		try {
+			owners = await resolveOwnerIds(await adminPb(), ownerEmails, locals.user.id);
+		} catch (e) {
+			errors.owner_emails = e instanceof Error ? e.message : 'Could not check co-owners.';
+		}
 
 		if (!passion_group) errors.passion_group = 'Required.';
 		if (!TYPES.includes(type)) errors.type = 'Choose vm or container.';
@@ -145,7 +152,8 @@ export const actions: Actions = {
 					purpose_notes,
 					start_date,
 					end_date,
-					quantity
+					quantity,
+					owner_emails: ownerEmails
 				}
 			});
 		}
@@ -172,7 +180,8 @@ export const actions: Actions = {
 					purpose_notes,
 					start_date,
 					end_date,
-					quantity
+					quantity,
+						owner_emails: ownerEmails
 				}
 			});
 		}
@@ -188,9 +197,7 @@ export const actions: Actions = {
 					return fail(400, { errors: { global: 'Only pending requests can be updated.' } });
 				}
 				
-				const pbAdmin = new PocketBase(env.POCKETBASE_URL);
-				pbAdmin.autoCancellation(false);
-				await pbAdmin.admins.authWithPassword(env.PB_ADMIN_EMAIL, env.PB_ADMIN_PASSWORD);
+				const pbAdmin = await adminPb();
 				
 				record = await pbAdmin.collection('instances').update<LeaseInstance>(editId, {
 					passion_group,
@@ -204,7 +211,8 @@ export const actions: Actions = {
 					purpose_notes,
 					start_date: new Date(start_date).toISOString(),
 					end_date: new Date(end_date).toISOString(),
-					quantity
+					quantity,
+					owners
 				}, {
 					expand: 'email'
 				});
@@ -213,9 +221,9 @@ export const actions: Actions = {
 				return fail(500, { errors: { global: 'Failed to update request.' } });
 			}
 		} else {
-			record = await locals.pb.collection('instances').create<LeaseInstance>({
+			record = await (await adminPb()).collection('instances').create<LeaseInstance>({
 				email: locals.user.id,
-				creator_email: locals.user.email,
+				owners,
 				passion_group,
 				type,
 				hostname,

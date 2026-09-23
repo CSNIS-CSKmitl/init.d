@@ -4,7 +4,9 @@
 	import { cn } from "$lib/utils";
 	import StatusBadge from "$lib/components/StatusBadge.svelte";
 	import ProxmoxTerminal from "$lib/components/status/ProxmoxTerminal.svelte";
-	import SshTerminal from "$lib/components/status/SshTerminal.svelte";
+	import ProxmoxVnc from "$lib/components/status/ProxmoxVnc.svelte";
+	import SshSessions from "$lib/components/status/SshSessions.svelte";
+	import OwnerManager from "$lib/components/status/OwnerManager.svelte";
 	import * as Empty from "$lib/components/ui/empty";
 	import * as Table from "$lib/components/ui/table";
 	import * as Dialog from "$lib/components/ui/dialog";
@@ -25,7 +27,7 @@
 		RefreshCw,
 	} from "@lucide/svelte";
 
-	let { items = [] }: { items: LeaseInstance[] } = $props();
+	let { items = [], userId, form }: { items: LeaseInstance[]; userId: string; form?: { id?: string; ownerError?: string; ownerEmails?: string } | null } = $props();
 
 	let expanded = $state<string | null>(null);
 
@@ -33,6 +35,8 @@
 	let consoleWsUrl = $state<string | null>(null);
 	let consoleTicket = $state<string | null>(null);
 	let consoleUser = $state<string | null>(null);
+	let consoleType = $state<"terminal" | "vnc" | null>(null);
+	let consolePassword = $state<string | null>(null);
 	let consoleLoading = $state<boolean>(false);
 	let consoleError = $state<string | null>(null);
 	let terminalType = $state<"console" | "ssh" | null>(null);
@@ -42,6 +46,8 @@
 		consoleTarget = item;
 		consoleWsUrl = null;
 		consoleTicket = null;
+		consoleType = null;
+		consolePassword = null;
 		consoleLoading = true;
 		consoleError = null;
 
@@ -66,6 +72,8 @@
 			consoleWsUrl = data.wsUrl;
 			consoleTicket = data.ticket;
 			consoleUser = data.user;
+			consoleType = data.consoleType;
+			consolePassword = data.vncPassword ?? null;
 		} catch (err: any) {
 			consoleError = err.message || "An unexpected error occurred.";
 		} finally {
@@ -78,6 +86,8 @@
 		consoleWsUrl = null;
 		consoleTicket = null;
 		consoleUser = null;
+		consoleType = null;
+		consolePassword = null;
 		consoleLoading = false;
 		consoleError = null;
 		terminalType = null;
@@ -96,6 +106,7 @@
 	});
 
 	let powerStates = $state<Record<string, { status: 'running' | 'stopped' | 'loading' | 'unknown', actionLoading?: boolean }>>({});
+	let powerErrors = $state<Record<string, string>>({});
 
 	// Fetch power state for a specific instance
 	async function fetchPowerState(id: string) {
@@ -104,10 +115,14 @@
 			if (res.ok) {
 				const data = await res.json();
 				powerStates[id] = { status: data.status };
+				delete powerErrors[id];
 			} else {
+				const data = await res.json().catch(() => ({}));
+				powerErrors[id] = data.error || data.message || 'Could not read power status.';
 				powerStates[id] = { status: 'unknown' };
 			}
 		} catch {
+			powerErrors[id] = 'Could not contact the server for power status.';
 			powerStates[id] = { status: 'unknown' };
 		}
 	}
@@ -115,23 +130,26 @@
 	// Trigger start / shutdown
 	async function togglePower(item: LeaseInstance) {
 		const currentState = powerStates[item.id]?.status;
-		if (!currentState || currentState === 'loading') return;
+		if (currentState !== 'running' && currentState !== 'stopped') return;
 		const action = currentState === 'running' ? 'shutdown' : 'start';
+		delete powerErrors[item.id];
 
 		// Set loading state
 		powerStates[item.id] = { status: currentState, actionLoading: true };
 
+		let actionError: string | null = null;
 		try {
 			const res = await requestPowerAction(item.id, action);
 			if (res.success && res.upid) {
 				// Poll task status until complete
-				await pollTaskStatus(item.node ? `pve${item.node}` : '', res.upid);
+				await pollTaskStatus(res.node, res.upid);
 			}
 		} catch (err) {
-			console.error('Power toggle failed:', err);
+			actionError = err instanceof Error ? err.message : 'Power action failed.';
 		} finally {
 			// Pull status again from backend after action complete
 			await fetchPowerState(item.id);
+			if (actionError) powerErrors[item.id] = actionError;
 		}
 	}
 
@@ -143,32 +161,23 @@
 		});
 		if (!res.ok) {
 			const err = await res.json();
-			throw new Error(err.error || 'Action failed');
+			throw new Error(err.error || err.message || 'Action failed');
 		}
 		return await res.json();
 	}
 
 	async function pollTaskStatus(node: string, upid: string) {
-		return new Promise<void>((resolve) => {
-			const interval = setInterval(async () => {
-				try {
-					const res = await fetch(`/api/instance-power/task?node=${node}&upid=${upid}`);
-					if (res.ok) {
-						const data = await res.json();
-						if (data.status === 'stopped') {
-							clearInterval(interval);
-							resolve();
-						}
-					} else {
-						clearInterval(interval);
-						resolve();
-					}
-				} catch {
-					clearInterval(interval);
-					resolve();
-				}
-			}, 2000);
-		});
+		for (let attempt = 0; attempt < 60; attempt++) {
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+			const res = await fetch(`/api/instance-power/task?node=${encodeURIComponent(node)}&upid=${encodeURIComponent(upid)}`);
+			const data = await res.json();
+			if (!res.ok) throw new Error(data.error || data.message || 'Could not check Proxmox task.');
+			if (data.status === 'stopped') {
+				if (data.exitstatus !== 'OK') throw new Error(`Proxmox task failed: ${data.exitstatus || 'unknown error'}`);
+				return;
+			}
+		}
+		throw new Error('Proxmox power action timed out. Refresh the status before retrying.');
 	}
 
 	// Trigger fetches for all completed instances on mount/update
@@ -333,7 +342,8 @@
 							<p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground/70">
 								{item.purpose_notes}
 							</p>
-						</div>
+							</div>
+						<OwnerManager {item} {userId} {form} />
 						{#if item.status === "pending"}
 							<div class="mt-4 flex gap-2 border-t border-border pt-4">
 								<Button
@@ -373,14 +383,14 @@
 							</div>
 						{/if}
 						{#if item.status === "completed" && item.vmid && item.node}
-							<div class="mt-4 flex gap-2 border-t border-border pt-4">
-								<!-- <button
-									type="button"
+							<div class="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
+								<Button
+									size="sm"
 									onclick={() => openConsole(item)}
-									class="inline-flex h-8 items-center justify-center rounded bg-accent border border-accent/20 px-3 font-mono text-[11px] uppercase tracking-wider text-zinc-950 transition-colors duration-200 hover:opacity-90 cursor-pointer"
+									class="font-mono text-[11px] uppercase tracking-wider"
 								>
 									Console
-								</button> -->
+								</Button>
 								<Button
 									variant="outline"
 									size="sm"
@@ -451,6 +461,9 @@
 									{/if}
 								{/if}
 							</div>
+							{#if powerErrors[item.id]}
+								<p class="mt-2 text-xs text-destructive" role="alert">{powerErrors[item.id]}</p>
+							{/if}
 						{/if}
 					</div>
 				{/if}
@@ -611,6 +624,7 @@
 										{item.purpose_notes}
 									</p>
 								</div>
+								<OwnerManager {item} {userId} {form} />
 								{#if item.status === "pending"}
 									<div class="mt-5 flex gap-2 border-t border-border pt-4">
 										<Button
@@ -728,6 +742,9 @@
 											{/if}
 										{/if}
 									</div>
+									{#if powerErrors[item.id]}
+										<p class="mt-2 text-xs text-destructive" role="alert">{powerErrors[item.id]}</p>
+									{/if}
 								{/if}
 							</Table.Cell>
 						</Table.Row>
@@ -746,7 +763,7 @@
 >
 	<Dialog.Content
 		showCloseButton={false}
-		class="flex h-[80vh] w-full max-w-5xl flex-col gap-0 overflow-hidden rounded-xl border border-border bg-card p-0 shadow-2xl"
+		class="flex h-[92vh] w-[96vw] max-w-[96vw] flex-col gap-0 overflow-hidden rounded-xl border border-border bg-card p-0 shadow-2xl sm:max-w-[96vw]"
 	>
 		{#if consoleTarget && terminalType}
 			<Dialog.Header class="flex-row items-center justify-between gap-2.5 space-y-0 border-b border-border bg-muted px-4 py-3 sm:px-6">
@@ -776,9 +793,9 @@
 			</Dialog.Header>
 
 			<!-- Modal Body -->
-			<div class="relative flex flex-1 items-center justify-center bg-zinc-950 p-1">
+			<div class="relative flex min-h-0 flex-1 items-center justify-center bg-zinc-950 p-1">
 				{#if terminalType === "ssh"}
-					<SshTerminal
+					<SshSessions
 						defaultHost={consoleTarget.dns_name ||
 							consoleTarget.hostname}
 						defaultIP={consoleTarget.IP}
@@ -820,7 +837,9 @@
 							</Button>
 						</div>
 					</div>
-				{:else if consoleWsUrl && consoleTicket && consoleUser}
+				{:else if consoleWsUrl && consoleType === "vnc" && consolePassword}
+					<ProxmoxVnc wsUrl={consoleWsUrl} password={consolePassword} onRetry={() => openConsole(consoleTarget!)} />
+				{:else if consoleWsUrl && consoleType === "terminal" && consoleTicket && consoleUser}
 					<ProxmoxTerminal
 						wsUrl={consoleWsUrl}
 						ticket={consoleTicket}

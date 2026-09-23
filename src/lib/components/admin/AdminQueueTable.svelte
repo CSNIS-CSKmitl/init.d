@@ -4,8 +4,9 @@
   import { enhance } from "$app/forms";
   import { cn } from "$lib/utils";
   import { leaseBadgeStatus, type LeaseBadgeStatus } from "$lib/leaseStatus";
-  import SshTerminal from "$lib/components/status/SshTerminal.svelte";
+  import SshSessions from "$lib/components/status/SshSessions.svelte";
   import ProxmoxTerminal from "$lib/components/status/ProxmoxTerminal.svelte";
+  import ProxmoxVnc from "$lib/components/status/ProxmoxVnc.svelte";
   import AdminLeaseDetail from "$lib/components/admin/AdminLeaseDetail.svelte";
   import * as Table from "$lib/components/ui/table";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -34,6 +35,8 @@
   let consoleWsUrl = $state<string | null>(null);
   let consoleTicket = $state<string | null>(null);
   let consoleUser = $state<string | null>(null);
+  let consoleType = $state<"terminal" | "vnc" | null>(null);
+  let consolePassword = $state<string | null>(null);
   let consoleLoading = $state<boolean>(false);
   let consoleError = $state<string | null>(null);
   let terminalType = $state<"console" | "ssh" | null>(null);
@@ -43,6 +46,8 @@
     consoleTarget = item;
     consoleWsUrl = null;
     consoleTicket = null;
+    consoleType = null;
+    consolePassword = null;
     consoleLoading = true;
     consoleError = null;
 
@@ -63,6 +68,8 @@
       consoleWsUrl = data.wsUrl;
       consoleTicket = data.ticket;
       consoleUser = data.user;
+      consoleType = data.consoleType;
+      consolePassword = data.vncPassword ?? null;
     } catch (err: any) {
       consoleError = err.message || "An unexpected error occurred.";
     } finally {
@@ -75,6 +82,8 @@
     consoleWsUrl = null;
     consoleTicket = null;
     consoleUser = null;
+    consoleType = null;
+    consolePassword = null;
     consoleLoading = false;
     consoleError = null;
     terminalType = null;
@@ -403,7 +412,7 @@
   }}
 >
   <Dialog.Content
-    class="flex h-[80vh] w-full max-w-5xl flex-col gap-0 overflow-hidden rounded-xl p-0"
+    class="flex h-[92vh] w-[96vw] max-w-[96vw] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-[96vw]"
   >
     <Dialog.Header
       class="flex-row items-center justify-between border-b border-border bg-muted px-4 py-3 sm:px-6"
@@ -427,10 +436,10 @@
     </Dialog.Header>
 
     <div
-      class="relative flex flex-1 items-center justify-center bg-zinc-950 p-1"
+      class="relative flex min-h-0 flex-1 items-center justify-center bg-zinc-950 p-1"
     >
       {#if terminalType === "ssh" && consoleTarget}
-        <SshTerminal
+        <SshSessions
           defaultHost={consoleTarget.dns_name || consoleTarget.hostname}
           defaultIP={consoleTarget.IP}
           defaultUsername="root"
@@ -468,7 +477,9 @@
             >
           </div>
         </div>
-      {:else if consoleWsUrl && consoleTicket && consoleUser}
+      {:else if consoleWsUrl && consoleType === "vnc" && consolePassword}
+        <ProxmoxVnc wsUrl={consoleWsUrl} password={consolePassword} onRetry={() => openConsole(consoleTarget!)} />
+      {:else if consoleWsUrl && consoleType === "terminal" && consoleTicket && consoleUser}
         <ProxmoxTerminal
           wsUrl={consoleWsUrl}
           ticket={consoleTicket}
