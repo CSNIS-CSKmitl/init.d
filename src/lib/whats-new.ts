@@ -3,7 +3,7 @@
 // Set enabled to false to hide the dialog for everyone.
 export const whatsNew = {
 	enabled: true,
-	version: '2026-09-24-1',
+	version: '2026-09-24-2',
 	title: 'มีอะไรใหม่ใน init.d',
 	intro: 'อัปเดตการขอและจัดการ VM/CT รอบนี้',
 	items: [
@@ -22,6 +22,10 @@ export const whatsNew = {
 		{
 			title: 'ตามโหนดปัจจุบันอัตโนมัติ',
 			description: 'เมื่อ VM/CT ย้ายโหนด ระบบจะซิงก์ข้อมูลโหนดจาก Proxmox'
+		},
+		{
+			title: 'หน้าจัดการเครื่องพร้อมกราฟ',
+			description: 'กดชื่อเครื่องที่หน้า Status เพื่อดู CPU, RAM, Network และเลือก Console, SSH หรือคำสั่งพลังงาน'
 		}
 	]
 } as const;

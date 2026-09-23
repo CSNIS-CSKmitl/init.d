@@ -29,7 +29,7 @@ npm run start
 | --- | --- |
 | `/login` | เข้าเว็บผ่าน PocketBase `oidc` หรือบัญชี `users` |
 | `/request` | ขอ VM/CT และระบุเจ้าของร่วมก่อนส่ง |
-| `/status` | ดูคำขอ, เพิ่ม/ลบเจ้าของร่วม, แก้หรือยกเลิกคำขอ pending, จัดการ Power/Console/SSH เมื่อพร้อมใช้ |
+| `/status` | ดูคำขอ, เพิ่ม/ลบเจ้าของร่วม, แก้หรือยกเลิกคำขอ pending; กดแถวเครื่องเพื่อดูกราฟ CPU/RAM/Network และจัดการ Power/Console/SSH |
 | `/admin` | ดูคิว, ตอบผู้ขอ, แก้ข้อมูล, Complete ด้วยตนเองหรือ Auto Provision |
 
 Popup “มีอะไรใหม่” หลังล็อกอินแก้ข้อความและเปิด/ปิดได้ใน [`src/lib/whats-new.ts`](src/lib/whats-new.ts) รายละเอียดอยู่ใน [คู่มือส่งต่อ](docs/HANDOVER_TH.md#ประกาศอัปเดตหลังล็อกอิน)

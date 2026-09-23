@@ -64,6 +64,32 @@ export interface LeaseInstance {
 	admin_reply_at?: string;
 }
 
+export interface InstanceMetricPoint {
+	time: number;
+	cpu: number | null; // percent
+	memory: number | null; // bytes
+	netIn: number | null; // bytes per second
+	netOut: number | null; // bytes per second
+}
+
+export interface InstanceMetrics {
+	status: string;
+	qmpstatus: string | null;
+	node: string;
+	vmid: number;
+	current: {
+		cpu: number | null; // percent
+		memory: number | null; // bytes
+		maxMemory: number | null; // bytes
+		disk: number | null; // bytes
+		maxDisk: number | null; // bytes
+		cpus: number | null;
+		uptime: number | null; // seconds
+	};
+	points: InstanceMetricPoint[];
+	chartError?: string;
+}
+
 export function creatorEmail(item: LeaseInstance): string {
 	return item.expand?.email?.email ?? item.email;
 }
