@@ -36,7 +36,7 @@ Popup “มีอะไรใหม่” หลังล็อกอินแ�
 
 ## Node sync
 
-เว็บ dev และ production จะตรวจ Proxmox ทุก 60 วินาที แล้วอัปเดต `instances.node` เมื่อ VM/CT ย้ายโหนด โดยจับคู่จากชนิด guest กับ VMID/CTID
+เว็บ dev และ production จะตรวจ Proxmox เป็นรอบ (ค่าเริ่มต้น 60 วินาที ปรับได้ด้วย `NODE_SYNC_INTERVAL_SECONDS`) แล้วอัปเดต `instances.node` เมื่อ VM/CT ย้ายโหนด โดยจับคู่จากชนิด guest กับ VMID/CTID
 
 ```sh
 npm run sync:nodes             # ดูผลก่อน
@@ -61,3 +61,7 @@ node scripts/test-sync-instance-nodes.mjs
 ```
 
 การทดสอบที่ใช้ PocketBase/Proxmox จริงและบัญชีทดสอบอยู่ใน [คู่มือส่งต่อ](docs/HANDOVER_TH.md#สคริปต์และการทดสอบ)
+
+## OAuth2 และเงื่อนไข Computer Science
+
+หน้า Login ใช้ PocketBase `oidc` โดยตรงและยังไม่ได้ขอ IAM scope เพิ่ม โค้ด PocketBase auth hook สำหรับตรวจสาขาอยู่ใน `pb_hooks/` แต่ยังไม่ยืนยันว่าติดตั้งบนเซิร์ฟเวอร์ PocketBase จึงยังถือว่าเงื่อนไข Computer Science ไม่ถูกบังคับที่ฐานข้อมูล รายละเอียดการตั้ง scope, การตรวจ claim และขั้นตอนเปิดใช้ hook อยู่ใน [คู่มือส่งต่อ](docs/HANDOVER_TH.md#oauth2-ของ-pocketbase-และ-iam-scopes)

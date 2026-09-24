@@ -1,6 +1,6 @@
 # คู่มือส่งต่อระบบ init.d
 
-ตรวจจากโค้ดและโครงสร้าง PocketBase ที่ใช้งานจริงเมื่อ 24 กันยายน 2026 คู่มือนี้ใช้สำหรับผู้ขอ VM/CT ผู้ดูแลคิว และผู้รับช่วงดูแลระบบ ค่าบัญชี รหัสผ่าน token และ URL ภายในให้รับจากผู้ดูแลผ่านช่องทางที่ปลอดภัย ไม่บันทึกลง Git หรือเอกสารนี้
+ปรับตามโค้ด ณ 24 กันยายน 2026 และโครงสร้าง PocketBase ที่ตรวจได้ก่อนหน้านี้ คู่มือนี้ใช้สำหรับผู้ขอ VM/CT ผู้ดูแลคิว และผู้รับช่วงดูแลระบบ สถานะการติดตั้งบนเครื่อง PocketBase ระบุแยกจากไฟล์ที่เตรียมไว้ใน repository ค่าบัญชี รหัสผ่าน token และ URL ภายในให้รับจากผู้ดูแลผ่านช่องทางที่ปลอดภัย ไม่บันทึกลง Git หรือเอกสารนี้
 
 ## สารบัญ
 
@@ -70,15 +70,25 @@ npm run dev
 | `SSH_HOST_KEYS_FILE` | ที่เก็บ fingerprint ของ SSH host key; ค่าเริ่มต้น `.data/ssh-hostkeys.json` ต้องเก็บข้ามการ deploy |
 | `PORT`, `ORIGIN` | พอร์ตและ public origin ของ adapter-node; production ต้องตั้ง `ORIGIN` ให้ตรง URL ที่เบราว์เซอร์เปิด |
 
+### OAuth2 ของ PocketBase และ IAM scopes
+
 หน้า Login เรียก `pb.collection('users').authWithOAuth2({ provider: 'oidc' })` โดยตรง PocketBase จัดการ redirect, แลก OAuth code และสร้าง/ผูกบัญชี `users` เอง ฝั่ง SvelteKit ไม่ทำ OAuth flow ใหม่และไม่สร้างบัญชีเอง มีทางเข้าด้วย username/email + password ของ collection `users` ด้วย ปุ่ม OAuth ระบุ KMITL IAM สคริปต์ `setup-google-oauth.mjs` จัดการ provider ชื่อ `google` ซึ่งเป็นเส้นทางเก่า ไม่ได้ตั้งค่า `oidc` ให้หน้า Login ปัจจุบัน
 
-หลัง PocketBase ทำ OAuth สำเร็จ เว็บส่ง PocketBase token ไป `/auth/oidc` เพื่อให้เซิร์ฟเวอร์เรียก `users.authRefresh()` ยืนยัน token กับ PocketBase แล้วเก็บใน HttpOnly cookie เว็บไม่เรียก IAM `userinfo` เองและไม่รับ role/major จากเบราว์เซอร์ หากยังไม่มี `user_type` เซิร์ฟเวอร์กำหนด relation นักศึกษาเริ่มต้นสำหรับบัญชี OAuth ใหม่; relation นี้ไม่ใช่หลักฐานว่า IAM ยืนยันสาขาแล้ว
+หลัง PocketBase ทำ OAuth สำเร็จ เว็บส่ง PocketBase token ไป `/auth/oidc` เพื่อให้เซิร์ฟเวอร์เรียก `users.authRefresh()` ยืนยัน token กับ PocketBase และตรวจว่า record ID ตรงกัน แล้วเก็บใน HttpOnly cookie เว็บไม่เรียก IAM `userinfo` เองและไม่รับ role/major จากเบราว์เซอร์ หากยังไม่มี `user_type` เซิร์ฟเวอร์กำหนด relation นักศึกษาเริ่มต้นสำหรับบัญชี OAuth ใหม่ **หลัง PocketBase ยืนยัน token เท่านั้น**; relation นี้ไม่ใช่หลักฐานว่า IAM ยืนยันสาขาแล้ว
 
-PocketBase เป็นตัวเก็บบัญชีและ relation `user_type`; IAM เป็นแหล่งยืนยันสถานะนักศึกษาและสาขา การบังคับ Computer Science ต้องทำใน PocketBase auth hook บนเครื่อง PocketBase เอง เพราะ PocketBase เป็นผู้ออก token และเปิด API ให้ใช้งานโดยตรง ไม่ควรพึ่งการตรวจที่เว็บหลัง PocketBase ออก token แล้ว
+โค้ดปัจจุบัน **ไม่ได้ส่ง custom `scopes`** ใน `authWithOAuth2` จึงใช้ค่าเริ่มต้นของ PocketBase OIDC (`openid`, `email`, `profile`) หาก IAM ต้องการ scope เพิ่มเพื่อส่ง `role` หรือสาขา ให้ขอชื่อ scope ที่ถูกต้องจากผู้ดูแล IAM ก่อน แล้วเพิ่มที่ `src/routes/login/+page.svelte` เช่น `authWithOAuth2({ provider: 'oidc', scopes: ['openid', 'email', 'profile', '<IAM scope>'] })` พร้อมขยายชนิด `authWithOAuth2` ใน `src/lib/pb/client.ts` ด้วย การส่ง `scopes` จะ **แทน** ค่าเริ่มต้น จึงต้องคง scope เดิมที่ยังใช้ไว้ ค่า client ID/secret และ endpoint ตั้งใน PocketBase Admin UI → `users` → OAuth2 providers ส่วน custom scope ของการล็อกอินนี้ตั้งใน SDK call ไม่ใช่การกำหนดสิทธิ์ของ collection
 
-ไฟล์ `pb_hooks/iam-oidc-eligibility.pb.js` ใช้กับ PocketBase ที่รันจริง โดยวางไว้ใน `pb_hooks` ของ process PocketBase (ไม่ใช่โฟลเดอร์เว็บ) Hook `onRecordAuthWithOAuth2Request` ตรวจข้อมูลที่ IAM ส่งหลังแลก token และก่อน PocketBase สร้าง/ผูกบัญชีหรือออก auth token: provider ต้องเป็น `oidc`, UserInfo URL ต้องตรง IAM, `sub` ต้องตรง OAuth identity, `role` ต้องเป็น `student` และ `profile` ต้องระบุสาขา Computer Science ปัจจุบัน หากข้อมูลขาดหรือไม่ตรงจะปฏิเสธ ค่าเริ่มต้นปฏิเสธ OAuth provider อื่นรวมถึง Google และบทบาท IAM ที่ไม่ใช่นักศึกษา; หากองค์กรอนุมัติข้อยกเว้นสำหรับ `teacher` หรือ `staff` จึงค่อยตั้ง `IAM_OIDC_ALLOWED_NON_STUDENT_ROLES` ใน environment ของ **PocketBase** เป็นรายการคั่นด้วยจุลภาค หลังตรวจผลกระทบกับทุกโครงการแล้ว การแก้ `.env` ของเว็บไม่มีผลต่อ environment ของ PocketBase
+อ้างอิง: [คู่มือ OAuth2 ของ PocketBase](https://pocketbase.io/docs/authentication/), [คำตอบเรื่อง custom scope จากผู้ดูแล PocketBase](https://github.com/pocketbase/pocketbase/discussions/7114)
 
-ก่อนติดตั้ง hook ให้ตรวจเวอร์ชัน PocketBase รองรับ event นี้, สำรอง `pb_hooks` เดิม, ตรวจว่ามี hook อื่นทำงานกับ `users` หรือไม่ แล้วทดสอบล็อกอิน IAM ด้วยบัญชี CS และบัญชีที่ไม่ผ่านเกณฑ์ จากนั้นตรวจ log PocketBase ว่าโหลดไฟล์สำเร็จ หากล็อกอินทุกคนล้มเหลว ให้ย้าย hook ออกจาก `pb_hooks` เพื่อย้อนกลับ ข้อมูล `StudentProfile` จริงยังไม่มีตัวอย่าง จึงต้องยืนยัน path ของสาขาจากการล็อกอินจริงโดยไม่บันทึก access token หรือข้อมูลส่วนตัวลง log
+Scope เป็นการขอข้อมูลจาก IAM ไม่ใช่เงื่อนไขว่าเป็นนักศึกษา Computer Science หาก `userinfo` ส่ง `role` และสาขาปัจจุบันอยู่แล้ว ไม่ต้องเพิ่ม scope หากยังไม่ส่ง ต้องตรวจเอกสาร IAM หรือตัวอย่าง UserInfo ที่ปิดข้อมูลส่วนตัวก่อนเลือก scope และ path ของ claim; **ยังไม่มีตัวอย่าง `StudentProfile` จริงที่ยืนยัน path ของสาขา**
+
+PocketBase เป็นตัวเก็บบัญชีและ relation `user_type`; IAM เป็นแหล่งยืนยันสถานะนักศึกษาและสาขา การบังคับ Computer Science ต้องทำใน PocketBase auth hook บนเครื่อง PocketBase เอง เพราะ PocketBase เป็นผู้ออก token และเปิด API ให้ใช้งานโดยตรง ไม่ควรพึ่งการตรวจที่เว็บหลัง PocketBase ออก token แล้ว **ณ วันที่ปรับคู่มือนี้ hook ยังเป็นเพียงไฟล์ใน repository ไม่ได้ยืนยันว่าติดตั้งบนเซิร์ฟเวอร์ PocketBase; จึงยังถือว่าไม่ได้บังคับ CS ที่ PocketBase**
+
+ไฟล์ `pb_hooks/iam-oidc-eligibility.pb.js` เตรียมไว้สำหรับ PocketBase ที่รันจริง โดยต้องวางใน `pb_hooks` ของ process PocketBase (ไม่ใช่โฟลเดอร์เว็บ) Hook `onRecordAuthWithOAuth2Request` ตรวจข้อมูลที่ IAM ส่งหลังแลก token และก่อน PocketBase สร้าง/ผูกบัญชีหรือออก auth token: provider ต้องเป็น `oidc`, UserInfo URL ต้องตรง IAM, `sub` ต้องตรง OAuth identity, `role` ต้องเป็น `student` และ `profile` ต้องระบุสาขา Computer Science ปัจจุบัน หากข้อมูลขาดหรือไม่ตรงจะปฏิเสธ ค่าเริ่มต้นปฏิเสธ OAuth provider อื่นรวมถึง Google และบทบาท IAM ที่ไม่ใช่นักศึกษา; หากองค์กรอนุมัติข้อยกเว้นสำหรับ `teacher` หรือ `staff` จึงค่อยตั้ง `IAM_OIDC_ALLOWED_NON_STUDENT_ROLES` ใน environment ของ **PocketBase** เป็นรายการคั่นด้วยจุลภาค หลังตรวจผลกระทบกับทุกโครงการแล้ว การแก้ `.env` ของเว็บไม่มีผลต่อ environment ของ PocketBase
+
+อ้างอิงลำดับการทำงานของ hook: [PocketBase JS event hooks](https://pocketbase.io/docs/js-event-hooks/)
+
+ก่อนติดตั้ง hook ให้ตรวจเวอร์ชัน PocketBase รองรับ event นี้, สำรอง `pb_hooks` เดิม, ตรวจว่ามี hook อื่นทำงานกับ `users` หรือไม่ และยืนยันรูปแบบ `StudentProfile` จริงในฐานทดสอบ จากนั้นทดสอบล็อกอิน IAM ด้วยบัญชี CS ที่ควรผ่านและบัญชีต่างสาขาที่ควรถูกปฏิเสธ ก่อนเปิดใช้ในฐานร่วม ตรวจ log PocketBase ว่าโหลดไฟล์สำเร็จ หากล็อกอินทุกคนล้มเหลว ให้ย้าย hook ออกจาก `pb_hooks` เพื่อย้อนกลับ ห้ามบันทึก access token หรือข้อมูลส่วนตัวลง log การเข้าถึงเครื่อง PocketBase ครั้งแรกผ่าน SSH ควรยืนยัน host-key fingerprint จาก console/ช่องทางที่เชื่อถือได้ก่อนส่งรหัสผ่าน
 
 Hook นี้ควบคุมเฉพาะการล็อกอิน OAuth ครั้งใหม่ บัญชีเดิมที่มี PocketBase token อยู่แล้วอาจใช้ API โดยตรงได้จน token หมดอายุหรือถูกเพิกถอน และการล็อกอินด้วยรหัสผ่านใช้กฎเดิม หากต้องบังคับเงื่อนไข CS กับ token เดิมและทุกวิธีล็อกอิน ให้ทำแผนย้ายบัญชี/เพิกถอน token และออกแบบ policy สำหรับ password/refresh แยก โดยคำนึงว่าฐาน `users` ใช้ร่วมกับหลายโครงการ
 
@@ -111,6 +121,7 @@ hostname ยอมรับตัวอักษรอังกฤษพิม�
 ### ติดตาม/แก้คำขอ
 
 - `/status` แสดงคำขอที่ตนเป็นผู้ขอหรือเจ้าของร่วม รวมข้อความตอบกลับจากแอดมิน และอัปเดตผ่าน PocketBase realtime
+- หน้า Status ค้นรายการที่ `email = user ID` และ `owners.id ?= user ID` แยกสองคำสั่ง แล้วรวมตาม record ID เพื่อไม่ให้ VM/CT ของผู้ขอหายหลังเพิ่มเจ้าของร่วม หากโหลด PocketBase ไม่ได้ หน้าจะแสดงข้อผิดพลาดแทนการแสดงรายการว่าง
 - ผู้ขอแก้รายละเอียดคำขอหรือยกเลิกได้เฉพาะตอน `pending` การยกเลิก **ลบ record** ใน PocketBase
 - ผู้ขอแก้รายชื่อเจ้าของร่วมจากส่วน **Owners → Save owners** ได้ทั้งก่อนและหลังอนุมัติ การบันทึกแทนที่รายชื่อทั้งหมด; ลบอีเมลที่ไม่ต้องการออกก่อนกด Save
 - เจ้าของร่วมดูคำขอและเข้าถึงเครื่องได้ แต่แก้คำขอ ยกเลิก หรือจัดการเจ้าของร่วมไม่ได้ ผู้ขอยังคงเป็นเจ้าของหลักในฟิลด์ `email`
@@ -167,7 +178,7 @@ popup ไม่ใช้ PocketBase collection จึงไม่ต้อง mi
 
 กฎ `instances` ปัจจุบัน: ผู้ขอและเจ้าของร่วมอ่านได้, `user_type.type = admin` อ่านได้ทั้งหมด, การสร้าง record ต้องอ้าง user ID ของตน, การแก้/ลบระดับ PocketBase ให้แอดมินเท่านั้น หน้าเว็บจึงตรวจสิทธิ์ก่อนใช้ PocketBase superuser เขียนเจ้าของร่วมและยกเลิกคำขอ อย่าเปิดสิทธิ์แก้ collection ให้ผู้ใช้ทั่วไปโดยไม่ตรวจ action ฝั่ง server
 
-กฎความปลอดภัยที่ปรับใน PocketBase: `users.create/update` ไม่รับฟิลด์ `user_type` จากผู้ใช้ และ `instances.create` ต้องมี `user_type` ก่อนจึงส่งคำขอได้ จึงกันบัญชี OAuth ที่ยังไม่ผ่านการตรวจ IAM จากการสร้างคำขอผ่าน PocketBase API โดยตรง `users.list/view` คงกฎเดิม เพราะ PocketBase นี้ใช้ร่วมกับโครงการอื่นที่มี role `superadmin` และ `teachers`; อย่าถอด role เหล่านี้จากกฎฐานข้อมูลร่วมเพียงเพื่อปรับสิทธิ์เว็บ VM/CT สคริปต์ `node scripts/harden-pocketbase-rules.mjs` แสดง dry run และ `node scripts/harden-pocketbase-rules.mjs --apply` ใช้กฎจริงพร้อมสำรองกฎเก่าลง `.data/pocketbase-rules-backup-*.json` ก่อนแก้
+กฎความปลอดภัยที่ปรับใน PocketBase: `users.create/update` ไม่รับฟิลด์ `user_type` จากผู้ใช้ และ `instances.create` ต้องมี `user_type` ก่อนจึงส่งคำขอได้ วิธีนี้กันบัญชีที่ยังไม่มี relation ดังกล่าวจากการสร้างคำขอผ่าน PocketBase API โดยตรง **แต่ไม่ใช่การตรวจ IAM/CS** เพราะ `/auth/oidc` อาจกำหนด `user_type` เริ่มต้นหลัง PocketBase ยืนยัน token `users.list/view` คงกฎเดิม เพราะ PocketBase นี้ใช้ร่วมกับโครงการอื่นที่มี role `superadmin` และ `teachers`; อย่าถอด role เหล่านี้จากกฎฐานข้อมูลร่วมเพียงเพื่อปรับสิทธิ์เว็บ VM/CT สคริปต์ `node scripts/harden-pocketbase-rules.mjs` แสดง dry run และ `node scripts/harden-pocketbase-rules.mjs --apply` ใช้กฎจริงพร้อมสำรองกฎเก่าลง `.data/pocketbase-rules-backup-*.json` ก่อนแก้
 
 เว็บและ WebSocket ให้สิทธิ์แอดมินเฉพาะ `user_type.type = admin` เท่านั้น `superadmin` เป็นบทบาทของอีกโครงการ ไม่ได้เพิ่มสิทธิ์ในเว็บนี้ ส่วน PocketBase superuser ที่เก็บใน `PB_ADMIN_EMAIL` เป็นบัญชีบริการสำหรับงานหลังบ้าน ไม่ใช่ role ของผู้ใช้เว็บ
 
@@ -191,13 +202,13 @@ SSH ในเว็บใช้ IP ของ instance จาก PocketBase แ�
 
 สำหรับฐานข้อมูลเดิมที่ยังไม่มีเจ้าของร่วม: หลัง backup และตรวจว่า `instances.email` เป็น relation แล้ว ใช้ `node scripts/add-instance-owners.mjs` เพื่อเพิ่ม `owners` และกฎการอ่าน สคริปต์นี้รันซ้ำได้ ส่วน `scripts/patch-instances.mjs` เป็นเครื่องมืออัปเกรดรุ่นเก่าบางฟิลด์ แต่ถ้า `node` ยังไม่มี มันจะเพิ่มเป็น **text** ซึ่งไม่ตรงกับฐานข้อมูลปัจจุบันที่ใช้ number; ตรวจ schema ก่อนรัน ไม่ใช้เป็น migration ครบชุด
 
-บัญชี OAuth ใหม่ต้องมี `user_type` ที่ถูกต้อง โค้ด `src/routes/auth/oidc/+server.ts` กำหนด relation ID ของนักศึกษาเมื่อการตรวจ IAM ผ่าน หากเปลี่ยน PocketBase ใหม่ต้องตรวจ ID นี้และแก้ให้ตรง มิฉะนั้น role อาจผิดหรือยังว่าง หน้า Login เรียก provider `oidc`; `setup-google-oauth.mjs` ใช้สำหรับ provider `google` แบบเดิมเท่านั้น
+บัญชี OAuth ใหม่ต้องมี `user_type` ที่ถูกต้อง โค้ด `src/routes/auth/oidc/+server.ts` กำหนด relation ID ของนักศึกษา **หลัง PocketBase ยืนยัน token** หากเปลี่ยน PocketBase ใหม่ต้องตรวจ ID นี้และแก้ให้ตรง มิฉะนั้น role อาจผิดหรือยังว่าง การกำหนด relation นี้ไม่ตรวจ CS หน้า Login เรียก provider `oidc`; `setup-google-oauth.mjs` ใช้สำหรับ provider `google` แบบเดิมเท่านั้น
 
 ## การเชื่อมต่อ Proxmox และซิงก์โหนด
 
 ระบบแปลง `type = vm` เป็น Proxmox `qemu` และ `type = container` เป็น `lxc` ปุ่ม Power/Console จะค้นหา guest จาก cluster inventory ด้วยชนิดและ VMID/CTID เพื่อหา node ปัจจุบัน ไม่ต้องพึ่ง node ที่เคยบันทึกอย่างเดียว
 
-เมื่อ guest ย้าย node สคริปต์ `scripts/sync-instance-nodes.mjs` จะตรวจทุก 60 วินาทีเมื่อ dev/production server ทำงาน แล้วอัปเดตเฉพาะ `instances.node` โดยคง VMID/CTID เดิมไว้ ต้องจับคู่ **ชนิด + ID ได้รายการเดียว** ทั้งฝั่งฐานข้อมูลและ Proxmox; ถ้าหาย ซ้ำ หรือ node ไม่ใช่รูปแบบ `pve` ตามด้วยตัวเลข จะ `SKIPPED` ไม่แก้ record
+เมื่อ guest ย้าย node สคริปต์ `scripts/sync-instance-nodes.mjs` จะตรวจเป็นรอบเมื่อ dev/production server ทำงาน โดยค่าเริ่มต้นคือ 60 วินาที และกำหนดได้ด้วย `NODE_SYNC_INTERVAL_SECONDS` (30–3600 วินาที) แล้วอัปเดตเฉพาะ `instances.node` โดยคง VMID/CTID เดิมไว้ ต้องจับคู่ **ชนิด + ID ได้รายการเดียว** ทั้งฝั่งฐานข้อมูลและ Proxmox; ถ้าหาย ซ้ำ หรือ node ไม่ใช่รูปแบบ `pve` ตามด้วยตัวเลข จะ `SKIPPED` ไม่แก้ record
 
 ```powershell
 npm run sync:nodes             # ดูว่าจะเปลี่ยนอะไร (read only)
@@ -213,10 +224,12 @@ npm run sync:nodes:watch       # worker แยก เมื่อไม่ได
 | --- | --- | --- |
 | `npm run check` | ตรวจ Svelte/TypeScript | ทุกครั้งก่อนส่งงาน |
 | `npm run build` | สร้าง production bundle | ก่อน restart/deploy |
+| `npm run test:security` | ทดสอบ role, WebSocket, console grant, SSH host key และตรรกะ PocketBase IAM hook ด้วยข้อมูลจำลอง | หลังแก้ auth/security; **ไม่ใช่การทดสอบ hook บน PocketBase จริง** |
 | `node scripts/test-sync-instance-nodes.mjs` | unit test ไม่ต่อฐานข้อมูล | หลังแก้กฎจับคู่โหนด |
 | `npm run sync:nodes` | ดูรายการโหนดที่จะเปลี่ยน | ก่อน apply หรือสอบสวน migration |
 | `npm run sync:nodes -- --apply` | เขียน `instances.node` ที่จับคู่ได้ | หลังตรวจ dry run |
 | `node scripts/add-instance-owners.mjs` | แก้ schema/rules ของ `instances` | อัปเกรด DB เดิมที่ยังไม่มี `owners` |
+| `node scripts/harden-pocketbase-rules.mjs` | ตรวจ rule ปัจจุบันโดยไม่แก้ฐาน; เพิ่ม `--apply` เพื่อเขียน rule พร้อม backup | ตรวจ drift ก่อนปรับสิทธิ์ฐานร่วม |
 | `node scripts/patch-instances.mjs` | เพิ่มบางฟิลด์ใน schema รุ่นเก่า | หลังตรวจ schema และ backup เท่านั้น |
 | `node scripts/seed-templates.mjs` | ดึง preset จาก community-scripts แล้วเขียน `templates` | เติมแค็ตตาล็อก; ใช้ network และเวลาพอสมควร |
 | `node scripts/update-pb-url.mjs` | เปลี่ยน public URL setting ของ PocketBase | ย้ายโดเมน OAuth |
@@ -235,11 +248,14 @@ node scripts/test-console.mjs         # ต้องมี VM และ CT ท�
 
 การทดสอบ console ใช้ Proxmox จริงและต้องมี guest ที่กำลังรัน ไม่ควรใช้ปุ่ม Auto Provision เป็นการทดสอบทั่วไปเพราะสร้าง guest จริง
 
+ผลตรวจล่าสุด 24 กันยายน 2026: `npm run check` ผ่านโดยไม่มี error/warning, `npm run build` ผ่าน และ `npm run test:security` ผ่าน 10 รายการ ทดสอบหน้า `/status` กับ PocketBase จริงก่อนหน้านี้แล้วพบทั้งเครื่องที่บัญชีเป็นผู้ขอและเป็นเจ้าของร่วมหลังแยก query; `/auth/oidc` รับ PocketBase token ที่ถูกต้องและปฏิเสธ record ID ที่ไม่ตรง ยัง **ไม่ได้** ทดสอบการล็อกอิน IAM ของบัญชี CS/ต่างสาขาบน hook ที่ติดตั้งจริง
+
 ## แก้ปัญหาที่พบบ่อย
 
 | อาการ | ตรวจตามลำดับ |
 | --- | --- |
 | ล็อกอิน OAuth ไม่ผ่าน | ตรวจ provider `oidc` ใน `users`, redirect URL ของ PocketBase, `VITE_POCKETBASE_URL`, auth hook บนเครื่อง PocketBase, `role`/สาขาที่ IAM ส่ง และ log PocketBase กับ `/auth/oidc` |
+| ต้องการข้อมูล IAM เพิ่มจาก OAuth | ตรวจ UserInfo ที่ IAM ส่งด้วย scope ปัจจุบันก่อน; ถ้าขาด claim ให้ขอชื่อ scope จาก IAM แล้วเพิ่มใน `authWithOAuth2({ scopes: [...] })` โดยคง `openid`, `email`, `profile`; scope ไม่ใช่ตัวกรองสาขา |
 | เพิ่มเจ้าของร่วมแล้ว VM/CT หายจาก Status | หน้า Status ต้องค้น `email = user ID` และ `owners.id ?= user ID` แยกคำสั่งแล้วรวมผล; ตัวกรอง OR เดิมบน relation ให้ผลตกหล่น ตรวจว่า PocketBase query สำเร็จทั้งสองคำสั่ง |
 | ล็อกอินได้แต่ `/admin` 403 | ตรวจ `users.user_type` และ `user_type.type = admin`; แยก PocketBase superuser จากเว็บแอดมิน |
 | เพิ่มเจ้าของร่วมไม่ได้ | อีเมลต้องมีบัญชี `users` ก่อน; สูงสุด 10 คน; ตรวจฟิลด์ `owners` และ rule ของ `instances` |
@@ -259,6 +275,7 @@ node scripts/test-console.mjs         # ต้องมี VM และ CT ท�
 - รายการ base VM/CT template, VMID ของ template, `TEMPLATE_NODE`, storage และ network bridge/tag ที่ใช้จริง
 - วิธี start/restart/ดู log ของ process manager เครื่องจริง รวมทั้ง WebSocket proxy และ `NODE_SYNC_*`
 - ผล `npm run check`, `npm run build`, dry run node sync และการทดสอบ Login/Request/Status/Admin/Power/Console ด้วยบัญชีทดสอบ
+- สถานะการติดตั้ง PocketBase IAM hook, เวอร์ชัน PocketBase, ผลทดสอบบัญชี CS/ต่างสาขา, path ของสาขาปัจจุบันใน `StudentProfile` และชื่อ scope IAM หากต้องเพิ่ม; ตอนปรับคู่มือนี้ยังไม่ยืนยันว่าติดตั้ง hook และยังไม่มีตัวอย่าง `StudentProfile` จริง
 - รายการ record ที่ `SKIPPED` จาก node sync และเหตุผลที่แก้หรือยังไม่แก้
 
 ข้อจำกัดที่ควรทราบ: progress ของ Auto Provision อยู่ใน memory; restart เว็บระหว่างงานทำให้หน้าแอดมินไม่เห็น progress เดิม แม้ Proxmox อาจทำงานต่อหรือสร้าง guest ไปแล้ว โค้ด Auto Provision มีค่า cloud-init bootstrap ใน `src/lib/proxmox.ts` ที่ต้องเปลี่ยน/หมุนเวียนตามนโยบายเครื่องจริง และ repository ยังไม่มี migration ปัจจุบันครบชุดสำหรับตั้งฐานข้อมูลเปล่า `vite.config.ts` ของ dev server ตรวจ SSH session น้อยกว่า `server.js` ของ production จึงควรเปิด dev server เฉพาะเครื่อง/เครือข่ายพัฒนาที่เชื่อถือได้
