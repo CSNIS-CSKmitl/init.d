@@ -66,10 +66,21 @@ npm run dev
 | `NODE_SYNC_INTERVAL_SECONDS` | รอบซิงก์โหนด 30–3600 วินาที; ค่าเริ่มต้น 60 |
 | `DISCORD_WEBHOOK_URL` | Webhook แจ้งสร้างคำขอ/เริ่ม provision/สำเร็จ/ล้มเหลว; ไม่ตั้งค่าแล้วเว็บยังทำงาน |
 | `DISCORD_LINK` | ลิงก์ Discord Support ในหน้าเว็บ |
-| `GOOGLE_USERINFO_URL` | Userinfo endpoint ที่โค้ด OIDC ใช้อ่าน role; ถ้าใช้ IAM ให้ตั้งให้ตรง provider |
-| `PORT`, `ORIGIN` | พอร์ตและ public origin ของ adapter-node ใน production |
+| `CONSOLE_GRANT_SECRET` | คีย์เซ็นสิทธิ์ console WebSocket อายุ 60 วินาที; ถ้าไม่ตั้งจะใช้ `PROXMOX_TOKEN_SECRET` |
+| `SSH_HOST_KEYS_FILE` | ที่เก็บ fingerprint ของ SSH host key; ค่าเริ่มต้น `.data/ssh-hostkeys.json` ต้องเก็บข้ามการ deploy |
+| `PORT`, `ORIGIN` | พอร์ตและ public origin ของ adapter-node; production ต้องตั้ง `ORIGIN` ให้ตรง URL ที่เบราว์เซอร์เปิด |
 
-หน้า Login ปัจจุบันเรียก PocketBase OAuth provider ชื่อ **`oidc`** และมีทางเข้าด้วย username/email + password ของ collection `users` ด้วย ปุ่มบนหน้าระบุ Google แต่โค้ดเรียก `oidc` จึงต้องตรวจ provider ใน PocketBase ก่อนเปลี่ยนค่า OAuth สคริปต์ `setup-google-oauth.mjs` จัดการ provider ชื่อ `google` ซึ่งเป็นเส้นทางเก่า ไม่ได้ตั้งค่า `oidc` ให้หน้า Login ปัจจุบัน
+หน้า Login เรียก `pb.collection('users').authWithOAuth2({ provider: 'oidc' })` โดยตรง PocketBase จัดการ redirect, แลก OAuth code และสร้าง/ผูกบัญชี `users` เอง ฝั่ง SvelteKit ไม่ทำ OAuth flow ใหม่และไม่สร้างบัญชีเอง มีทางเข้าด้วย username/email + password ของ collection `users` ด้วย ปุ่ม OAuth ระบุ KMITL IAM สคริปต์ `setup-google-oauth.mjs` จัดการ provider ชื่อ `google` ซึ่งเป็นเส้นทางเก่า ไม่ได้ตั้งค่า `oidc` ให้หน้า Login ปัจจุบัน
+
+หลัง PocketBase ทำ OAuth สำเร็จ เว็บส่ง PocketBase token ไป `/auth/oidc` เพื่อให้เซิร์ฟเวอร์เรียก `users.authRefresh()` ยืนยัน token กับ PocketBase แล้วเก็บใน HttpOnly cookie เว็บไม่เรียก IAM `userinfo` เองและไม่รับ role/major จากเบราว์เซอร์ หากยังไม่มี `user_type` เซิร์ฟเวอร์กำหนด relation นักศึกษาเริ่มต้นสำหรับบัญชี OAuth ใหม่; relation นี้ไม่ใช่หลักฐานว่า IAM ยืนยันสาขาแล้ว
+
+PocketBase เป็นตัวเก็บบัญชีและ relation `user_type`; IAM เป็นแหล่งยืนยันสถานะนักศึกษาและสาขา การบังคับ Computer Science ต้องทำใน PocketBase auth hook บนเครื่อง PocketBase เอง เพราะ PocketBase เป็นผู้ออก token และเปิด API ให้ใช้งานโดยตรง ไม่ควรพึ่งการตรวจที่เว็บหลัง PocketBase ออก token แล้ว
+
+ไฟล์ `pb_hooks/iam-oidc-eligibility.pb.js` ใช้กับ PocketBase ที่รันจริง โดยวางไว้ใน `pb_hooks` ของ process PocketBase (ไม่ใช่โฟลเดอร์เว็บ) Hook `onRecordAuthWithOAuth2Request` ตรวจข้อมูลที่ IAM ส่งหลังแลก token และก่อน PocketBase สร้าง/ผูกบัญชีหรือออก auth token: provider ต้องเป็น `oidc`, UserInfo URL ต้องตรง IAM, `sub` ต้องตรง OAuth identity, `role` ต้องเป็น `student` และ `profile` ต้องระบุสาขา Computer Science ปัจจุบัน หากข้อมูลขาดหรือไม่ตรงจะปฏิเสธ ค่าเริ่มต้นปฏิเสธ OAuth provider อื่นรวมถึง Google และบทบาท IAM ที่ไม่ใช่นักศึกษา; หากองค์กรอนุมัติข้อยกเว้นสำหรับ `teacher` หรือ `staff` จึงค่อยตั้ง `IAM_OIDC_ALLOWED_NON_STUDENT_ROLES` ใน environment ของ **PocketBase** เป็นรายการคั่นด้วยจุลภาค หลังตรวจผลกระทบกับทุกโครงการแล้ว การแก้ `.env` ของเว็บไม่มีผลต่อ environment ของ PocketBase
+
+ก่อนติดตั้ง hook ให้ตรวจเวอร์ชัน PocketBase รองรับ event นี้, สำรอง `pb_hooks` เดิม, ตรวจว่ามี hook อื่นทำงานกับ `users` หรือไม่ แล้วทดสอบล็อกอิน IAM ด้วยบัญชี CS และบัญชีที่ไม่ผ่านเกณฑ์ จากนั้นตรวจ log PocketBase ว่าโหลดไฟล์สำเร็จ หากล็อกอินทุกคนล้มเหลว ให้ย้าย hook ออกจาก `pb_hooks` เพื่อย้อนกลับ ข้อมูล `StudentProfile` จริงยังไม่มีตัวอย่าง จึงต้องยืนยัน path ของสาขาจากการล็อกอินจริงโดยไม่บันทึก access token หรือข้อมูลส่วนตัวลง log
+
+Hook นี้ควบคุมเฉพาะการล็อกอิน OAuth ครั้งใหม่ บัญชีเดิมที่มี PocketBase token อยู่แล้วอาจใช้ API โดยตรงได้จน token หมดอายุหรือถูกเพิกถอน และการล็อกอินด้วยรหัสผ่านใช้กฎเดิม หากต้องบังคับเงื่อนไข CS กับ token เดิมและทุกวิธีล็อกอิน ให้ทำแผนย้ายบัญชี/เพิกถอน token และออกแบบ policy สำหรับ password/refresh แยก โดยคำนึงว่าฐาน `users` ใช้ร่วมกับหลายโครงการ
 
 ถ้าตั้ง IAM/OIDC ใหม่ ให้เปิด PocketBase Admin UI → `users` → OAuth2 providers แล้วตรวจ provider ชื่อ `oidc`, issuer/authorization/token/userinfo URL, client ID/secret และ redirect URI ที่ PocketBase แสดงให้ตรงฝั่ง IAM จากนั้นตรวจว่า user ที่ล็อกอินมี relation `user_type` ถูกต้อง การให้สิทธิ์แอดมินเว็บทำโดยผูก `users.user_type` เข้ากับ record ใน `user_type` ที่ `type = admin` ไม่ใช่การให้รหัส PocketBase superuser
 
@@ -156,7 +167,11 @@ popup ไม่ใช้ PocketBase collection จึงไม่ต้อง mi
 
 กฎ `instances` ปัจจุบัน: ผู้ขอและเจ้าของร่วมอ่านได้, `user_type.type = admin` อ่านได้ทั้งหมด, การสร้าง record ต้องอ้าง user ID ของตน, การแก้/ลบระดับ PocketBase ให้แอดมินเท่านั้น หน้าเว็บจึงตรวจสิทธิ์ก่อนใช้ PocketBase superuser เขียนเจ้าของร่วมและยกเลิกคำขอ อย่าเปิดสิทธิ์แก้ collection ให้ผู้ใช้ทั่วไปโดยไม่ตรวจ action ฝั่ง server
 
-โค้ดเว็บตีความ `staff` และ `superadmin` เป็นบทบาท admin ด้วย แต่กฎ collection ที่ตรวจใน PocketBase อ้าง `type = admin` เท่านั้น ถ้าจะเพิ่มบทบาทใหม่ต้องปรับกฎ PocketBase ให้สอดคล้องและทดสอบก่อน
+กฎความปลอดภัยที่ปรับใน PocketBase: `users.create/update` ไม่รับฟิลด์ `user_type` จากผู้ใช้ และ `instances.create` ต้องมี `user_type` ก่อนจึงส่งคำขอได้ จึงกันบัญชี OAuth ที่ยังไม่ผ่านการตรวจ IAM จากการสร้างคำขอผ่าน PocketBase API โดยตรง `users.list/view` คงกฎเดิม เพราะ PocketBase นี้ใช้ร่วมกับโครงการอื่นที่มี role `superadmin` และ `teachers`; อย่าถอด role เหล่านี้จากกฎฐานข้อมูลร่วมเพียงเพื่อปรับสิทธิ์เว็บ VM/CT สคริปต์ `node scripts/harden-pocketbase-rules.mjs` แสดง dry run และ `node scripts/harden-pocketbase-rules.mjs --apply` ใช้กฎจริงพร้อมสำรองกฎเก่าลง `.data/pocketbase-rules-backup-*.json` ก่อนแก้
+
+เว็บและ WebSocket ให้สิทธิ์แอดมินเฉพาะ `user_type.type = admin` เท่านั้น `superadmin` เป็นบทบาทของอีกโครงการ ไม่ได้เพิ่มสิทธิ์ในเว็บนี้ ส่วน PocketBase superuser ที่เก็บใน `PB_ADMIN_EMAIL` เป็นบัญชีบริการสำหรับงานหลังบ้าน ไม่ใช่ role ของผู้ใช้เว็บ
+
+SSH ในเว็บใช้ IP ของ instance จาก PocketBase และตรวจผู้ขอ/เจ้าของร่วม/แอดมินก่อนเชื่อมต่อ Host key ครั้งแรกจะถูก pin ใน `SSH_HOST_KEYS_FILE`; ครั้งต่อไปหาก key เปลี่ยนจะถูกปฏิเสธ ควรยืนยัน fingerprint กับผู้ดูแลเครื่องก่อนเชื่อมต่อครั้งแรก แล้วสำรองไฟล์ pin นี้ไว้เมื่อย้ายเซิร์ฟเวอร์
 
 ## การย้ายฐานข้อมูลและ migration
 
@@ -165,7 +180,7 @@ popup ไม่ใช้ PocketBase collection จึงไม่ต้อง mi
 1. หยุดเว็บและตัว worker ที่เขียน PocketBase ชั่วคราว เก็บ backup `pb_data`/snapshot ของ PocketBase พร้อม config, OAuth provider และ `user_type` อย่างปลอดภัย ทดสอบการ restore ในเครื่องทดสอบก่อน
 2. ย้าย PocketBase พร้อมข้อมูลเดิมไปเครื่องใหม่ แล้วตรวจ collection และ field สำคัญตามหัวข้อก่อนหน้า โดยเฉพาะ `instances.email`, `owners`, `node`, `vmid` และ rules
 3. ตั้ง `.env` ใหม่ด้วย URL/credential ของเครื่องปลายทาง ถ้า public PocketBase URL เปลี่ยน ให้ปรับ provider redirect URL และค่า `VITE_POCKETBASE_URL`; `node scripts/update-pb-url.mjs` เปลี่ยน setting `url` ของ PocketBase ตามค่านี้
-4. รัน `npm ci`, `npm run check`, `npm run build`, เปิดเว็บด้วย `ORIGIN` ใหม่ แล้วตรวจ Login → Request → Status → Admin → Console/Power ตามสิทธิ์
+4. รัน `npm ci`, `npm run check`, `npm run test:security`, `npm run build`, เปิดเว็บด้วย `ORIGIN` ใหม่ แล้วตรวจ Login → Request → Status → Admin → Console/Power ตามสิทธิ์
 5. รัน `npm run sync:nodes` แบบดูผลก่อน หาก mapping ถูกต้องจึงใช้ `npm run sync:nodes -- --apply` ตัววนซิงก์จะทำงานเองเมื่อเปิด dev/production server
 
 ### อัปเกรด schema หรือเริ่มฐานข้อมูลเปล่า
@@ -176,7 +191,7 @@ popup ไม่ใช้ PocketBase collection จึงไม่ต้อง mi
 
 สำหรับฐานข้อมูลเดิมที่ยังไม่มีเจ้าของร่วม: หลัง backup และตรวจว่า `instances.email` เป็น relation แล้ว ใช้ `node scripts/add-instance-owners.mjs` เพื่อเพิ่ม `owners` และกฎการอ่าน สคริปต์นี้รันซ้ำได้ ส่วน `scripts/patch-instances.mjs` เป็นเครื่องมืออัปเกรดรุ่นเก่าบางฟิลด์ แต่ถ้า `node` ยังไม่มี มันจะเพิ่มเป็น **text** ซึ่งไม่ตรงกับฐานข้อมูลปัจจุบันที่ใช้ number; ตรวจ schema ก่อนรัน ไม่ใช้เป็น migration ครบชุด
 
-บัญชี OAuth ใหม่ต้องมี `user_type` ที่ถูกต้อง โค้ด `src/routes/auth/oidc/+server.ts` มี mapping ID ของ student/teacher/guest/staff แบบคงที่ หากเปลี่ยน PocketBase ใหม่ต้องตรวจ ID ของ `user_type` และแก้ mapping ให้ตรง มิฉะนั้น role อาจผิดหรือยังว่าง หน้า Login เรียก provider `oidc`; `setup-google-oauth.mjs` ใช้สำหรับ provider `google` แบบเดิมเท่านั้น
+บัญชี OAuth ใหม่ต้องมี `user_type` ที่ถูกต้อง โค้ด `src/routes/auth/oidc/+server.ts` กำหนด relation ID ของนักศึกษาเมื่อการตรวจ IAM ผ่าน หากเปลี่ยน PocketBase ใหม่ต้องตรวจ ID นี้และแก้ให้ตรง มิฉะนั้น role อาจผิดหรือยังว่าง หน้า Login เรียก provider `oidc`; `setup-google-oauth.mjs` ใช้สำหรับ provider `google` แบบเดิมเท่านั้น
 
 ## การเชื่อมต่อ Proxmox และซิงก์โหนด
 
@@ -224,12 +239,13 @@ node scripts/test-console.mjs         # ต้องมี VM และ CT ท�
 
 | อาการ | ตรวจตามลำดับ |
 | --- | --- |
-| ล็อกอิน OAuth ไม่ผ่าน | ตรวจ provider `oidc` ใน `users`, redirect URL ของ PocketBase, `VITE_POCKETBASE_URL`, URL/userinfo ของ IAM และ log `/auth/oidc` |
+| ล็อกอิน OAuth ไม่ผ่าน | ตรวจ provider `oidc` ใน `users`, redirect URL ของ PocketBase, `VITE_POCKETBASE_URL`, auth hook บนเครื่อง PocketBase, `role`/สาขาที่ IAM ส่ง และ log PocketBase กับ `/auth/oidc` |
+| เพิ่มเจ้าของร่วมแล้ว VM/CT หายจาก Status | หน้า Status ต้องค้น `email = user ID` และ `owners.id ?= user ID` แยกคำสั่งแล้วรวมผล; ตัวกรอง OR เดิมบน relation ให้ผลตกหล่น ตรวจว่า PocketBase query สำเร็จทั้งสองคำสั่ง |
 | ล็อกอินได้แต่ `/admin` 403 | ตรวจ `users.user_type` และ `user_type.type = admin`; แยก PocketBase superuser จากเว็บแอดมิน |
 | เพิ่มเจ้าของร่วมไม่ได้ | อีเมลต้องมีบัญชี `users` ก่อน; สูงสุด 10 คน; ตรวจฟิลด์ `owners` และ rule ของ `instances` |
 | Power/Console บอก guest ไม่พบ หรือ `.conf does not exist` | ตรวจ VMID/CTID, ชนิด `vm`/`container` และ guest จริงใน cluster; รัน `npm run sync:nodes` ดูรายการ `SKIPPED` |
 | VM เปิดไม่ได้หลังย้าย node | ตรวจ Proxmox task และ guest inventory; API จะหา node ปัจจุบันจากชนิด+ID; หากหาไม่ได้ให้แก้ record ให้ตรง guest |
-| Console เปิดไม่ได้ | ตรวจ Proxmox API token/session permission, `PROXMOX_PASSWORD` หากจำเป็น, WebSocket proxy `/proxmox-ws`, certificate และ browser console |
+| Console เปิดไม่ได้ | ตรวจ Proxmox API token/session permission, `PROXMOX_PASSWORD`, `ORIGIN`, WebSocket proxy `/proxmox-ws`, certificate และ browser console |
 | SSH ตอบ `All configured authentication methods failed` | ใช้รหัส/คีย์ของ guest OS, ตรวจ username, `sshd`, firewall, root login policy; รหัสเว็บคนละชุด |
 | SSH ไม่มี IP | ตรวจ `instances.IP`, guest network, DHCP และ QEMU Guest Agent สำหรับ VM; Console อาจยังใช้ได้แม้ SSH ไม่มี IP |
 | Auto Provision ค้าง/ล้มเหลว | ตรวจ Proxmox task, template ID ใน `static/constant.ts`, `TEMPLATE_NODE`, storage/network และว่ามี guest ID ถูกสร้างไปแล้วหรือไม่ ก่อน retry |

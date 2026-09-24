@@ -16,7 +16,7 @@ await pb.collections.update(instances.id, {
 	fields,
 	listRule: '(email = @request.auth.id || owners.id ?= @request.auth.id || @request.auth.user_type.type = "admin")',
 	viewRule: '(email = @request.auth.id || owners.id ?= @request.auth.id || @request.auth.user_type.type = "admin")',
-	createRule: '@request.auth.id != "" && @request.body.email = @request.auth.id',
+	createRule: '@request.auth.id != "" && @request.auth.user_type != "" && @request.body.email = @request.auth.id',
 	updateRule: '@request.auth.user_type.type = "admin"'
 });
 console.log('instances owners relation and access rules updated');

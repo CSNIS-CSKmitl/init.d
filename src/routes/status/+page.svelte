@@ -64,7 +64,7 @@
 		<p class="font-mono text-xs uppercase tracking-[0.2em] text-primary">// init.d</p>
 		<h1 class="mt-2 text-2xl font-semibold tracking-tight">Status</h1>
 		<p class="mt-1 text-sm text-foreground/70">
-			Everything you have requested, scoped to
+			VM/CT ที่คุณขอและได้รับสิทธิ์เจ้าของร่วมสำหรับ
 			<span class="font-mono text-foreground">{data.email}</span>.
 		</p>
 	</div>

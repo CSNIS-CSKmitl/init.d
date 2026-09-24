@@ -11,10 +11,12 @@
 	import "@xterm/xterm/css/xterm.css";
 
 	let {
+		instanceId,
 		defaultHost = "",
 		defaultIP = "",
 		defaultUsername = "root",
 	}: {
+		instanceId: string;
 		defaultHost?: string;
 		defaultIP?: string;
 		defaultUsername?: string;
@@ -181,7 +183,7 @@
 			ws?.send(
 				JSON.stringify({
 					type: "init",
-					host,
+					instanceId,
 					port: Number(port) || 22,
 					username,
 					password,
@@ -267,9 +269,9 @@
 									type="text"
 									id="host"
 									bind:value={IP}
+									readonly
 									placeholder="192.168.1.100"
 									required
-									readonly
 									class="opacity-70"
 								/>
 							</Field.Field>

@@ -4,6 +4,7 @@
 import type { Handle } from '@sveltejs/kit';
 import { createPb } from '$lib/pb/server';
 import type { UserRole } from '$lib/types';
+import { isAppAdmin } from '$lib/role.mjs';
 
 interface UserTypeRef {
 	type?: string;
@@ -24,7 +25,7 @@ function resolveRole(record: UserRecord): UserRole {
 	// record lives at `record.expand.user_type`.
 	const expanded = record.expand?.user_type;
 	const typeName = expanded?.type ?? null;
-	if (typeName && ['admin', 'staff', 'superadmin'].includes(typeName.toLowerCase())) {
+	if (isAppAdmin(typeName)) {
 		return 'admin';
 	}
 	return 'user';

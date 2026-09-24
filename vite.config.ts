@@ -2,44 +2,20 @@ import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, loadEnv } from 'vite';
 import path from 'path';
-import { WebSocketServer } from 'ws';
+import WebSocket, { WebSocketServer } from 'ws';
+import type { RawData } from 'ws';
+import type { IncomingMessage } from 'node:http';
 import { Client as SshClient } from 'ssh2';
-import PocketBase from 'pocketbase';
+import { isIP } from 'node:net';
 import { startNodeSync } from './scripts/sync-instance-nodes.mjs';
-
-function parseAuthCookie(cookieHeader: string): { token: string; userId: string } | null {
-	if (!cookieHeader) return null;
-	const match = cookieHeader.match(/pb_auth=([^;]+)/);
-	if (!match) return null;
-	try {
-		const decoded = decodeURIComponent(match[1]);
-		const data = JSON.parse(decoded);
-		if (data && data.token && data.record) {
-			return {
-				token: data.token,
-				userId: data.record.id
-			};
-		}
-	} catch (e) {
-		console.error('[SSH-WS Auth Dev] Cookie parsing failed:', e);
-	}
-	return null;
-}
+import { authenticateSocket, authorizedInstance, authorizeConsoleSocket, isAllowedOrigin } from './src/lib/server/ws-auth.mjs';
+import { createHostVerifier } from './src/lib/server/ssh-hostkeys.mjs';
 
 export default defineConfig(({ mode }) => {
-	// Load .env so we can inject Proxmox credentials into the WS proxy
+	// Load .env for the development WebSocket server.
 	const env = loadEnv(mode, process.cwd(), '');
 	const proxmoxHost = env.PROXMOX_HOST || 'localhost';
 	const proxmoxPort = env.PROXMOX_PORT || '8006';
-	const proxmoxUser = env.PROXMOX_USER || '';
-	const proxmoxToken = env.PROXMOX_TOKEN || '';
-	const proxmoxSecret = env.PROXMOX_TOKEN_SECRET || '';
-
-	// Build the Authorization header value for Proxmox API token auth
-	const proxmoxAuthHeader = `PVEAPIToken=${proxmoxUser}!${proxmoxToken}=${proxmoxSecret}`;
-
-	console.log('[Vite Config] Loaded Proxmox Host:', proxmoxHost);
-	console.log('[Vite Config] Built Auth Header:', `PVEAPIToken=${proxmoxUser}!${proxmoxToken}=... (len=${proxmoxSecret.length})`);
 
 	return {
 		plugins: [
@@ -57,16 +33,22 @@ export default defineConfig(({ mode }) => {
 			{
 				name: 'ssh-ws-dev-server',
 				configureServer(server) {
-					const wss = new WebSocketServer({ noServer: true });
-					server.httpServer?.on('upgrade', (req, socket, head) => {
-						if (req.url?.startsWith('/ssh-ws')) {
-							wss.handleUpgrade(req, socket, head, (ws) => {
-								wss.emit('connection', ws, req);
-							});
+					const wss = new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 });
+					server.httpServer?.on('upgrade', async (req, socket, head) => {
+						if (req.url !== '/ssh-ws') return;
+						if (!isAllowedOrigin(req, `${server.config.server.https ? 'https' : 'http'}://${req.headers.host}`)) {
+							socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+							return;
 						}
+						const auth = await authenticateSocket(req, env.POCKETBASE_URL);
+						if (!auth) {
+							socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+							return;
+						}
+						wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req, auth));
 					});
 
-					wss.on('connection', (ws, request: any) => {
+					wss.on('connection', (ws: WebSocket, _request: IncomingMessage, auth: any) => {
 						let sshClient: SshClient | null = null;
 						let sshStream: any = null;
 
@@ -75,44 +57,20 @@ export default defineConfig(({ mode }) => {
 								const data = JSON.parse(message.toString());
 
 								if (data.type === 'init') {
-									const { host, port, username, password, privateKey, cols, rows } = data;
-
-									if (!host || !username) {
-										ws.send(JSON.stringify({ type: 'error', message: 'Missing host or username' }));
+									const { instanceId, port, username, password, privateKey, cols, rows } = data;
+									if (sshClient || !instanceId || typeof username !== 'string' || !username || username.length > 64) {
+										ws.send(JSON.stringify({ type: 'error', message: 'Invalid SSH request' }));
 										ws.close();
 										return;
 									}
-
-									// Verify authentication via cookie
-									const auth = parseAuthCookie(request?.headers?.cookie || '');
-									if (!auth) {
-										ws.send(JSON.stringify({ type: 'error', message: 'Unauthorized. Please log in.' }));
-										ws.close();
-										return;
-									}
-
-									// Validate token with PocketBase and check instance ownership
-									const pb = new PocketBase(env.POCKETBASE_URL || 'http://localhost:8090');
-									pb.authStore.save(auth.token, null);
-									
-									try {
-										// 1. Validate token is active
-										await pb.collection('users').authRefresh();
-										
-										// 2. Query to verify if the user has access to this instance by its IP, hostname or dns_name
-										const cleanHost = host.replace(/"/g, '\\"');
-										const filter = `IP = "${cleanHost}" || hostname = "${cleanHost}" || dns_name = "${cleanHost}"`;
-										const instance = await pb.collection('instances').getFirstListItem(filter);
-										
-										console.log(`[SSH-WS Dev Auth] Success. User ${auth.userId} authorized for instance ${instance.hostname} (${instance.IP})`);
-									} catch (err: any) {
-										console.error(`[SSH-WS Dev Auth] Access denied for host ${host}:`, err.message);
+									const instance = await authorizedInstance(auth, instanceId);
+									const host = instance?.IP;
+									const sshPort = Number(port);
+									if (!host || !isIP(host) || !Number.isInteger(sshPort) || sshPort < 1 || sshPort > 65535) {
 										ws.send(JSON.stringify({ type: 'error', message: 'Forbidden. You do not have access to this instance.' }));
 										ws.close();
 										return;
 									}
-
-									console.log(`[SSH-WS Dev] Received init: host=${host}, port=${port}, username=${username}, passwordLength=${password ? password.length : 0}, hasPrivateKey=${!!privateKey}`);
 
 									sshClient = new SshClient();
 									sshClient
@@ -152,10 +110,11 @@ export default defineConfig(({ mode }) => {
 										})
 										.connect({
 											host,
-											port: Number(port) || 22,
+											port: sshPort,
 											username,
 											password: password || undefined,
 											privateKey: privateKey || undefined,
+											hostVerifier: createHostVerifier(instanceId),
 											tryKeyboard: true,
 											readyTimeout: 20000
 										});
@@ -180,39 +139,62 @@ export default defineConfig(({ mode }) => {
 						});
 					});
 				}
+			},
+			{
+				name: 'proxmox-ws-dev-server',
+				configureServer(server) {
+					const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
+					server.httpServer?.on('upgrade', async (req, socket, head) => {
+						if (!new URL(req.url || '/', 'http://internal').pathname.startsWith('/proxmox-ws/')) return;
+						if (!isAllowedOrigin(req, `${server.config.server.https ? 'https' : 'http'}://${req.headers.host}`)) {
+							socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+							return;
+						}
+						const auth = await authenticateSocket(req, env.POCKETBASE_URL);
+						if (!auth) {
+							socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+							return;
+						}
+						const target = await authorizeConsoleSocket(req, auth, env.CONSOLE_GRANT_SECRET || env.PROXMOX_TOKEN_SECRET);
+						if (!target) {
+							socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+							return;
+						}
+						wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req, target));
+					});
+					wss.on('connection', (clientWs: WebSocket, _request: IncomingMessage, target: any) => {
+						const targetWs = new WebSocket(`wss://${proxmoxHost}:${proxmoxPort}${target.targetPath}`, {
+							headers: { Host: `${proxmoxHost}:${proxmoxPort}`, Cookie: `PVEAuthCookie=${target.pveAuthCookie}` },
+							rejectUnauthorized: env.PROXMOX_SKIP_TLS_VERIFY !== 'true'
+						});
+						const pending: { data: Buffer; binary: boolean }[] = [];
+						const close = (ws: WebSocket) => {
+							if (ws.readyState === WebSocket.CONNECTING) ws.terminate();
+							else if (ws.readyState === WebSocket.OPEN) ws.close();
+						};
+						targetWs.on('open', () => {
+							for (const item of pending) targetWs.send(item.data, { binary: item.binary });
+							pending.length = 0;
+						});
+						clientWs.on('message', (data: RawData, binary: boolean) => {
+							if (targetWs.readyState === WebSocket.OPEN) targetWs.send(data, { binary });
+							else if (targetWs.readyState === WebSocket.CONNECTING && pending.length < 32) pending.push({ data: Buffer.from(data as Buffer), binary });
+							else close(clientWs);
+						});
+						targetWs.on('message', (data, binary) => {
+							if (clientWs.readyState === WebSocket.OPEN) clientWs.send(data, { binary });
+						});
+						clientWs.on('close', () => close(targetWs));
+						targetWs.on('close', () => close(clientWs));
+						clientWs.on('error', () => close(targetWs));
+						targetWs.on('error', () => close(clientWs));
+					});
+				}
 			}
 		],
 		server: {
 			fs: {
 				allow: ['..', '.svelte-kit', '.svelte-kit/**']
-			},
-			proxy: {
-				'/proxmox-ws': {
-					target: `https://${proxmoxHost}:${proxmoxPort}`,
-					ws: true,
-					changeOrigin: true, // rewrite the Host header to match the Proxmox target host
-					secure: process.env.PROXMOX_SKIP_TLS_VERIFY !== 'true',
-					rewrite: (path) => path.replace(/^\/proxmox-ws/, ''),
-					configure: (proxy) => {
-						proxy.on('proxyReqWs', (proxyReq, req, socket, options, head) => {
-							console.log('[Vite WS Proxy] Upgrading WebSocket connection...');
-
-							const cookie = req.headers.cookie?.match(/(?:^|;\s*)PVEAuthCookie=([^;]+)/)?.[1];
-
-							if (cookie) {
-								proxyReq.setHeader('Cookie', `PVEAuthCookie=${decodeURIComponent(cookie)}`);
-								console.log('[Vite WS Proxy] Authenticated using PVEAuthCookie.');
-							} else {
-								// Fallback to static API Token header if no session cookie parameter is present
-								proxyReq.setHeader('Authorization', proxmoxAuthHeader);
-								console.log('[Vite WS Proxy] Authenticated using static PVEAPIToken.');
-							}
-						});
-						proxy.on('error', (err) => {
-							console.error('[Vite WS Proxy Error]', err.message);
-						});
-					}
-				}
 			}
 		},
 		build: {

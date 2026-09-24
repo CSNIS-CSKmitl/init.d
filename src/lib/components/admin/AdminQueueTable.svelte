@@ -440,6 +440,7 @@
     >
       {#if terminalType === "ssh" && consoleTarget}
         <SshSessions
+		  instanceId={consoleTarget.id}
           defaultHost={consoleTarget.dns_name || consoleTarget.hostname}
           defaultIP={consoleTarget.IP}
           defaultUsername="root"

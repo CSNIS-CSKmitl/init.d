@@ -4,53 +4,45 @@ import express from 'express';
 import http from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
 import { Client as SshClient } from 'ssh2';
-import PocketBase from 'pocketbase';
+import { isIP } from 'node:net';
 import { startNodeSync } from './scripts/sync-instance-nodes.mjs';
+import { authenticateSocket, authorizedInstance, authorizeConsoleSocket, isAllowedOrigin } from './src/lib/server/ws-auth.mjs';
+import { createHostVerifier } from './src/lib/server/ssh-hostkeys.mjs';
+
+if (!process.env.ORIGIN) throw new Error('ORIGIN must be set to the public URL of this portal.');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ noServer: true });
-const proxmoxWss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 });
+const proxmoxWss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 
 const proxmoxHost = process.env.PROXMOX_HOST || 'localhost';
 const proxmoxPort = process.env.PROXMOX_PORT || '8006';
-const proxmoxUser = process.env.PROXMOX_USER || '';
-const proxmoxToken = process.env.PROXMOX_TOKEN || '';
-const proxmoxSecret = process.env.PROXMOX_TOKEN_SECRET || '';
-const proxmoxAuthHeader = `PVEAPIToken=${proxmoxUser}!${proxmoxToken}=${proxmoxSecret}`;
-
-function parseAuthCookie(cookieHeader) {
-	if (!cookieHeader) return null;
-	const match = cookieHeader.match(/pb_auth=([^;]+)/);
-	if (!match) return null;
-	try {
-		const decoded = decodeURIComponent(match[1]);
-		const data = JSON.parse(decoded);
-		if (data && data.token && data.record) {
-			return {
-				token: data.token,
-				userId: data.record.id
-			};
-		}
-	} catch (e) {
-		console.error('[SSH-WS Auth Production] Cookie parsing failed:', e);
-	}
-	return null;
+function rejectUpgrade(socket, status, message) {
+	if (!socket.destroyed) socket.end(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\n\r\n`);
 }
 
-server.on('upgrade', (request, socket, head) => {
-	const url = request.url || '';
-	console.log(`[Production Server Upgrade] Incoming upgrade request: ${url.split('?')[0]}`);
-	if (url.startsWith('/ssh-ws')) {
-		wss.handleUpgrade(request, socket, head, (ws) => {
-			wss.emit('connection', ws, request);
-		});
-	} else if (url.startsWith('/proxmox-ws')) {
-		proxmoxWss.handleUpgrade(request, socket, head, (ws) => {
-			proxmoxWss.emit('connection', ws, request);
-		});
-	} else {
-		console.log(`[Production Server Upgrade] Unhandled upgrade request path: ${url}`);
+server.on('upgrade', async (request, socket, head) => {
+	try {
+		const url = new URL(request.url || '/', 'http://internal');
+		const isSsh = url.pathname === '/ssh-ws';
+		const isProxmox = url.pathname.startsWith('/proxmox-ws/');
+		if (!isSsh && !isProxmox) return rejectUpgrade(socket, 404, 'Not Found');
+		if (!isAllowedOrigin(request, process.env.ORIGIN)) return rejectUpgrade(socket, 403, 'Forbidden');
+		const auth = await authenticateSocket(request, process.env.POCKETBASE_URL);
+		if (!auth) return rejectUpgrade(socket, 401, 'Unauthorized');
+		if (isProxmox) {
+			const target = await authorizeConsoleSocket(request, auth, process.env.CONSOLE_GRANT_SECRET || process.env.PROXMOX_TOKEN_SECRET);
+			if (!target) return rejectUpgrade(socket, 403, 'Forbidden');
+			request.proxmoxTargetPath = target.targetPath;
+			request.pveAuthCookie = target.pveAuthCookie;
+			proxmoxWss.handleUpgrade(request, socket, head, (ws) => proxmoxWss.emit('connection', ws, request));
+		} else {
+			wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request, auth));
+		}
+	} catch (error) {
+		console.error('[WebSocket upgrade]', error);
+		rejectUpgrade(socket, 500, 'Internal Server Error');
 	}
 });
 
@@ -59,24 +51,14 @@ proxmoxWss.on('connection', (clientWs, request) => {
 	const reqUrl = request.url || '';
 	console.log(`[Proxmox-WS Prod Proxy] Connection opened for request: ${reqUrl.split('?')[0]}`);
 
-	let targetPath = reqUrl.replace(/^\/proxmox-ws/, '');
-	const pveAuthCookie = request.headers.cookie?.match(/(?:^|;\s*)PVEAuthCookie=([^;]+)/)?.[1];
-
-	if (!targetPath.startsWith('/')) {
-		targetPath = '/' + targetPath;
-	}
+	const targetPath = request.proxmoxTargetPath;
+	const pveAuthCookie = request.pveAuthCookie;
 
 	const targetHeaders = {
 		Host: `${proxmoxHost}:${proxmoxPort}`
 	};
 
-	if (pveAuthCookie) {
-		targetHeaders['Cookie'] = `PVEAuthCookie=${decodeURIComponent(pveAuthCookie)}`;
-		console.log('[Proxmox-WS Prod Proxy] Authenticated using dynamic PVEAuthCookie.');
-	} else {
-		targetHeaders['Authorization'] = proxmoxAuthHeader;
-		console.log('[Proxmox-WS Prod Proxy] Authenticated using static PVEAPIToken.');
-	}
+	targetHeaders['Cookie'] = `PVEAuthCookie=${pveAuthCookie}`;
 
 	const targetUrl = `wss://${proxmoxHost}:${proxmoxPort}${targetPath}`;
 	console.log(`[Proxmox-WS Prod Proxy] Proxying WebSocket to ${targetUrl.split('?')[0]}`);
@@ -107,8 +89,10 @@ proxmoxWss.on('connection', (clientWs, request) => {
 	clientWs.on('message', (data, isBinary) => {
 		if (isTargetOpen && targetWs.readyState === WebSocket.OPEN) {
 			targetWs.send(data, { binary: isBinary });
-		} else {
+		} else if (targetWs.readyState === WebSocket.CONNECTING && messageQueue.length < 32) {
 			messageQueue.push({ data, isBinary });
+		} else {
+			closeWs(clientWs);
 		}
 	});
 
@@ -137,7 +121,7 @@ proxmoxWss.on('connection', (clientWs, request) => {
 	});
 });
 
-wss.on('connection', (ws, request) => {
+wss.on('connection', (ws, request, auth) => {
 	let sshClient = null;
 	let sshStream = null;
 
@@ -146,43 +130,16 @@ wss.on('connection', (ws, request) => {
 			const data = JSON.parse(message.toString());
 
 			if (data.type === 'init') {
-				const { host, port, username, password, privateKey, cols, rows } = data;
-
-				if (!host || !username) {
-					ws.send(JSON.stringify({ type: 'error', message: 'Missing host or username' }));
+				const { instanceId, port, username, password, privateKey, cols, rows } = data;
+				if (sshClient || !instanceId || typeof username !== 'string' || !username || username.length > 64) {
+					ws.send(JSON.stringify({ type: 'error', message: 'Invalid SSH request' }));
 					ws.close();
 					return;
 				}
-
-				// Verify authentication via cookie
-				const auth = parseAuthCookie(request?.headers?.cookie || '');
-				if (!auth) {
-					ws.send(JSON.stringify({ type: 'error', message: 'Unauthorized. Please log in.' }));
-					ws.close();
-					return;
-				}
-
-				// Validate token with PocketBase and check instance ownership
-				const pb = new PocketBase(process.env.POCKETBASE_URL);
-				pb.authStore.save(auth.token, null);
-				
-				try {
-					// 1. Validate token is active
-					await pb.collection('users').authRefresh();
-					const user = await pb.collection('users').getOne(auth.userId, { expand: 'user_type' });
-					const role = String(user.expand?.user_type?.type ?? '').toLowerCase();
-					const isAdmin = ['admin', 'staff', 'superadmin'].includes(role);
-					
-					// 2. Query to verify if the user has access to this instance by its IP, hostname or dns_name
-					const filter = pb.filter('IP = {:host} || hostname = {:host} || dns_name = {:host}', { host });
-					const instance = await pb.collection('instances').getFirstListItem(filter);
-					if (!isAdmin && instance.email !== auth.userId && !(instance.owners ?? []).includes(auth.userId)) {
-						throw new Error('Instance access denied');
-					}
-					
-					console.log(`[SSH-WS Production Auth] Success. User ${auth.userId} authorized for instance ${instance.hostname} (${instance.IP})`);
-				} catch (err) {
-					console.error(`[SSH-WS Production Auth] Access denied for host ${host}:`, err.message);
+				const instance = await authorizedInstance(auth, instanceId);
+				const host = instance?.IP;
+				const sshPort = Number(port);
+				if (!host || !isIP(host) || !Number.isInteger(sshPort) || sshPort < 1 || sshPort > 65535) {
 					ws.send(JSON.stringify({ type: 'error', message: 'Forbidden. You do not have access to this instance.' }));
 					ws.close();
 					return;
@@ -226,10 +183,11 @@ wss.on('connection', (ws, request) => {
 					})
 					.connect({
 						host,
-						port: Number(port) || 22,
+						port: sshPort,
 						username,
 						password: password || undefined,
 						privateKey: privateKey || undefined,
+						hostVerifier: createHostVerifier(instanceId),
 						tryKeyboard: true,
 						readyTimeout: 20000
 					});

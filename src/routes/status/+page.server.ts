@@ -1,5 +1,4 @@
-// Status page — queries PocketBase filtered by the logged-in user's
-// email so users only see rows they themselves filed.
+// Status page — show requests filed by the user and requests shared with them.
 
 import { redirect, error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -14,14 +13,27 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const email = locals.user.email;
 
 	try {
-		const list = await locals.pb.collection('instances').getList<LeaseInstance>(1, 200, {
-			filter: locals.pb.filter('email = {:id} || owners.id ?= {:id}', { id: locals.user.id }),
-			sort: '-created',
-			expand: 'passion_group,email,owners'
-		});
-		return { items: await addOwnerEmails(await adminPb(), list.items), email, userId: locals.user.id };
-	} catch {
-		return { items: [], email, userId: locals.user.id };
+		const instanceCollection = locals.pb.collection('instances');
+		const options = { sort: '-created', expand: 'passion_group,email,owners' };
+		// A single OR filter across email and owners.id produces incorrect
+		// results in PocketBase after owners are added. Query each relation
+		// independently and merge by record ID.
+		const [requested, shared] = await Promise.all([
+			instanceCollection.getFullList<LeaseInstance>({
+				...options,
+				filter: locals.pb.filter('email = {:id}', { id: locals.user.id })
+			}),
+			instanceCollection.getFullList<LeaseInstance>({
+				...options,
+				filter: locals.pb.filter('owners.id ?= {:id}', { id: locals.user.id })
+			})
+		]);
+		const unique = [...new Map([...requested, ...shared].map((item) => [item.id, item])).values()]
+			.sort((a, b) => b.created.localeCompare(a.created));
+		return { items: await addOwnerEmails(await adminPb(), unique), email, userId: locals.user.id };
+	} catch (cause) {
+		console.error('[status] Failed to load instances:', cause);
+		throw error(502, 'Could not load your VM/CT list. Please retry.');
 	}
 };
 

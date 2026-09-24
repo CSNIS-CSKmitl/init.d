@@ -160,7 +160,7 @@
 			</Dialog.Header>
 			<div class="relative flex min-h-0 flex-1 items-center justify-center bg-zinc-950 p-1">
 				{#if terminalType === 'ssh'}
-					<SshSessions defaultHost={consoleTarget.dns_name || consoleTarget.hostname} defaultIP={consoleTarget.IP} defaultUsername="root" />
+					<SshSessions instanceId={consoleTarget.id} defaultHost={consoleTarget.dns_name || consoleTarget.hostname} defaultIP={consoleTarget.IP} defaultUsername="root" />
 				{:else if consoleLoading}
 					<div class="flex flex-col items-center gap-3 p-8 text-center"><Spinner class="size-8 text-primary" /><p class="font-mono text-xs text-zinc-400">กำลังเชื่อมต่อ Proxmox Console...</p></div>
 				{:else if consoleError}

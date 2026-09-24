@@ -5,6 +5,7 @@ import { getProxmoxTermTicket, getProxmoxVncTicket } from '$lib/proxmox';
 import type { LeaseInstance } from '$lib/types';
 import { canAccessInstance } from '$lib/server/instance-owners';
 import { resolveProxmoxGuest, ProxmoxGuestNotFoundError } from '$lib/server/proxmox-guest';
+import { createConsoleGrant } from '$lib/server/console-grant.mjs';
 
 export const POST: RequestHandler = async ({ request, locals, cookies, url }) => {
 	// 1. Verify user is logged in
@@ -82,15 +83,22 @@ export const POST: RequestHandler = async ({ request, locals, cookies, url }) =>
 
 		// Proxmox uses /vncwebsocket for both RFB and PTY tickets.
 		// Keep the Proxmox session in a same-origin, HTTP-only cookie for the WS proxy.
-		if (ticketResponse.pveAuthCookie) {
-			cookies.set('PVEAuthCookie', ticketResponse.pveAuthCookie, {
-				path: '/proxmox-ws',
-				secure: url.protocol === 'https:',
-				httpOnly: true,
-				sameSite: 'strict'
-			});
+		if (!ticketResponse.pveAuthCookie) {
+			return json({ error: 'Console requires a Proxmox session. Configure PROXMOX_PASSWORD.' }, { status: 503 });
 		}
-		const wsUrl = `/proxmox-ws/api2/json/nodes/${encodeURIComponent(node)}/${typePath}/${encodeURIComponent(vmid)}/vncwebsocket?port=${ticketResponse.port}&vncticket=${encodeURIComponent(ticketResponse.ticket)}`;
+		cookies.set('PVEAuthCookie', ticketResponse.pveAuthCookie, {
+			path: '/proxmox-ws',
+			secure: url.protocol === 'https:',
+			httpOnly: true,
+			sameSite: 'strict'
+		});
+		const wsPath = `/proxmox-ws/api2/json/nodes/${encodeURIComponent(node)}/${typePath}/${encodeURIComponent(vmid)}/vncwebsocket?port=${ticketResponse.port}&vncticket=${encodeURIComponent(ticketResponse.ticket)}`;
+		const grant = createConsoleGrant(env.CONSOLE_GRANT_SECRET || env.PROXMOX_TOKEN_SECRET, {
+			instanceId,
+			userId: locals.user.id,
+			path: wsPath
+		});
+		const wsUrl = `${wsPath}&grant=${encodeURIComponent(grant)}`;
 
 		return json({
 			success: true,

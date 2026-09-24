@@ -3,7 +3,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Plus, X } from '@lucide/svelte';
 
-	let { defaultHost, defaultIP, defaultUsername = 'root' }: {
+	let { instanceId, defaultHost, defaultIP, defaultUsername = 'root' }: {
+		instanceId: string;
 		defaultHost: string;
 		defaultIP?: string;
 		defaultUsername?: string;
@@ -48,7 +49,7 @@
 	</div>
 	{#each sessions as id (id)}
 		<div class="min-h-0 flex-1" class:hidden={active !== id} role="tabpanel">
-			<SshTerminal {defaultHost} {defaultIP} {defaultUsername} />
+			<SshTerminal {instanceId} {defaultHost} {defaultIP} {defaultUsername} />
 		</div>
 	{/each}
 </div>
