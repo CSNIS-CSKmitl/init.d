@@ -5,7 +5,7 @@ routerAdd('POST', '/api/cskmitl/push/register', (e) => {
 	const data = new DynamicModel({ installationId: '', targetId: '' });
 	e.bindBody(data);
 	if (!/^[a-f0-9-]{36}$/i.test(data.installationId) ||
-		typeof data.targetId !== 'string' || data.targetId.length < 20 || data.targetId.length > 256) {
+		typeof data.targetId !== 'string' || data.targetId.length < 20 || data.targetId.length > 4096) {
 		throw new BadRequestError('Invalid push device');
 	}
 	let device;
