@@ -16,10 +16,12 @@ export const fallback: RequestHandler = async ({ request, params, fetch }) => {
 	// Construct the target URL on the PocketBase server
 	const targetUrl = `${pbUrlClean}/${pathClean}${new URL(request.url).search}`;
 
-	// Clone the headers from the incoming request, omitting 'host'
+	// Let fetch negotiate the upstream transfer encoding. Forwarding the
+	// browser's Accept-Encoding can leave a compressed Content-Length on a
+	// decompressed body, truncating PocketBase's OAuth result page.
 	const headers = new Headers();
 	for (const [key, value] of request.headers.entries()) {
-		if (key.toLowerCase() !== 'host') {
+		if (!['host', 'accept-encoding', 'content-length', 'connection', 'transfer-encoding'].includes(key.toLowerCase())) {
 			headers.set(key, value);
 		}
 	}
@@ -32,14 +34,22 @@ export const fallback: RequestHandler = async ({ request, params, fetch }) => {
 			method: request.method,
 			headers,
 			body,
+			redirect: 'manual',
 			// @ts-ignore
 			duplex: body ? 'half' : undefined
 		});
 
-		// Return the streamed response back to the client
-		return new Response(res.body, {
+		const responseHeaders = new Headers(res.headers);
+		for (const key of ['content-encoding', 'content-length', 'connection', 'transfer-encoding']) {
+			responseHeaders.delete(key);
+		}
+		const isHtml = responseHeaders.get('content-type')?.includes('text/html') ?? false;
+		// Buffer small HTML pages so the OAuth success/failure screen is complete.
+		// Leave SSE and API responses streamed.
+		const responseBody = isHtml ? await res.arrayBuffer() : res.body;
+		return new Response(responseBody, {
 			status: res.status,
-			headers: res.headers
+			headers: responseHeaders
 		});
 	} catch (err) {
 		console.error('[PB Proxy Error]:', err);

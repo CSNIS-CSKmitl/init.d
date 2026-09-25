@@ -1,0 +1,19 @@
+[Unit]
+Description=PocketBase FCM Push Relay Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/push_relay
+EnvironmentFile=/etc/pocketbase-push-relay.env
+ExecStart=/usr/bin/python3 /opt/push_relay/push_relay.py
+Restart=always
+RestartSec=3
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/push_relay
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

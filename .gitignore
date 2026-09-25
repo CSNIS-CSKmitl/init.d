@@ -22,3 +22,10 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Keys and credentials
+.pb_ssh_known_hosts
+*-adminsdk-*.json
+firebase-service-account*.json
+*.env.local
+
