@@ -11,7 +11,10 @@
 		LogIn,
 		Menu,
 		X,
+		Megaphone,
 	} from "@lucide/svelte";
+
+	let { onAnnouncement }: { onAnnouncement: () => void } = $props();
 
 	let user = $derived(page.data.user);
 	const isAdmin = $derived(user?.role === "admin");
@@ -58,6 +61,16 @@
 				พบปัญหาติดต่อที่ Discord Support Server
 			</p>
 		</div>
+		<Button
+			variant="outline"
+			class="ml-auto min-h-11 min-w-11 px-2 sm:px-3"
+			aria-label="เปิดประกาศ"
+			aria-haspopup="dialog"
+			onclick={onAnnouncement}
+		>
+			<Megaphone aria-hidden="true" data-icon="inline-start" />
+			<span class="hidden sm:inline">ประกาศ</span>
+		</Button>
 		<!-- Desktop nav — hidden below lg where the hamburger takes over. -->
 		<nav class="hidden items-center gap-1 lg:flex">
 			{#each links as link (link.href)}

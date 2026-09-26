@@ -36,11 +36,13 @@ const strict = {
 const hardened = {
 	users: {
 		listRule: expected.users.listRule,
-		viewRule: expected.users.viewRule,
-		createRule: '@request.body.username = "" && @request.body.user_type:isset = false',
+		viewRule: '@request.auth.id != "" && (' + expected.users.viewRule + ')',
+		createRule: '@request.context = "oauth2" && @request.body.username = "" && @request.body.user_type:isset = false',
 		updateRule: '@request.auth.id = id && @request.body.user_type:isset = false'
 	},
-	instances: { createRule: '@request.auth.id != "" && @request.auth.user_type != "" && @request.body.email = @request.auth.id' }
+	// The portal creates requests through its server-side superuser client.
+	// Direct client creates could forge status, VMID, IP, and other server-owned fields.
+	instances: { createRule: null }
 };
 
 for (const collection of ['users', 'instances']) {

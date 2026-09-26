@@ -3,11 +3,14 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import WhatsNewDialog from '$lib/components/WhatsNewDialog.svelte';
+	import AnnouncementCenter from '$lib/components/AnnouncementCenter.svelte';
 	import { ModeWatcher } from 'mode-watcher';
 	import type { LayoutData } from './$types';
 	import type { Snippet } from 'svelte';
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
+	let announcementOpen = $state(false);
+	let showUpdates = $state(false);
 </script>
 
 <ModeWatcher defaultMode="dark" />
@@ -37,8 +40,15 @@
 		"
 	></div>
 
-	<Navbar />
-	<WhatsNewDialog userId={data.user?.id ?? null} />
+	<Navbar onAnnouncement={() => (announcementOpen = true)} />
+	<AnnouncementCenter
+		userId={data.user?.id ?? null}
+		bind:open={announcementOpen}
+		onInitialCheck={(unseen) => (showUpdates = !unseen)}
+	/>
+	{#if showUpdates && !announcementOpen}
+		<WhatsNewDialog userId={data.user?.id ?? null} />
+	{/if}
 	<main class="relative mx-auto max-w-[1400px] px-6 py-10">
 		{@render children()}
 	</main>
