@@ -20,7 +20,7 @@
 	<title>init.d — infrastructure provisioning</title>
 </svelte:head>
 
-<div class="relative min-h-screen overflow-x-hidden bg-background text-foreground transition-colors duration-300">
+<div class="relative flex min-h-screen flex-col overflow-x-hidden bg-background text-foreground transition-colors duration-300">
 	<!-- Ambient Background Glows -->
 	<div
 		class="pointer-events-none absolute top-0 left-1/2 -z-10 h-[350px] w-full max-w-[1200px] -translate-x-1/2 opacity-20 blur-[100px] transition-opacity duration-300"
@@ -49,7 +49,10 @@
 	{#if showUpdates && !announcementOpen}
 		<WhatsNewDialog userId={data.user?.id ?? null} />
 	{/if}
-	<main class="relative mx-auto max-w-[1400px] px-6 py-10">
+	<main class="relative mx-auto w-full max-w-[1400px] flex-1 px-6 py-10">
 		{@render children()}
 	</main>
+	<footer class="relative border-t border-border px-6 py-6 text-center text-xs text-muted-foreground">
+		<span>© {new Date().getFullYear()} <a href="https://github.com/techasit5415" target="_blank" rel="noopener noreferrer" class="hover:text-foreground hover:underline">Techasit Vanitpattarakul</a></span>
+	</footer>
 </div>
