@@ -5,7 +5,7 @@ import { proxmox } from '$lib/proxmox';
 import { canAccessInstance } from '$lib/server/instance-owners';
 import { resolveProxmoxGuest, ProxmoxGuestNotFoundError } from '$lib/server/proxmox-guest';
 
-const timeframes = ['hour', 'day', 'week', 'month', 'year'] as const;
+const timeframes = ['live', 'hour', 'day', 'week', 'month', 'year'] as const;
 
 function numberOrNull(value: unknown): number | null {
 	const number = Number(value);
@@ -32,9 +32,10 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		const guest = await resolveProxmoxGuest(record);
 		const target = (proxmox.nodes.$(guest.node) as any)[guest.type].$(record.vmid);
 		const current = await target.status.current.$get() as Record<string, unknown>;
+		const sampledAt = Date.now() / 1000;
 		let points: InstanceMetricPoint[] = [];
 		let chartError: string | undefined;
-		try {
+		if (timeframe !== 'live') try {
 			const raw = await target.rrddata.$get({ timeframe, cf: 'AVERAGE' }) as Record<string, unknown>[];
 			points = (Array.isArray(raw) ? raw : []).slice(-200).flatMap((point) => {
 				const time = numberOrNull(point.time);
@@ -53,6 +54,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		}
 
 		const result: InstanceMetrics = {
+			sampledAt,
 			status: String(current.status || guest.status || 'unknown'),
 			qmpstatus: typeof current.qmpstatus === 'string' ? current.qmpstatus : null,
 			node: guest.node,
@@ -64,7 +66,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 				disk: numberOrNull(current.disk),
 				maxDisk: numberOrNull(current.maxdisk),
 				cpus: numberOrNull(current.cpus),
-				uptime: numberOrNull(current.uptime)
+				uptime: numberOrNull(current.uptime),
+				netIn: numberOrNull(current.netin),
+				netOut: numberOrNull(current.netout)
 			},
 			points,
 			...(chartError ? { chartError } : {})

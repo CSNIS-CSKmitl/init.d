@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { InstanceMetrics, LeaseInstance } from '$lib/types';
+	import type { InstanceMetricPoint, InstanceMetrics, LeaseInstance } from '$lib/types';
+	import { appendLiveMetricPoint, liveMetricPoint, METRICS_POLL_MS } from '$lib/instance-metrics';
 	import { passionGroupName } from '$lib/types';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Badge } from '$lib/components/ui/badge';
@@ -31,16 +32,28 @@
 	let loading = $state(true);
 	let refreshing = $state(false);
 	let refreshVersion = 0;
+	let refreshController: AbortController | null = null;
+	let mounted = false;
+	let previousSample: InstanceMetrics | null = null;
+	let livePoints = $state<InstanceMetricPoint[]>([]);
+	let historyPoints = $state<InstanceMetricPoint[]>([]);
+	let historyTimeframe = $state<string | null>(null);
+	let historyUpdatedAt = 0;
+	let chartError = $state<string | undefined>();
+	let lastUpdated = $state<number | null>(null);
+	let livePaused = $state(false);
 	let loadError = $state<string | null>(null);
 	let actionError = $state<string | null>(null);
 	let actionLoading = $state<PowerAction | null>(null);
-	let timeframe = $state<'hour' | 'day' | 'week' | 'month' | 'year'>('hour');
+	let timeframe = $state<'live' | 'hour' | 'day' | 'week' | 'month' | 'year'>('live');
 
 	let paused = $derived(metrics?.qmpstatus === 'paused');
 	let running = $derived(metrics?.status === 'running');
 	let vm = $derived(item.type === 'vm');
 	let ready = $derived(item.status === 'completed' && !!item.vmid);
-	let latest = $derived(metrics?.points.findLast((point) => point.netIn !== null || point.netOut !== null) ?? null);
+	let latest = $derived(livePoints.at(-1) ?? null);
+	let chartPoints = $derived(timeframe === 'live' ? livePoints : historyTimeframe === timeframe ? historyPoints : []);
+	let updatedLabel = $derived(lastUpdated === null ? '—' : new Date(lastUpdated).toLocaleTimeString('th-TH'));
 
 	function bytes(value: number | null | undefined) {
 		if (value === null || value === undefined) return '—';
@@ -60,31 +73,69 @@
 		return days ? `${days} วัน ${hours} ชม.` : `${hours} ชม. ${minutes} นาที`;
 	}
 
-	async function refresh() {
-		if (!ready) return;
+	async function refresh(force = false) {
+		if (!mounted || !ready || document.hidden || (refreshing && !force)) return;
+		refreshController?.abort();
+		const controller = new AbortController();
+		refreshController = controller;
 		const version = ++refreshVersion;
 		const selectedTimeframe = timeframe;
+		const fetchHistory = selectedTimeframe !== 'live' && (force || historyTimeframe !== selectedTimeframe || Date.now() - historyUpdatedAt >= 30_000);
+		const requestTimeframe = fetchHistory ? selectedTimeframe : 'live';
 		refreshing = true;
-		loadError = null;
+		const timeout = window.setTimeout(() => controller.abort(new Error('โหลดสถานะเครื่องนานเกินไป กำลังลองใหม่')), 10_000);
 		try {
-			const response = await fetch(`/api/instance-metrics?instanceId=${encodeURIComponent(item.id)}&timeframe=${selectedTimeframe}`);
+			const response = await fetch(`/api/instance-metrics?instanceId=${encodeURIComponent(item.id)}&timeframe=${requestTimeframe}`, { signal: controller.signal, cache: 'no-store' });
 			const data = await response.json();
 			if (!response.ok) throw new Error(data.error || data.message || 'โหลดสถานะเครื่องไม่สำเร็จ');
-			if (version === refreshVersion) metrics = data as InstanceMetrics;
+			if (!mounted || version !== refreshVersion) return;
+			const sample = data as InstanceMetrics;
+			livePoints = appendLiveMetricPoint(livePoints, liveMetricPoint(sample, previousSample));
+			previousSample = sample;
+			metrics = sample;
+			lastUpdated = Date.now();
+			loadError = null;
+			if (fetchHistory) {
+				historyPoints = sample.points;
+				historyTimeframe = selectedTimeframe;
+				historyUpdatedAt = Date.now();
+				chartError = sample.chartError;
+			}
 		} catch (e) {
-			if (version === refreshVersion) loadError = e instanceof Error ? e.message : 'โหลดสถานะเครื่องไม่สำเร็จ';
+			if (mounted && version === refreshVersion) loadError = e instanceof Error ? e.message : 'โหลดสถานะเครื่องไม่สำเร็จ';
 		} finally {
+			window.clearTimeout(timeout);
 			if (version === refreshVersion) {
 				loading = false;
 				refreshing = false;
+				refreshController = null;
 			}
 		}
 	}
 
 	onMount(() => {
+		mounted = true;
+		livePaused = document.hidden;
 		if (ready) void refresh(); else loading = false;
-		const timer = window.setInterval(() => { if (ready && !actionLoading && !refreshing) void refresh(); }, 30_000);
-		return () => window.clearInterval(timer);
+		const timer = window.setInterval(() => { void refresh(); }, METRICS_POLL_MS);
+		function visibilityChanged() {
+			livePaused = document.hidden;
+			if (document.hidden) {
+				refreshVersion++;
+				refreshController?.abort();
+				refreshController = null;
+				refreshing = false;
+				previousSample = null;
+			} else void refresh(true);
+		}
+		document.addEventListener('visibilitychange', visibilityChanged);
+		return () => {
+			mounted = false;
+			refreshVersion++;
+			refreshController?.abort();
+			window.clearInterval(timer);
+			document.removeEventListener('visibilitychange', visibilityChanged);
+		};
 	});
 
 	async function pollTask(upid: string) {
@@ -126,7 +177,7 @@
 			actionError = e instanceof Error ? e.message : 'ส่งคำสั่งไม่สำเร็จ';
 		} finally {
 			actionLoading = null;
-			await refresh();
+			await refresh(true);
 		}
 	}
 
@@ -165,7 +216,7 @@
 					{#if vm}<Button size="sm" variant="outline" onclick={() => power('reset')} disabled={!!actionLoading} class="text-destructive"><RotateCw class="size-4" /> Reset</Button>{/if}
 				{/if}
 			{/if}
-			<Button size="sm" variant="ghost" onclick={() => refresh()} disabled={refreshing || !!actionLoading} aria-label="รีเฟรชสถานะ"><RefreshCw class={refreshing ? 'size-4 animate-spin' : 'size-4'} /></Button>
+			<Button size="sm" variant="ghost" onclick={() => refresh(true)} disabled={refreshing || !!actionLoading} aria-label="รีเฟรชสถานะ"><RefreshCw class={refreshing ? 'size-4 animate-spin' : 'size-4'} /></Button>
 		</div>{/if}
 
 		{#if actionLoading}<p class="flex items-center gap-2 text-xs text-primary" role="status"><Spinner class="size-4" /> กำลังทำคำสั่ง {actionLoading}…</p>{/if}
@@ -182,18 +233,19 @@
 				<div class="rounded-lg border border-border bg-muted/30 p-3"><p class="text-xs text-muted-foreground">Uptime / Disk</p><p class="mt-1 text-sm font-semibold">{uptime(metrics.current.uptime)}</p><p class="text-xs text-muted-foreground">{vm ? `Disk ${bytes(metrics.current.maxDisk)}` : `${bytes(metrics.current.disk)} / ${bytes(metrics.current.maxDisk)}`}</p></div>
 			</div>
 			<div class="flex flex-wrap items-center justify-between gap-2">
-				<p class="text-xs text-muted-foreground">สถิติจาก Proxmox · รีเฟรชทุก 30 วินาที</p>
+				<p class="inline-flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><span class={loadError || livePaused ? 'size-2 rounded-full bg-amber-400' : 'size-2 rounded-full bg-emerald-400'}></span>{livePaused ? 'หยุดชั่วคราว' : loadError ? 'กำลังเชื่อมต่อใหม่' : 'Live · อัปเดตทุก 2 วินาที'} · ล่าสุด {updatedLabel}</p>
 				<label class="flex items-center gap-2 text-xs text-muted-foreground">ช่วงเวลา
-					<select bind:value={timeframe} onchange={() => refresh()} class="rounded-md border border-border bg-background px-2 py-1.5 text-foreground">
+					<select bind:value={timeframe} onchange={() => refresh(true)} class="rounded-md border border-border bg-background px-2 py-1.5 text-foreground">
+						<option value="live">สด (5 นาที)</option>
 						<option value="hour">1 ชั่วโมง</option><option value="day">1 วัน</option><option value="week">1 สัปดาห์</option><option value="month">1 เดือน</option><option value="year">1 ปี</option>
 					</select>
 				</label>
 			</div>
-			{#if metrics.chartError}<p class="text-xs text-muted-foreground">{metrics.chartError}</p>{/if}
+			{#if timeframe !== 'live' && chartError}<p class="text-xs text-muted-foreground">{chartError}</p>{/if}
 			<div class="grid gap-3 lg:grid-cols-2">
-				<MetricChart title="CPU Usage" times={metrics.points.map((p) => p.time)} series={[{ label: 'CPU', color: '#a3e635', values: metrics.points.map((p) => p.cpu) }]} maxValue={Math.min(100, Math.max(5, ...metrics.points.map((p) => (p.cpu ?? 0) * 1.2)))} formatValue={(value) => `${value.toFixed(0)}%`} />
-				<MetricChart title="Memory Usage" times={metrics.points.map((p) => p.time)} series={[{ label: 'Used', color: '#38bdf8', values: metrics.points.map((p) => p.memory) }]} maxValue={metrics.current.maxMemory ?? undefined} formatValue={bytes} />
-				<MetricChart title="Network Traffic" times={metrics.points.map((p) => p.time)} series={[{ label: 'Incoming', color: '#a3e635', values: metrics.points.map((p) => p.netIn) }, { label: 'Outgoing', color: '#38bdf8', values: metrics.points.map((p) => p.netOut) }]} formatValue={(value) => `${bytes(value)}/s`} />
+				<MetricChart title="CPU Usage" times={chartPoints.map((p) => p.time)} series={[{ label: 'CPU', color: '#a3e635', values: chartPoints.map((p) => p.cpu) }]} maxValue={Math.min(100, Math.max(5, ...chartPoints.map((p) => (p.cpu ?? 0) * 1.2)))} formatValue={(value) => `${value.toFixed(0)}%`} />
+				<MetricChart title="Memory Usage" times={chartPoints.map((p) => p.time)} series={[{ label: 'Used', color: '#38bdf8', values: chartPoints.map((p) => p.memory) }]} maxValue={metrics.current.maxMemory ?? undefined} formatValue={bytes} />
+				<MetricChart title="Network Traffic" times={chartPoints.map((p) => p.time)} series={[{ label: 'Incoming', color: '#a3e635', values: chartPoints.map((p) => p.netIn) }, { label: 'Outgoing', color: '#38bdf8', values: chartPoints.map((p) => p.netOut) }]} formatValue={(value) => `${bytes(value)}/s`} />
 			</div>
 		{/if}
 

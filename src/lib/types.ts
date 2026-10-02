@@ -73,6 +73,7 @@ export interface InstanceMetricPoint {
 }
 
 export interface InstanceMetrics {
+	sampledAt: number; // Unix timestamp in seconds, measured after reading current status
 	status: string;
 	qmpstatus: string | null;
 	node: string;
@@ -85,6 +86,8 @@ export interface InstanceMetrics {
 		maxDisk: number | null; // bytes
 		cpus: number | null;
 		uptime: number | null; // seconds
+		netIn: number | null; // cumulative bytes received
+		netOut: number | null; // cumulative bytes sent
 	};
 	points: InstanceMetricPoint[];
 	chartError?: string;
