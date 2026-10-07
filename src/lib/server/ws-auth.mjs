@@ -52,6 +52,8 @@ export async function authorizedInstance(auth, instanceId) {
 	if (typeof instanceId !== 'string' || !instanceId) return null;
 	try {
 		const item = await auth.pb.collection('instances').getOne(instanceId);
+		if (['deleting', 'deleted', 'delete_failed'].includes(item.provision_state ?? '') ||
+			(!auth.isAdmin && ['provisioning', 'failed'].includes(item.provision_state ?? ''))) return null;
 		const owners = Array.isArray(item.owners) ? item.owners : [];
 		return auth.isAdmin || item.email === auth.userId || owners.includes(auth.userId) ? item : null;
 	} catch {

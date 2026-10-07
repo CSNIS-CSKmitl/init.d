@@ -30,7 +30,7 @@ npm run start
 | `/login` | เข้าเว็บผ่าน PocketBase `oidc` หรือบัญชี `users` |
 | `/request` | ขอ VM/CT และระบุเจ้าของร่วมก่อนส่ง |
 | `/status` | ดูคำขอ, เพิ่ม/ลบเจ้าของร่วม, แก้หรือยกเลิกคำขอ pending; กดแถวเครื่องเพื่อดูกราฟ CPU/RAM/Network และจัดการ Power/Console/SSH |
-| `/admin` | ดูคิว, ตอบผู้ขอ, แก้ข้อมูล, Complete ด้วยตนเองหรือ Auto Provision |
+| `/admin` | ดูคิว, ตอบผู้ขอ, แก้ข้อมูลและ IP, Complete ด้วยตนเองหรือ Auto Provision, ลบ VM/CT |
 
 Popup “มีอะไรใหม่” หลังล็อกอินแก้ข้อความและเปิด/ปิดได้ใน [`src/lib/whats-new.ts`](src/lib/whats-new.ts) รายละเอียดอยู่ใน [คู่มือส่งต่อ](docs/HANDOVER_TH.md#ประกาศอัปเดตหลังล็อกอิน)
 
@@ -56,12 +56,26 @@ npm run sync:nodes:watch       # worker แยก
 
 อัปเกรดฐานข้อมูลเดิมที่ยังไม่มี `owners` ใช้ `node scripts/add-instance-owners.mjs` หลัง backup และตรวจ schema ส่วน `scripts/patch-instances.mjs` เติมบางฟิลด์ของรุ่นเก่าเท่านั้น และอาจสร้าง `node` เป็น text หากไม่มีฟิลด์นี้
 
+อัปเกรด state ของระบบ provisioning บนฐานข้อมูลเดิม:
+
+```sh
+node scripts/add-instance-state.mjs          # ตรวจ schema ก่อน
+node scripts/add-instance-state.mjs --apply  # สำรอง schema ใน .data แล้วอัปเดต
+```
+
+สคริปต์เพิ่ม `failed` ใน `status` และเติม `provision_state`, `provision_error`, `IP`, `vmid`, `node` ที่ยังขาด โดยเก็บ field ID, relation และ API rules เดิมไว้ มี migration `pb_migrations/1791320000_instance_provision_state.js` สำหรับ PocketBase ที่ใช้ CLI migrations
+
+Auto บันทึก `provisioning` ก่อนเริ่มงาน, `completed` เมื่อสำเร็จ และ `failed` พร้อม error เมื่อมีปัญหา จึงยังเห็นผลหลังรีเฟรชหรือ restart เว็บ VMID/Node ถูกบันทึกก่อนเริ่ม clone เพื่อจัดการ VM ที่สร้างค้างได้ หาก VMID มีอยู่แล้วจะไม่สร้างซ้ำ การ retry เมื่อยังมี VM ค้างต้องตรวจและลบเครื่องเดิมหรือ Complete แบบ Manual ก่อน
+
+หน้า admin แก้ IP ใน Edit lease fields ได้ (IPv4/IPv6 หรือเว้นว่างเพื่อล้าง) เป็นการแก้ค่าในฐานข้อมูลและปลายทาง SSH ต้องตั้ง network ภายใน guest แยกเมื่อเปลี่ยน IP จริง ปุ่ม Delete VM / CT ต้องพิมพ์ hostname เพื่อยืนยัน ระบบหาโหนดปัจจุบันจาก Proxmox, ตรวจชนิด/hostname และไม่อนุญาตลบ template จากนั้นหยุดเครื่องและรอ task ลบสำเร็จก่อนลบรายการใน PocketBase หากลบล้มเหลวจะเก็บรายการพร้อม error ไว้ให้ admin ลองลบใหม่
+
 ## ตรวจงาน
 
 ```sh
 npm run check
 npm run build
 node scripts/test-sync-instance-nodes.mjs
+node --test scripts/test-instance-lifecycle.mjs scripts/test-admin-instances.mjs
 ```
 
 การทดสอบที่ใช้ PocketBase/Proxmox จริงและบัญชีทดสอบอยู่ใน [คู่มือส่งต่อ](docs/HANDOVER_TH.md#สคริปต์และการทดสอบ)

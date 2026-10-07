@@ -6,11 +6,13 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { LeaseInstance } from '$lib/types';
-import { createCT, createVM, startProvisioning } from '$lib/proxmox';
+import { startProvisioning, removeProxmoxInstance, provisioningProgress } from '$lib/proxmox';
 import { sendDiscordNotification } from '$lib/discord';
 import PocketBase from 'pocketbase';
 import { env } from '$env/dynamic/private';
-import { addOwnerEmails } from '$lib/server/instance-owners';
+import { addOwnerEmails, adminPb } from '$lib/server/instance-owners';
+import { deleteInstance, instanceIsBusy } from '$lib/server/instance-lifecycle';
+import { isIP } from 'node:net';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -55,6 +57,8 @@ export const actions: Actions = {
 		const portsRaw = String(fd.get('ports') ?? '').trim();
 		const vmidRaw = String(fd.get('vmid') ?? '').trim();
 		const nodeRaw = String(fd.get('node') ?? '').trim();
+		const ip = String(fd.get('IP') ?? '').trim();
+		if (ip && !isIP(ip)) return fail(400, { error: 'Enter a valid IPv4 or IPv6 address.', recordId: id });
 
 		const vmid = vmidRaw.length > 0 ? Number(vmidRaw) : null;
 		const node = nodeRaw.length > 0 ? Number(nodeRaw) : null;
@@ -62,19 +66,25 @@ export const actions: Actions = {
 		if (![cpu, ram, disk].every((value) => Number.isFinite(value))) {
 			return fail(400, { error: 'Specs must be valid numbers.', recordId: id });
 		}
-		if (vmidRaw.length > 0 && !Number.isFinite(vmid)) {
+		if (vmidRaw.length > 0 && (!Number.isInteger(vmid) || Number(vmid) < 1)) {
 			return fail(400, { error: 'VMID must be a valid number.', recordId: id });
 		}
-		if (nodeRaw.length > 0 && !Number.isFinite(node)) {
+		if (nodeRaw.length > 0 && (!Number.isInteger(node) || Number(node) < 1)) {
 			return fail(400, { error: 'Node must be a valid number.', recordId: id });
 		}
 
 		try {
-			await locals.pb.collection('instances').update(id, {
+			const pb = await adminPb();
+			const record = await pb.collection('instances').getOne<LeaseInstance>(id);
+			if (instanceIsBusy(id) || ['provisioning', 'deleting'].includes(record.provision_state ?? '')) {
+				return fail(409, { error: 'Wait for the current operation to finish before editing.', recordId: id });
+			}
+			await pb.collection('instances').update(id, {
 				specs: { cpu, ram, disk },
 				ports: portsRaw.length > 0 ? portsRaw : null,
 				vmid,
-				node
+				node,
+				IP: ip
 			});
 			return { ok: true, id, recordId: id };
 		} catch (e) {
@@ -92,8 +102,15 @@ export const actions: Actions = {
 		const vmidRaw = String(fd.get('vmid') ?? '').trim();
 		const nodeRaw = String(fd.get('node') ?? '').trim();
 		const storage = String(fd.get('storage') ?? '').trim();
+		if (!['manual', 'auto'].includes(mode)) return fail(400, { error: 'Invalid mode.', recordId: id });
 
 		try {
+			const pb = await adminPb();
+			const existing = await pb.collection('instances').getOne<LeaseInstance>(id, { expand: 'email' });
+			if (instanceIsBusy(id) || ['provisioning', 'deleting'].includes(existing.provision_state ?? '')) {
+				return fail(409, { error: 'An operation is already in progress.', recordId: id });
+			}
+			if (existing.status === 'completed') return fail(409, { error: 'Instance is already completed.', recordId: id });
 			if (mode === 'auto') {
 				if (!vmidRaw) return fail(400, { error: 'Missing vmid.', recordId: id });
 				if (!nodeRaw) return fail(400, { error: 'Missing node.', recordId: id });
@@ -108,7 +125,7 @@ export const actions: Actions = {
 					return fail(400, { error: 'Node must be a valid number.', recordId: id });
 				}
 
-				const record = await locals.pb.collection('instances').getOne<LeaseInstance>(id, { expand: 'email' });
+				const record = existing;
 				const network = 'vmbr1';
 				const detail = {
 					...record,
@@ -117,18 +134,40 @@ export const actions: Actions = {
 					memory: record.specs.ram,
 				};
 
-				startProvisioning(locals.pb, id, detail, network, storage, `pve${node}`, vmid, record.type);
+				await startProvisioning(pb, id, detail, network, storage, `pve${node}`, vmid, record.type);
 				return { ok: true, id, recordId: id, mode, started: true };
 			}
 
-			const record = await locals.pb.collection('instances').update<LeaseInstance>(id, { status: 'completed' }, { expand: 'email' });
+			const record = await pb.collection('instances').update<LeaseInstance>(id, {
+				status: 'completed', provision_state: 'completed', provision_error: ''
+			}, { expand: 'email' });
+			provisioningProgress.delete(id);
 			sendDiscordNotification('completed', record).catch((err) =>
 				console.error('Failed to send discord notification:', err)
 			);
 			return { ok: true, id, recordId: id, mode };
 		} catch (e) {
 			console.error('resolve failed', e);
-			return fail(500, { error: 'Could not update instance.', recordId: id });
+			return fail(500, { error: e instanceof Error ? e.message : 'Could not update instance.', recordId: id });
+		}
+	},
+	delete: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') throw error(403, 'Admin only.');
+		const fd = await request.formData();
+		const id = String(fd.get('id') ?? '').trim();
+		if (!id) return fail(400, { error: 'Missing id.', recordId: id });
+		try {
+			const pb = await adminPb();
+			const record = await pb.collection('instances').getOne<LeaseInstance>(id);
+			if (String(fd.get('confirm_hostname') ?? '').trim() !== record.hostname) {
+				return fail(400, { error: 'Type the hostname to confirm deletion.', recordId: id });
+			}
+			await deleteInstance(pb, record, () => removeProxmoxInstance(record));
+			provisioningProgress.delete(id);
+			return { ok: true, id, recordId: id, deleted: true };
+		} catch (e) {
+			console.error('admin delete failed', e);
+			return fail(500, { error: e instanceof Error ? e.message : 'Could not delete instance.', recordId: id });
 		}
 	},
 	reply: async ({ request, locals }) => {

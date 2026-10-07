@@ -74,6 +74,9 @@ export const actions: Actions = {
 			if (record.status !== 'pending') {
 				return fail(400, { error: 'Only pending requests can be canceled.' });
 			}
+			if (record.provision_state === 'provisioning' || record.vmid) {
+				return fail(409, { error: 'A VM may already exist. Ask an admin to delete it.' });
+			}
 
 			// 2. Authenticate as admin to delete (regular users can't delete)
 			const pbAdmin = new PocketBase(env.POCKETBASE_URL);

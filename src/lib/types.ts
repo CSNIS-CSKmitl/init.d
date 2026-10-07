@@ -2,7 +2,7 @@
 
 export type InstanceType = 'vm' | 'container';
 export type NetworkType = 'local' | 'public';
-export type LeaseStatus = 'pending' | 'completed';
+export type LeaseStatus = 'pending' | 'completed' | 'failed';
 export type UserRole = 'admin' | 'user';
 
 export interface InstanceSpecs {
@@ -58,6 +58,7 @@ export interface LeaseInstance {
 	status: LeaseStatus;
 	IP?: string;
 	provision_state?: string;
+	provision_error?: string;
 	// Optional admin reply shown back on /status. Populated by admins from
 	// the `/admin` dashboard; users never set these directly.
 	admin_reply?: string;

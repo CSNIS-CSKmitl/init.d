@@ -42,6 +42,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			if (editRecord.status !== 'pending') {
 				throw error(400, 'Only pending requests can be edited.');
 			}
+			if (editRecord.provision_state === 'provisioning' || editRecord.vmid) {
+				throw error(409, 'Requests with an active or partial VM cannot be edited.');
+			}
 			[editRecord] = await addOwnerEmails(await adminPb(), [editRecord]);
 		} catch (e) {
 			console.error('Failed to load record for edit:', e);
@@ -196,6 +199,9 @@ export const actions: Actions = {
 				if (existing.status !== 'pending') {
 					return fail(400, { errors: { global: 'Only pending requests can be updated.' } });
 				}
+				if (existing.provision_state === 'provisioning' || existing.vmid) {
+					return fail(409, { errors: { global: 'Requests with an active or partial VM cannot be edited.' } });
+				}
 				
 				const pbAdmin = await adminPb();
 				
@@ -236,7 +242,8 @@ export const actions: Actions = {
 				start_date: new Date(start_date).toISOString(),
 				end_date: new Date(end_date).toISOString(),
 				quantity,
-				status: 'pending'
+				status: 'pending',
+				provision_state: 'pending'
 			}, {
 				expand: 'email'
 			});

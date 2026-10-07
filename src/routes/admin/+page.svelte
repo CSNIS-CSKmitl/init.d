@@ -34,7 +34,8 @@
 						// Trigger page data reload if any pending item completes provisioning
 						let hasCompleted = false;
 						for (const item of items) {
-							if (item.status === 'pending' && data[item.id]?.status === 'Complete') {
+							if ((data[item.id]?.status === 'Complete' && item.status !== 'completed') ||
+								(data[item.id]?.status === 'Failed' && item.status !== 'failed')) {
 								hasCompleted = true;
 							}
 						}

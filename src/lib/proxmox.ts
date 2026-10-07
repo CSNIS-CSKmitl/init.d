@@ -3,6 +3,9 @@ import { fetch as undiciFetch, Agent } from 'undici';
 import * as dotenv from 'dotenv';
 import { CT_ID, VM_ID } from '$static/constant';
 import { sendDiscordNotification } from './discord';
+import type PocketBase from 'pocketbase';
+import type { LeaseInstance } from './types';
+import { startInstanceProvisioning } from './server/instance-lifecycle';
 
 dotenv.config();
 
@@ -75,7 +78,9 @@ function buildVmNet0(network: string): string {
  */
 async function waitForTask(node: string, upid: string): Promise<void> {
     console.log(`Waiting for task ${upid} on node ${node} to complete...`);
-    while (true) {
+    if (!upid) return; // Some synchronous resize endpoints return no task.
+    const deadline = Date.now() + 10 * 60 * 1000;
+    while (Date.now() < deadline) {
         const statusObj = await proxmox.nodes.$(node).tasks.$(upid).status.$get() as any;
         if (statusObj.status === 'stopped') {
             if (statusObj.exitstatus === 'OK') {
@@ -87,6 +92,7 @@ async function waitForTask(node: string, upid: string): Promise<void> {
         }
         await new Promise(resolve => setTimeout(resolve, 2000));
     }
+    throw new Error(`Timed out waiting for task ${upid}. Check Proxmox before retrying.`);
 }
 
 export const createCT = async (
@@ -347,81 +353,76 @@ export const createVM = async (
 
 export const provisioningProgress = new Map<string, { status: string; error?: string }>();
 
-export const startProvisioning = (
-    pb: any,
+export const startProvisioning = async (
+    pb: PocketBase,
     recordId: string,
-    detail: any,
+    detail: LeaseInstance & { cores: number; memory: number },
     network: string,
     disk: string,
     node: string,
     id: number,
     type: 'vm' | 'container'
 ) => {
-    provisioningProgress.set(recordId, { status: 'Starting provisioning...' });
-
-    // Run asynchronously without awaiting so the action returns immediately
-    (async () => {
-        try {
-            sendDiscordNotification('provision_started', detail, { node, vmid: id }).catch(e =>
-                console.error('[Discord Webhook] Failed to send provision_started alert:', e)
-            );
-
-            const onProgress = async (msg: string) => {
-                provisioningProgress.set(recordId, { status: msg });
-            };
-
-            let ipAddress = '';
-            if (type === 'container') {
-                const ctRes = await createCT(detail, network, disk, node, id, onProgress, pb, recordId);
-                if (ctRes?.ipAddress) {
-                    ipAddress = ctRes.ipAddress;
-                }
-            } else {
-                const vmRes = await createVM(detail, network, disk, node, id, onProgress, pb, recordId);
-                if (vmRes?.ipAddress) {
-                    ipAddress = vmRes.ipAddress;
-                }
+    // Read the original binding rather than the form's proposed new VMID.
+    const record = await pb.collection('instances').getOne<LeaseInstance>(recordId);
+    const onProgress = async (message: string) => {
+        provisioningProgress.set(recordId, { status: message });
+    };
+    await startInstanceProvisioning(pb, record,
+        { vmid: id, node: Number.parseInt(node.replace(/[^\d]/g, ''), 10) },
+        async () => {
+            const guests = await proxmox.cluster.resources.$get({ type: 'vm' });
+            if (guests.some(guest => Number(guest.vmid) === id)) {
+                throw new Error(`VMID ${id} already exists. Use an unused VMID or complete the lease manually.`);
             }
-
-            // Provision complete!
-            provisioningProgress.set(recordId, { status: 'Complete' });
-
-            // Parse node number (e.g. "pve3" -> 3)
-            const nodeNum = Number.parseInt(node.replace(/[^\d]/g, ''), 10);
-
-            const updateData: Record<string, any> = {
-                status: 'completed',
-                vmid: id,
-                node: Number.isNaN(nodeNum) ? null : nodeNum
-            };
-            if (ipAddress) {
-                updateData.IP = ipAddress;
+            if (record.vmid && guests.some(guest => Number(guest.vmid) === Number(record.vmid))) {
+                throw new Error('This lease still has a VM/CT on Proxmox. Delete it or complete the lease manually before retrying.');
             }
-
-            // Update status in PocketBase. Make sure comments/replies are NOT modified!
-            const updatedRecord = await pb.collection('instances').update(recordId, updateData);
-
-            sendDiscordNotification('completed', updatedRecord, { node, vmid: id }).catch(e =>
-                console.error('[Discord Webhook] Failed to send completed alert:', e)
-            );
-
-            // Clean up progress after 2 minutes
-            setTimeout(() => {
-                provisioningProgress.delete(recordId);
-            }, 120000);
-
-        } catch (err: any) {
-            console.error(`Provisioning failed for ${recordId}:`, err);
-            const errMsg = err?.message || String(err);
-            provisioningProgress.set(recordId, { status: 'Failed', error: errMsg });
-
-            sendDiscordNotification('failed', detail, { node, vmid: id, error: errMsg }).catch(e =>
-                console.error('[Discord Webhook] Failed to send failure alert:', e)
-            );
-        }
-    })();
+        },
+        async () => {
+            sendDiscordNotification('provision_started', detail, { node, vmid: id }).catch(console.error);
+            return type === 'container'
+                ? createCT(detail, network, disk, node, id, onProgress, pb, recordId)
+                : createVM(detail, network, disk, node, id, onProgress, pb, recordId);
+        },
+        (status, error) => {
+            provisioningProgress.set(recordId, { status, ...(error ? { error } : {}) });
+            if (status === 'Complete' || status === 'Failed') {
+                const terminal = provisioningProgress.get(recordId);
+                setTimeout(() => {
+                    if (provisioningProgress.get(recordId) === terminal) provisioningProgress.delete(recordId);
+                }, 120000).unref();
+            }
+        },
+        updated => { sendDiscordNotification('completed', updated, { node, vmid: id }).catch(console.error); },
+        error => { sendDiscordNotification('failed', detail, { node, vmid: id, error }).catch(console.error); },
+    );
 };
 
+export async function removeProxmoxInstance(record: LeaseInstance): Promise<void> {
+    if (!record.vmid) return; // A request that never created a guest.
+    // Query the cluster afresh: a failed migration may leave the guest on the template node.
+    const guests = await proxmox.cluster.resources.$get({ type: 'vm' });
+    const guest = guests.find(guest => Number(guest.vmid) === Number(record.vmid));
+    if (!guest) return; // Already removed on Proxmox; allow cleanup of the DB row.
+    const expectedType = record.type === 'vm' ? 'qemu' : 'lxc';
+    if (guest.type !== expectedType || !guest.node) throw new Error('VMID belongs to a different guest type. Check the lease binding.');
+    const target = (proxmox.nodes.$(guest.node) as any)[expectedType].$(record.vmid);
+    const config = await target.config.$get();
+    if (config.template) throw new Error('Templates cannot be deleted from the lease dashboard.');
+    if ((config.name ?? config.hostname) !== record.hostname) {
+        throw new Error('Proxmox hostname does not match this lease. Check VMID before deleting.');
+    }
+    const current = await target.status.current.$get();
+    if (current.status !== 'stopped') {
+        const stopTask = await target.status.stop.$post();
+        if (!stopTask) throw new Error('Proxmox did not return a stop task.');
+        await waitForTask(guest.node, stopTask);
+    }
+    const deleteTask = await target.$delete({ purge: true });
+    if (!deleteTask) throw new Error('Proxmox did not return a deletion task.');
+    await waitForTask(guest.node, deleteTask);
+}
 
 export interface ProxmoxVncTicketParams {
     host: string;

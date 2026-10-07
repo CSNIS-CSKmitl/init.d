@@ -46,6 +46,10 @@ export const POST: RequestHandler = async ({ request, locals, cookies, url }) =>
 				{ status: 409 }
 			);
 		}
+		if (['deleting', 'deleted', 'delete_failed'].includes(record.provision_state ?? '') ||
+			(locals.user.role !== 'admin' && ['provisioning', 'failed'].includes(record.provision_state ?? ''))) {
+			return json({ error: 'Instance is not ready for console access.' }, { status: 409 });
+		}
 
 		const guest = await resolveProxmoxGuest(record);
 		const node = guest.node;

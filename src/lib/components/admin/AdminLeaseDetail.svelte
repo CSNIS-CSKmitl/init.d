@@ -26,6 +26,7 @@
 		Globe,
 		Lock,
 		Rocket,
+		Trash2,
 	} from "@lucide/svelte";
 
 	// This component is instantiated once per open row (the parent renders
@@ -51,11 +52,17 @@
 	const badgeStatus = $derived(leaseBadgeStatus(item, progressMap[item.id]));
 	const isFailed = $derived(badgeStatus === "failed");
 	const needsResolve = $derived(leaseNeedsResolve(item, progressMap[item.id]));
+	const busy = $derived(badgeStatus === 'provisioning');
+	const provisionProgress = $derived(
+		item.provision_state === 'deleting' ? { status: 'Deleting...', error: undefined } :
+		['delete_failed', 'deleted'].includes(item.provision_state ?? '') ? { status: 'Deletion failed', error: item.provision_error } :
+		item.status === 'completed' ? undefined : progressMap[item.id] ??
+		(isFailed ? { status: 'Failed', error: item.provision_error } :
+		busy ? { status: item.provision_state === 'deleting' ? 'Deleting...' : 'Provisioning...' } : undefined)
+	);
 
 	let replyDraft = $state(untrack(() => item.admin_reply ?? ""));
-	// A failed attempt never actually created the VM/CT, so "Manual — already
-	// exists on Proxmox" would be the wrong default; start on Auto so the
-	// visible primary action is the correct one (retry).
+	// Auto is the default retry path; a partial guest must be checked first.
 	let resolveMode = $state<"manual" | "auto">(untrack(() => isFailed ? "auto" : "manual"));
 	let resolveVmid = $state(untrack(() => item.vmid != null ? String(item.vmid) : ""));
 	let resolveNode = $state(untrack(() => item.node != null ? String(item.node) : ""));
@@ -66,6 +73,9 @@
 	let editPorts = $state(untrack(() => item.ports ?? ""));
 	let editVmid = $state(untrack(() => item.vmid != null ? String(item.vmid) : ""));
 	let editNode = $state(untrack(() => item.node != null ? String(item.node) : ""));
+	let editIp = $state(untrack(() => item.IP ?? ""));
+	let deleteConfirmation = $state("");
+	let deleting = $state(false);
 	let provisionNode = $state("pve3");
 	let provisionNetwork = $state("vmbr1");
 	let provisionId = $state("");
@@ -80,6 +90,7 @@
 		editVmid = item.vmid != null ? String(item.vmid) : "";
 		editNode = item.node != null ? String(item.node) : "";
 	});
+	$effect(() => { editIp = item.IP ?? ""; });
 
 	const portsFor = (s: string | undefined) =>
 		(s ?? "")
@@ -149,6 +160,10 @@
 					{item.network_type === "local" ? "Local" : "Public"}
 				</div>
 			</div>
+			<div>
+				<div class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">IP Address</div>
+				<div class="break-all font-mono text-xs text-foreground">{item.IP || '—'}</div>
+			</div>
 		</div>
 
 		<div class="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
@@ -182,20 +197,20 @@
 			</div>
 		</div>
 
-		{#if progressMap[item.id]}
+		{#if provisionProgress}
 			<Alert.Root class={cn("gap-0 p-3", isFailed ? "border-destructive/20 bg-destructive/5 text-destructive" : "border-info/20 bg-info/5 text-info")}>
 				<div class="flex items-center gap-2">
 					<span class="relative flex h-2 w-2">
-						{#if !isFailed && progressMap[item.id].status !== "Complete"}
+						{#if !isFailed && provisionProgress.status !== "Complete"}
 							<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-info opacity-75"></span>
 						{/if}
 						<span class={cn("relative inline-flex h-2 w-2 rounded-full", isFailed ? "bg-destructive" : "bg-info")}></span>
 					</span>
 					<Alert.Title class="text-[10px] font-bold tracking-wider uppercase">Provisioning Status:</Alert.Title>
 				</div>
-				<Alert.Description class="mt-1 font-medium text-foreground">{progressMap[item.id].status}</Alert.Description>
-				{#if progressMap[item.id].error}
-					<div class="mt-1.5 text-xs leading-normal font-bold text-destructive">Error: {progressMap[item.id].error}</div>
+				<Alert.Description class="mt-1 font-medium text-foreground">{provisionProgress.status}</Alert.Description>
+				{#if provisionProgress.error}
+					<div class="mt-1.5 text-xs leading-normal font-bold text-destructive">Error: {provisionProgress.error}</div>
 				{/if}
 			</Alert.Root>
 		{:else if item.status === "completed" && item.vmid}
@@ -390,21 +405,44 @@
 					<Field.FieldLabel for={`edit-vmid-${item.id}`} class="font-mono text-[10px] tracking-wider text-foreground/70 uppercase">Proxmox VMID</Field.FieldLabel>
 					<Input id={`edit-vmid-${item.id}`} name="vmid" type="number" bind:value={editVmid} class="font-mono text-xs" placeholder="e.g. 101" />
 				</Field.Field>
-				<Field.Field>
-					<Field.FieldLabel for={`edit-node-${item.id}`} class="font-mono text-[10px] tracking-wider text-foreground/70 uppercase">Proxmox Node</Field.FieldLabel>
+					<Field.Field>
+						<Field.FieldLabel for={`edit-node-${item.id}`} class="font-mono text-[10px] tracking-wider text-foreground/70 uppercase">Proxmox Node</Field.FieldLabel>
 					<Input id={`edit-node-${item.id}`} name="node" type="number" bind:value={editNode} class="font-mono text-xs" placeholder="e.g. 3" />
-				</Field.Field>
+					</Field.Field>
+					<Field.Field>
+						<Field.FieldLabel for={`edit-ip-${item.id}`} class="font-mono text-[10px] tracking-wider text-foreground/70 uppercase">IP Address</Field.FieldLabel>
+						<Input id={`edit-ip-${item.id}`} name="IP" bind:value={editIp} class="font-mono text-xs" placeholder="192.168.15.100" disabled={busy} />
+					</Field.Field>
 			</Field.FieldGroup>
 			<p class="font-mono text-[10px] text-muted-foreground">
-				VMID/Node saved here become the defaults Resolve → Auto prefills for this lease.
+				VMID/Node saved here become the defaults Resolve → Auto prefills for this lease. IP updates the lease record and SSH target; configure the guest network separately if its address changes.
 			</p>
 			<div class="flex justify-end">
-				<Button type="submit" size="sm" class="w-fit font-mono">Save Fields</Button>
+				<Button type="submit" size="sm" class="w-fit font-mono" disabled={busy}>Save Fields</Button>
 			</div>
 		</form>
 	</section>
 
-	{#if !needsResolve && item.vmid}
+	<Separator />
+	<section class="flex flex-col gap-2">
+		<h3 class="flex items-center gap-1.5 font-mono text-xs font-bold text-destructive uppercase"><Trash2 class="h-3.5 w-3.5" /> Delete VM / CT</h3>
+		<p class="text-xs text-muted-foreground">ลบ VM/CT และดิสก์บน Proxmox พร้อมรายการในฐานข้อมูล การลบย้อนกลับไม่ได้ หากเครื่องกำลังทำงาน ระบบจะหยุดเครื่องก่อนลบ</p>
+		<form method="POST" action="?/delete" use:enhance={() => {
+			deleting = true;
+			return async ({ update }) => { try { await update(); } finally { deleting = false; } };
+		}} class="flex flex-col gap-3 rounded-lg border border-destructive/20 p-4">
+			<input type="hidden" name="id" value={item.id} />
+			<Field.Field>
+				<Field.FieldLabel for={`delete-confirm-${item.id}`} class="text-xs">พิมพ์ {item.hostname} เพื่อยืนยัน</Field.FieldLabel>
+				<Input id={`delete-confirm-${item.id}`} name="confirm_hostname" bind:value={deleteConfirmation} autocomplete="off" required disabled={busy || deleting} class="font-mono text-xs" />
+			</Field.Field>
+			<Button type="submit" variant="destructive" size="sm" class="w-fit font-mono" disabled={busy || deleting || deleteConfirmation.trim() !== item.hostname}>
+				<Trash2 data-icon="inline-start" /> {deleting ? 'Deleting…' : 'Delete VM / CT'}
+			</Button>
+		</form>
+	</section>
+
+	{#if item.status === 'completed' && !busy && item.vmid}
 		<Separator />
 		<section class="flex flex-col gap-2">
 			<h3 class="font-mono text-xs font-bold text-foreground uppercase">Remote access</h3>
