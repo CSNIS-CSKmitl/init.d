@@ -192,7 +192,7 @@
 			<div class="flex flex-wrap items-start justify-between gap-3 pr-8">
 				<div>
 					<Dialog.Title class="break-all font-mono text-xl">{item.hostname}</Dialog.Title>
-					<Dialog.Description class="mt-1">{vm ? 'Virtual Machine' : 'Container'}{ready ? ` · VMID ${item.vmid} · ${metrics?.node ?? item.node ?? '—'}` : ' · รอดำเนินการ'}</Dialog.Description>
+					<Dialog.Description class="mt-1">{vm ? 'Virtual Machine' : 'Container'}{ready ? ` · VMID ${item.vmid} · ${metrics?.node ?? item.node ?? '—'}` : item.status === 'deleted' ? ' · ลบแล้ว' : ' · รอดำเนินการ'}</Dialog.Description>
 				</div>
 				<Badge variant={running ? 'default' : 'secondary'}>{ready ? (loading ? 'กำลังโหลด' : paused ? 'paused' : metrics?.status ?? 'unknown') : item.status}</Badge>
 			</div>
@@ -251,6 +251,9 @@
 
 		<section class="space-y-4 border-t border-border pt-4" aria-label="รายละเอียดคำขอ">
 			<h3 class="text-sm font-semibold">รายละเอียดคำขอ</h3>
+			{#if item.status === 'deleted'}
+				<p class="rounded-lg border border-border bg-muted/40 p-3 text-sm">เครื่องนี้ถูกลบแล้ว เก็บรายการไว้เป็นประวัติ{item.datedelete ? ` · วันที่ลบ ${new Date(item.datedelete).toLocaleString('th-TH-u-ca-gregory', { timeZone: 'Asia/Bangkok', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })} (เวลาไทย)` : ''}</p>
+			{/if}
 			{#if item.admin_reply}
 				<div class="rounded-lg border border-border bg-muted/40 p-3"><p class="text-xs font-semibold text-primary">ข้อความจากแอดมิน</p><p class="mt-1 whitespace-pre-wrap text-sm">{item.admin_reply}</p></div>
 			{/if}

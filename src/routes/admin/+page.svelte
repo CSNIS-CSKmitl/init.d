@@ -34,8 +34,8 @@
 						// Trigger page data reload if any pending item completes provisioning
 						let hasCompleted = false;
 						for (const item of items) {
-							if ((data[item.id]?.status === 'Complete' && item.status !== 'completed') ||
-								(data[item.id]?.status === 'Failed' && item.status !== 'failed')) {
+							if (item.status !== 'deleted' && ((data[item.id]?.status === 'Complete' && item.status !== 'completed') ||
+								(data[item.id]?.status === 'Failed' && item.status !== 'failed'))) {
 								hasCompleted = true;
 							}
 						}
@@ -62,7 +62,7 @@
 	// disagree with what the admin sees row-by-row (it used to: this only
 	// checked `item.status`, while the table also folds in live progress).
 	const stats = $derived.by(() => {
-		const counts = { total: items.length, pending: 0, provisioning: 0, failed: 0, completed: 0 };
+		const counts = { total: items.length, pending: 0, provisioning: 0, failed: 0, completed: 0, deleted: 0 };
 		for (const item of items) {
 			counts[leaseBadgeStatus(item, progressMap[item.id])]++;
 		}

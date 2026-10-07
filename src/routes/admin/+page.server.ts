@@ -11,7 +11,7 @@ import { sendDiscordNotification } from '$lib/discord';
 import PocketBase from 'pocketbase';
 import { env } from '$env/dynamic/private';
 import { addOwnerEmails, adminPb } from '$lib/server/instance-owners';
-import { deleteInstance, instanceIsBusy } from '$lib/server/instance-lifecycle';
+import { deleteInstance, instanceIsBusy, instanceIsDeleted } from '$lib/server/instance-lifecycle';
 import { isIP } from 'node:net';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -76,6 +76,7 @@ export const actions: Actions = {
 		try {
 			const pb = await adminPb();
 			const record = await pb.collection('instances').getOne<LeaseInstance>(id);
+			if (instanceIsDeleted(record)) return fail(409, { error: 'Deleted leases are retained as history and cannot be edited.', recordId: id });
 			if (instanceIsBusy(id) || ['provisioning', 'deleting'].includes(record.provision_state ?? '')) {
 				return fail(409, { error: 'Wait for the current operation to finish before editing.', recordId: id });
 			}
@@ -107,6 +108,7 @@ export const actions: Actions = {
 		try {
 			const pb = await adminPb();
 			const existing = await pb.collection('instances').getOne<LeaseInstance>(id, { expand: 'email' });
+			if (instanceIsDeleted(existing)) return fail(409, { error: 'Deleted leases cannot be resolved again. Create a new request.', recordId: id });
 			if (instanceIsBusy(id) || ['provisioning', 'deleting'].includes(existing.provision_state ?? '')) {
 				return fail(409, { error: 'An operation is already in progress.', recordId: id });
 			}

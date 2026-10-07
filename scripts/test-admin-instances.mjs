@@ -81,11 +81,11 @@ test('CTs and absent guests can be deleted without targeting an unrelated VM', a
 	assert.deepEqual(absent.calls, []);
 });
 
-function adminActions() {
+function adminActions(extra = {}) {
 	const updates = [];
 	let removed = false;
 	const pb = { collection: () => ({
-		getOne: async () => ({ ...lease, status: 'completed' }),
+		getOne: async () => ({ ...lease, status: 'completed', ...extra }),
 		update: async (_id, patch) => { updates.push(patch); return patch; },
 	}) };
 	const actions = loadModule('../src/routes/admin/+page.server.ts', {
@@ -96,7 +96,11 @@ function adminActions() {
 		'$lib/proxmox': { provisioningProgress: new Map(), removeProxmoxInstance: async () => { removed = true; } },
 		'$lib/discord': {}, pocketbase: {}, '$env/dynamic/private': { env: {} },
 		'$lib/server/instance-owners': { adminPb: async () => pb },
-		'$lib/server/instance-lifecycle': { instanceIsBusy: () => false, deleteInstance: async (_pb, _record, remove) => remove() },
+		'$lib/server/instance-lifecycle': {
+			instanceIsBusy: () => false,
+			instanceIsDeleted: record => record.status === 'deleted' || record.provision_state === 'deleted',
+			deleteInstance: async (_pb, _record, remove) => remove(),
+		},
 		'node:net': { isIP },
 	}).actions;
 	const event = (fields, role = 'admin') => {
@@ -133,4 +137,13 @@ test('deletion requires the exact server-side hostname confirmation', async () =
 	assert.equal(removed(), false);
 	assert.equal((await actions.delete(event({ id: 'lease', confirm_hostname: 'lease-vm' }))).deleted, true);
 	assert.equal(removed(), true);
+});
+
+test('deleted history cannot be edited or resolved through forged admin submissions', async () => {
+	const { actions, updates, event } = adminActions({ status: 'deleted', provision_state: 'deleted' });
+	const fields = { id: 'lease', cpu: '2', ram: '4', disk: '20', vmid: '123', node: '3' };
+	assert.equal((await actions.update(event(fields))).status, 409);
+	assert.equal((await actions.resolve(event({ id: 'lease', mode: 'manual' }))).status, 409);
+	assert.equal((await actions.resolve(event({ ...fields, mode: 'auto', storage: 'local-lvm' }))).status, 409);
+	assert.deepEqual(updates, []);
 });

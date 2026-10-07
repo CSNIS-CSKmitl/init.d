@@ -51,11 +51,13 @@
 
 	const badgeStatus = $derived(leaseBadgeStatus(item, progressMap[item.id]));
 	const isFailed = $derived(badgeStatus === "failed");
+	const isDeleted = $derived(badgeStatus === "deleted");
 	const needsResolve = $derived(leaseNeedsResolve(item, progressMap[item.id]));
 	const busy = $derived(badgeStatus === 'provisioning');
 	const provisionProgress = $derived(
+		isDeleted ? undefined :
 		item.provision_state === 'deleting' ? { status: 'Deleting...', error: undefined } :
-		['delete_failed', 'deleted'].includes(item.provision_state ?? '') ? { status: 'Deletion failed', error: item.provision_error } :
+		item.provision_state === 'delete_failed' ? { status: 'Deletion failed', error: item.provision_error } :
 		item.status === 'completed' ? undefined : progressMap[item.id] ??
 		(isFailed ? { status: 'Failed', error: item.provision_error } :
 		busy ? { status: item.provision_state === 'deleting' ? 'Deleting...' : 'Provisioning...' } : undefined)
@@ -64,15 +66,15 @@
 	let replyDraft = $state(untrack(() => item.admin_reply ?? ""));
 	// Auto is the default retry path; a partial guest must be checked first.
 	let resolveMode = $state<"manual" | "auto">(untrack(() => isFailed ? "auto" : "manual"));
-	let resolveVmid = $state(untrack(() => item.vmid != null ? String(item.vmid) : ""));
-	let resolveNode = $state(untrack(() => item.node != null ? String(item.node) : ""));
+	let resolveVmid = $state(untrack(() => item.vmid ? String(item.vmid) : ""));
+	let resolveNode = $state(untrack(() => item.node ? String(item.node) : ""));
 	let resolveStorage = $state("local-lvm");
 	let editCpu = $state(untrack(() => String(item.specs.cpu)));
 	let editRam = $state(untrack(() => String(item.specs.ram)));
 	let editDisk = $state(untrack(() => String(item.specs.disk)));
 	let editPorts = $state(untrack(() => item.ports ?? ""));
-	let editVmid = $state(untrack(() => item.vmid != null ? String(item.vmid) : ""));
-	let editNode = $state(untrack(() => item.node != null ? String(item.node) : ""));
+	let editVmid = $state(untrack(() => item.vmid ? String(item.vmid) : ""));
+	let editNode = $state(untrack(() => item.node ? String(item.node) : ""));
 	let editIp = $state(untrack(() => item.IP ?? ""));
 	let deleteConfirmation = $state("");
 	let deleting = $state(false);
@@ -85,10 +87,10 @@
 	// writes back a vmid/node, both fields should reflect it immediately
 	// instead of showing what was there when this panel was first opened.
 	$effect(() => {
-		resolveVmid = item.vmid != null ? String(item.vmid) : "";
-		resolveNode = item.node != null ? String(item.node) : "";
-		editVmid = item.vmid != null ? String(item.vmid) : "";
-		editNode = item.node != null ? String(item.node) : "";
+		resolveVmid = item.vmid ? String(item.vmid) : "";
+		resolveNode = item.node ? String(item.node) : "";
+		editVmid = item.vmid ? String(item.vmid) : "";
+		editNode = item.node ? String(item.node) : "";
 	});
 	$effect(() => { editIp = item.IP ?? ""; });
 
@@ -117,6 +119,10 @@
 		const d = new Date(iso);
 		return `${d.getDate()} ${TH_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 	};
+	const deletedAt = (iso: string) => new Date(iso).toLocaleString('th-TH-u-ca-gregory', {
+		timeZone: 'Asia/Bangkok', year: 'numeric', month: 'short', day: 'numeric',
+		hour: '2-digit', minute: '2-digit', second: '2-digit',
+	});
 </script>
 
 <div class="flex flex-col gap-6 px-6 py-5">
@@ -197,7 +203,12 @@
 			</div>
 		</div>
 
-		{#if provisionProgress}
+		{#if isDeleted}
+			<Alert.Root class="gap-1 border-border bg-muted p-3">
+				<Alert.Title class="flex items-center gap-2"><Trash2 class="h-3.5 w-3.5" /> Deleted</Alert.Title>
+				<Alert.Description class="text-xs">เก็บรายการนี้เป็นประวัติ · วันที่ลบ: {item.datedelete ? deletedAt(item.datedelete) : 'ไม่พบวันที่ลบ'} (เวลาไทย)</Alert.Description>
+			</Alert.Root>
+		{:else if provisionProgress}
 			<Alert.Root class={cn("gap-0 p-3", isFailed ? "border-destructive/20 bg-destructive/5 text-destructive" : "border-info/20 bg-info/5 text-info")}>
 				<div class="flex items-center gap-2">
 					<span class="relative flex h-2 w-2">
@@ -342,7 +353,7 @@
 	{/if}
 
 	<!-- Provision (legacy manual-create path) -->
-	{#if provisioning}
+	{#if provisioning && !isDeleted}
 		<section class="flex flex-col gap-2">
 			<h3 class="flex items-center gap-1.5 font-mono text-xs font-bold text-foreground uppercase">
 				<Rocket class="h-3.5 w-3.5" /> Provision
@@ -378,6 +389,7 @@
 	{/if}
 
 	<!-- Edit fields -->
+	{#if !isDeleted}
 	<section class="flex flex-col gap-2">
 		<h3 class="flex items-center gap-1.5 font-mono text-xs font-bold text-foreground uppercase">
 			<Settings2 class="h-3.5 w-3.5" /> Edit lease fields
@@ -426,7 +438,7 @@
 	<Separator />
 	<section class="flex flex-col gap-2">
 		<h3 class="flex items-center gap-1.5 font-mono text-xs font-bold text-destructive uppercase"><Trash2 class="h-3.5 w-3.5" /> Delete VM / CT</h3>
-		<p class="text-xs text-muted-foreground">ลบ VM/CT และดิสก์บน Proxmox พร้อมรายการในฐานข้อมูล การลบย้อนกลับไม่ได้ หากเครื่องกำลังทำงาน ระบบจะหยุดเครื่องก่อนลบ</p>
+		<p class="text-xs text-muted-foreground">ลบ VM/CT และดิสก์บน Proxmox แล้วเก็บรายการนี้เป็นประวัติ พร้อมวันที่ลบ หากเครื่องกำลังทำงาน ระบบจะหยุดเครื่องก่อนลบ</p>
 		<form method="POST" action="?/delete" use:enhance={() => {
 			deleting = true;
 			return async ({ update }) => { try { await update(); } finally { deleting = false; } };
@@ -442,6 +454,7 @@
 		</form>
 	</section>
 
+	{/if}
 	{#if item.status === 'completed' && !busy && item.vmid}
 		<Separator />
 		<section class="flex flex-col gap-2">

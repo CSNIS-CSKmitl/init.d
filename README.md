@@ -63,11 +63,11 @@ node scripts/add-instance-state.mjs          # ตรวจ schema ก่อน
 node scripts/add-instance-state.mjs --apply  # สำรอง schema ใน .data แล้วอัปเดต
 ```
 
-สคริปต์เพิ่ม `failed` ใน `status` และเติม `provision_state`, `provision_error`, `IP`, `vmid`, `node` ที่ยังขาด โดยเก็บ field ID, relation และ API rules เดิมไว้ มี migration `pb_migrations/1791320000_instance_provision_state.js` สำหรับ PocketBase ที่ใช้ CLI migrations
+สคริปต์เพิ่ม `failed` และ `deleted` ใน `status` และเติม `provision_state`, `provision_error`, `IP`, `vmid`, `node`, `datedelete` ที่ยังขาด โดยเก็บ field ID, relation และ API rules เดิมไว้ มี migration `pb_migrations/1791320000_instance_provision_state.js` และ `pb_migrations/1791321000_soft_delete_instances.js` สำหรับ PocketBase ที่ใช้ CLI migrations
 
 Auto บันทึก `provisioning` ก่อนเริ่มงาน, `completed` เมื่อสำเร็จ และ `failed` พร้อม error เมื่อมีปัญหา จึงยังเห็นผลหลังรีเฟรชหรือ restart เว็บ VMID/Node ถูกบันทึกก่อนเริ่ม clone เพื่อจัดการ VM ที่สร้างค้างได้ หาก VMID มีอยู่แล้วจะไม่สร้างซ้ำ การ retry เมื่อยังมี VM ค้างต้องตรวจและลบเครื่องเดิมหรือ Complete แบบ Manual ก่อน
 
-หน้า admin แก้ IP ใน Edit lease fields ได้ (IPv4/IPv6 หรือเว้นว่างเพื่อล้าง) เป็นการแก้ค่าในฐานข้อมูลและปลายทาง SSH ต้องตั้ง network ภายใน guest แยกเมื่อเปลี่ยน IP จริง ปุ่ม Delete VM / CT ต้องพิมพ์ hostname เพื่อยืนยัน ระบบหาโหนดปัจจุบันจาก Proxmox, ตรวจชนิด/hostname และไม่อนุญาตลบ template จากนั้นหยุดเครื่องและรอ task ลบสำเร็จก่อนลบรายการใน PocketBase หากลบล้มเหลวจะเก็บรายการพร้อม error ไว้ให้ admin ลองลบใหม่
+หน้า admin แก้ IP ใน Edit lease fields ได้ (IPv4/IPv6 หรือเว้นว่างเพื่อล้าง) เป็นการแก้ค่าในฐานข้อมูลและปลายทาง SSH ต้องตั้ง network ภายใน guest แยกเมื่อเปลี่ยน IP จริง ปุ่ม Delete VM / CT ต้องพิมพ์ hostname เพื่อยืนยัน ระบบหาโหนดปัจจุบันจาก Proxmox, ตรวจชนิด/hostname และไม่อนุญาตลบ template จากนั้นหยุดเครื่องและรอ task ลบสำเร็จ แล้วเก็บรายการเดิมใน PocketBase เป็นประวัติ โดยตั้ง `status` และ `provision_state` เป็น `deleted`, ล้าง `vmid`/`node` และบันทึกวันเวลาที่ลบใน `datedelete` (เก็บ UTC แสดงเวลาไทย) ข้อมูลคำขอและ IP เดิมยังอยู่ หากลบล้มเหลวจะเก็บ VMID/Node และ error ไว้ให้ admin ลองลบใหม่ รายการที่ลบแล้วแสดงในตัวกรอง Deleted และไม่สามารถแก้ข้อมูลเครื่องหรือ provision ซ้ำได้ การกดลบซ้ำไม่เปลี่ยนวันที่ลบเดิม
 
 ## ตรวจงาน
 

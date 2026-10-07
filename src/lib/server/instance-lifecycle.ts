@@ -4,6 +4,8 @@ import type { LeaseInstance } from '../types';
 // Lock before the first await so double submissions cannot start two operations.
 const active = new Set<string>();
 export const instanceIsBusy = (id: string) => active.has(id);
+export const instanceIsDeleted = (record: { status: string; provision_state?: string }) =>
+	record.status === 'deleted' || record.provision_state === 'deleted';
 
 export async function startInstanceProvisioning(
 	pb: PocketBase,
@@ -15,6 +17,7 @@ export async function startInstanceProvisioning(
 	onCompleted: (record: LeaseInstance) => void,
 	onFailed: (message: string) => void,
 ): Promise<void> {
+	if (instanceIsDeleted(record)) throw new Error('Deleted leases are retained as history and cannot be provisioned again.');
 	if (active.has(record.id) || ['provisioning', 'deleting'].includes(record.provision_state ?? '')) {
 		throw new Error('An operation is already in progress for this instance.');
 	}
@@ -70,27 +73,28 @@ export async function deleteInstance(
 	record: LeaseInstance,
 	removeGuest: () => Promise<void>,
 ): Promise<void> {
+	if (instanceIsDeleted(record)) return; // Preserve the original deletion timestamp on retries.
 	if (active.has(record.id) || ['provisioning', 'deleting'].includes(record.provision_state ?? '')) {
 		throw new Error('Wait for the current operation to finish before deleting.');
 	}
 	active.add(record.id);
-	let removed = false;
+	let deletedPatch: Record<string, unknown> | undefined;
 	try {
 		await pb.collection('instances').update(record.id, { status: 'failed', provision_state: 'deleting' });
 		await removeGuest();
-		removed = true;
-		// Clear the binding before removing the row, so a DB delete failure cannot
-		// leave access to a VMID that might later be reused by another guest.
-		await pb.collection('instances').update(record.id, {
-			status: 'failed', provision_state: 'deleted', vmid: 0, node: 0, IP: '',
-		});
-		await pb.collection('instances').delete(record.id);
+		// Keep the lease as history and revoke the guest binding in the same write.
+		deletedPatch = {
+			status: 'deleted', provision_state: 'deleted', provision_error: '',
+			vmid: null, node: null, datedelete: new Date().toISOString(),
+		};
+		await pb.collection('instances').update(record.id, deletedPatch);
 	} catch (cause) {
 		const message = (cause instanceof Error ? cause.message : String(cause)).slice(0, 4096);
 		try {
-			await pb.collection('instances').update(record.id, removed
-				? { status: 'failed', provision_state: 'deleted', provision_error: message, vmid: 0, node: 0, IP: '' }
+			await pb.collection('instances').update(record.id, deletedPatch
+				? deletedPatch
 				: { status: 'failed', provision_state: 'delete_failed', provision_error: message });
+			if (deletedPatch) return; // The retry saved the successful deletion outcome.
 		} catch (saveError) {
 			console.error('Could not save deletion outcome:', saveError);
 		}

@@ -3,7 +3,7 @@
 // AdminStats and AdminQueueTable both consume this so the numbers in the
 // stats bar always agree with the badges rendered in the table.
 
-export type LeaseBadgeStatus = "failed" | "provisioning" | "pending" | "completed";
+export type LeaseBadgeStatus = "failed" | "provisioning" | "pending" | "completed" | "deleted";
 
 export type LeaseProgress = { status: string; error?: string } | undefined;
 
@@ -11,6 +11,7 @@ export function leaseBadgeStatus(
 	item: { status: string; provision_state?: string },
 	progress: LeaseProgress,
 ): LeaseBadgeStatus {
+	if (item.status === "deleted" || item.provision_state === "deleted") return "deleted";
 	if (item.provision_state === "deleting") return "provisioning";
 	if (item.status === "completed") return "completed";
 	if (item.provision_state === "failed" || item.status === "failed") return "failed";

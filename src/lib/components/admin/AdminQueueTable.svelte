@@ -142,6 +142,7 @@
       provisioning: 0,
       failed: 0,
       completed: 0,
+      deleted: 0,
     };
     for (const i of items) c[leaseBadgeStatus(i, progressMap[i.id])]++;
     return c;
@@ -152,6 +153,7 @@
     provisioning: { label: "Provisioning" },
     pending: { label: "Pending" },
     completed: { label: "Completed" },
+    deleted: { label: "Deleted" },
   };
 </script>
 
@@ -189,6 +191,7 @@
         <Tabs.Trigger value="completed"
           >Completed ({filterCounts.completed})</Tabs.Trigger
         >
+        <Tabs.Trigger value="deleted">Deleted ({filterCounts.deleted})</Tabs.Trigger>
       </Tabs.List>
     </Tabs.Root>
 
@@ -256,6 +259,8 @@
                         "border-warning/20 bg-warning/10 text-warning",
                       badgeStatus === "completed" &&
                         "border-success/20 bg-success/10 text-success",
+                      badgeStatus === "deleted" &&
+                        "border-border bg-muted text-muted-foreground",
                     )}
                   >
                     <span
@@ -266,6 +271,7 @@
                           "animate-pulse bg-info",
                         badgeStatus === "pending" && "animate-pulse bg-warning",
                         badgeStatus === "completed" && "bg-success",
+                        badgeStatus === "deleted" && "bg-muted-foreground",
                       )}
                     ></span>
                     {meta.label}

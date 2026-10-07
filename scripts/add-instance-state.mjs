@@ -33,8 +33,10 @@ const backup = resolve(directory, `instances-state-schema-${new Date().toISOStri
 writeFileSync(backup, JSON.stringify(collection, null, 2), { flag: 'wx' });
 await pb.collections.update(collection.id, { fields });
 const saved = await pb.collections.getOne(collection.id);
-for (const name of ['status', 'provision_state', 'provision_error', 'IP', 'vmid', 'node']) {
+for (const name of ['status', 'provision_state', 'provision_error', 'IP', 'vmid', 'node', 'datedelete']) {
 	if (!saved.fields.some(field => field.name === name)) throw new Error(`Schema verification failed: ${name}`);
 }
-if (!saved.fields.find(field => field.name === 'status').values.includes('failed')) throw new Error('Failed state was not saved.');
+for (const state of ['failed', 'deleted']) {
+	if (!saved.fields.find(field => field.name === 'status').values.includes(state)) throw new Error(`State ${state} was not saved.`);
+}
 console.log('Instance state schema updated and verified. Backup:', backup);
