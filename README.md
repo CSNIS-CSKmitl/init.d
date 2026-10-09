@@ -27,23 +27,26 @@ npm run start
 
 ใช้ [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml): push เข้า `main` หรือกด Run workflow เพื่อให้ runner ตรวจและ build แล้วส่งไฟล์ด้วย rsync ผ่าน SSH ไปยัง Linux server และ restart PM2 (สร้าง process หากยังไม่มี) หลังจากนั้นตรวจ HTTP `/login` ก่อน `pm2 save`
 
-ตั้งค่าใน GitHub → Settings → Secrets and variables → Actions:
+ตั้งค่าใน GitHub → Settings → Environments → `env` (ตรงกับ `environment: env` ใน workflow):
 
 | ประเภท | ชื่อ | ค่า |
 | --- | --- | --- |
 | Secret | `SSH_HOST` | IP หรือ hostname ของ server |
 | Secret | `SSH_USER` | user SSH ที่เป็นเจ้าของ process PM2 และเขียนไฟล์ปลายทางได้ |
+| Secret | `ENV_FILE` | เนื้อหา production `.env` ทั้งไฟล์ตาม `.env.example`; workflow ส่งไปวางบน server ให้อัตโนมัติ |
 | Variable | `DEPLOY_PATH` | absolute path ของแอป เช่น `/var/www/initd` (ไม่ใช้ช่องว่างหรือ `..`) |
 | Variable (optional) | `VITE_POCKETBASE_URL` | ค่าเริ่มต้น `/api/db` ผ่าน proxy ของเว็บ ไม่ต้องตั้งซ้ำ; ตั้งเฉพาะเมื่อต้องการใช้ URL อื่นตอน build |
 | Variable | `PM2_APP_NAME` | ชื่อ process PM2 เดิม; ค่าเริ่มต้น `initd` |
 
-เตรียม server ครั้งแรก: สร้าง `DEPLOY_PATH` ให้ SSH user เขียนได้, ติดตั้ง Node.js **24**, npm, rsync และ PM2 และให้คำสั่งเหล่านี้อยู่ใน PATH ของ SSH แบบ non-interactive ก่อนรัน workflow สร้าง `.env` ใน path นี้ตาม `.env.example` โดยต้องมี `ORIGIN` และค่า production อื่น ๆ ให้ครบ หากมี process PM2 อยู่แล้ว ต้องใช้ `server.js` และ working directory ตรงกับ `DEPLOY_PATH`
+เตรียม server ครั้งแรก: ติดตั้ง Node.js **24**, npm, rsync และ PM2 และให้คำสั่งเหล่านี้อยู่ใน PATH ของ SSH แบบ non-interactive โดย SSH user ต้องมีสิทธิ์สร้าง/เขียน `DEPLOY_PATH` Workflow สร้างโฟลเดอร์และวาง `.env` ให้เอง ไม่ต้องสร้างไฟล์บน server ก่อน หากมี process PM2 อยู่แล้ว ต้องใช้ `server.js` และ working directory ตรงกับ `DEPLOY_PATH`
 
-เก็บ production `.env` ไว้บน server ที่เดียว ไม่ต้องคัดลอก env ทั้งชุดไป GitHub และไม่ต้องใส่ใหม่ทุกครั้งที่ deploy ค่า `POCKETBASE_URL` ในไฟล์นี้ใช้ URL ภายในที่ server เข้าถึงได้ ส่วน browser ใช้ `/api/db` ที่ฝังตอน build เพื่อให้เว็บ proxy ต่อไป PocketBase การเปลี่ยน `POCKETBASE_URL` ใช้ restart PM2 เพื่อโหลดค่าใหม่; หากเปลี่ยน `VITE_POCKETBASE_URL` ต้อง build/deploy ใหม่ เพราะเป็นค่าที่ฝังในไฟล์ client
+จัดการ production env ที่ GitHub Secret `ENV_FILE` ที่เดียว ตั้ง `ORIGIN`, `PORT`, `POCKETBASE_URL` และ credential ให้ครบ Workflow ส่งไฟล์นี้ผ่าน SSH ไปยัง `$DEPLOY_PATH/.env` ทุกครั้งก่อน restart PM2 ด้วย permission `600` และลบสำเนาชั่วคราวบน runner เมื่อ step จบ จึงไม่ต้องอัปโหลด `.env` ด้วยตนเอง การแก้ `.env` บน server โดยตรงจะถูกทับในการ deploy ครั้งถัดไป
+
+`POCKETBASE_URL` ใช้ URL ภายในที่ server เข้าถึงได้ ส่วน browser ใช้ `/api/db` ที่ฝังตอน build เพื่อให้เว็บ proxy ต่อ PocketBase การเปลี่ยน server env ให้แก้ Secret `ENV_FILE` แล้ว deploy ใหม่; หากเปลี่ยน `VITE_POCKETBASE_URL` ต้องแก้ GitHub Variable ชื่อนี้ให้ตรงและ build/deploy ใหม่ เพราะเป็นค่าที่ฝังในไฟล์ client Build/check ไม่ใช้ production credential
 
 ใช้ self-hosted Linux runner ที่ตั้งค่า SSH ไปยัง server ไว้แล้ว Workflow ใช้ SSH config, key หรือ agent และ known_hosts ของ user ที่รัน runner โดยตรง จึงไม่ต้องตั้ง `SSH_PRIVATE_KEY` หรือ `SSH_KNOWN_HOSTS` ใน GitHub ใช้ SSH port 22 ตามปกติ ทดสอบ `ssh -o BatchMode=yes <user>@<host> true` ด้วย user เดียวกับ service ของ runner ให้ผ่านก่อน ถ้ามีหลาย Linux runners ให้เพิ่ม label ของ runner ที่มี SSH access ใน `runs-on` ของ workflow
 
-runner ต้องมี SSH และ rsync เช่นกัน Workflow ส่งเฉพาะ build และไฟล์ runtime ที่ `server.js` ใช้ เก็บ `.env` กับ `.data` เดิมบน server ไว้ และไม่รัน PocketBase migrations อัตโนมัติ การอัปเดตไฟล์และติดตั้ง dependency ทำใน path เดิม จึงอาจมี downtime ช่วง deploy และไม่มี rollback อัตโนมัติ ตั้ง `pm2 startup` บน server ครั้งแรกหากต้องการให้ process กลับมาหลัง reboot
+runner ต้องมี SSH และ rsync เช่นกัน Workflow ส่ง build, ไฟล์ runtime ที่ `server.js` ใช้ และ `.env` จาก Secret โดยเก็บ `.data` เดิมบน server ไว้ และไม่รัน PocketBase migrations อัตโนมัติ การอัปเดตไฟล์และติดตั้ง dependency ทำใน path เดิม จึงอาจมี downtime ช่วง deploy และไม่มี rollback อัตโนมัติ ตั้ง `pm2 startup` บน server ครั้งแรกหากต้องการให้ process กลับมาหลัง reboot
 
 ## หน้าหลัก
 

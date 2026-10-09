@@ -44,9 +44,11 @@ jobs:
           package-manager-cache: false
 
       - name: Validate configuration
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
         run: |
           set -euo pipefail
-          for name in SSH_HOST SSH_USER DEPLOY_PATH; do
+          for name in SSH_HOST SSH_USER DEPLOY_PATH ENV_FILE; do
             if [[ -z "${!name}" ]]; then
               echo "::error::Missing GitHub Actions secret or variable: $name"
               exit 1
@@ -74,25 +76,44 @@ jobs:
         run: npm run build
 
       - name: Transfer files and restart PM2
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
+          stage='prepare temporary deploy files'
+          trap 'status=$?; echo "::error::Deploy failed during: $stage (line $LINENO, exit $status)"; exit "$status"' ERR
+          echo 'Preparing deploy files.'
           deploy_temp=$(mktemp -d "$RUNNER_TEMP/initd-deploy.XXXXXX")
           trap 'rm -rf -- "$deploy_temp"' EXIT
+          # Keep production credentials outside checkout and build artifacts.
+          (umask 077; printf '%s\n' "$ENV_FILE" > "$deploy_temp/.env")
+          unset ENV_FILE
           # Use the runner user's existing SSH config, keys/agent and known_hosts.
           ssh_options=(-o BatchMode=yes
             -o StrictHostKeyChecking=yes -o ConnectTimeout=15)
           remote="$SSH_USER@$SSH_HOST"
 
-          # .env is maintained on the server; .data contains persistent SSH pins.
+          # Create the application directory automatically; keep persistent data.
+          stage='check SSH access and server prerequisites'
+          echo 'Connecting to deployment server and checking prerequisites.'
           ssh "${ssh_options[@]}" "$remote" "bash -s -- '$DEPLOY_PATH'" <<'REMOTE'
-          set -euo pipefail
+          set -Eeuo pipefail
+          trap 'status=$?; echo "::error::Server prerequisite check failed at line $LINENO (exit $status)"; exit "$status"' ERR
+          mkdir -p -- "$1"
           cd "$1"
-          test -f .env || { echo 'Create the production .env in DEPLOY_PATH first.' >&2; exit 1; }
-          for command in node npm pm2 rsync; do command -v "$command" >/dev/null; done
+          for command in node npm pm2 rsync; do
+            if ! command -v "$command" >/dev/null; then
+              echo "::error::Missing command on deployment server or not in non-interactive SSH PATH: $command"
+              exit 1
+            fi
+            echo "Server prerequisite available: $command"
+          done
           node -e 'if (Number(process.versions.node.split(".")[0]) !== 24) { console.error("Node.js 24 is required on the server."); process.exit(1); }'
           REMOTE
 
           # Package the custom server and its runtime imports alongside the build.
+          stage='package application runtime'
+          echo 'Packaging application runtime.'
           package_dir="$deploy_temp/package"
           mkdir -p "$package_dir/scripts" "$package_dir/src/lib/server"
           cp -R build "$package_dir/"
@@ -104,23 +125,38 @@ jobs:
           # Quote SSH arguments for rsync, including temporary paths with spaces.
           printf -v RSYNC_RSH '%q ' ssh "${ssh_options[@]}"
           export RSYNC_RSH
-          # Delete stale build assets only; never delete server .env or .data.
+          # Delete stale build assets only; preserve persistent .data.
+          stage='transfer build assets'
+          echo 'Transferring build assets.'
           rsync -az --delete "$package_dir/build/" "$remote:$DEPLOY_PATH/build/"
+          stage='transfer runtime files'
+          echo 'Transferring runtime files.'
           rsync -az --exclude='/build/' "$package_dir/" "$remote:$DEPLOY_PATH/"
+          # rsync replaces the env file using a temporary file and rename.
+          stage='transfer production environment file'
+          echo 'Transferring environment file with permission 600.'
+          rsync -az --chmod=F600 "$deploy_temp/.env" "$remote:$DEPLOY_PATH/.env"
 
+          stage='install server dependencies, restart PM2 and check health'
+          echo 'Installing server dependencies and restarting the application.'
           ssh "${ssh_options[@]}" "$remote" "bash -s -- '$DEPLOY_PATH' '$PM2_APP_NAME'" <<'REMOTE'
-          set -euo pipefail
+          set -Eeuo pipefail
+          stage='enter deployment directory'
+          trap 'status=$?; echo "::error::Server deploy failed during: $stage (line $LINENO, exit $status)"; exit "$status"' ERR
           cd "$1"
           app_name="$2"
           # Skip the prepare script, which requires development-only Svelte tools.
+          stage='install production dependencies'
           npm ci --omit=dev --ignore-scripts
           export NODE_ENV=production
+          stage='start or restart PM2'
           if pm2 describe "$app_name" >/dev/null 2>&1; then
             pm2 restart "$app_name" --update-env
           else
             pm2 start server.js --name "$app_name" --cwd "$PWD" --time
           fi
           # Fail the workflow if the application does not serve HTTP after startup.
+          stage='application HTTP health check'
           node --input-type=module <<'HEALTH'
           import 'dotenv/config';
           import { setTimeout } from 'node:timers/promises';
@@ -135,5 +171,6 @@ jobs:
           console.error('Application health check failed. Inspect pm2 logs on the server.');
           process.exit(1);
           HEALTH
+          stage='save PM2 process list'
           pm2 save
           REMOTE
