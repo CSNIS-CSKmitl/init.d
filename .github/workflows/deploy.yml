@@ -1,0 +1,133 @@
+name: Deploy init.d
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: initd-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    # Use the runner that already has SSH access to the deployment server.
+    # Add its custom label here if multiple Linux runners are registered.
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      VITE_POCKETBASE_URL: ${{ vars.VITE_POCKETBASE_URL }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+      PM2_APP_NAME: ${{ vars.PM2_APP_NAME || 'initd' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Validate configuration
+        run: |
+          set -euo pipefail
+          for name in VITE_POCKETBASE_URL SSH_HOST SSH_USER DEPLOY_PATH; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing GitHub Actions secret or variable: $name"
+              exit 1
+            fi
+          done
+          # Keep values safe for SSH's remote command parsing and rsync paths.
+          [[ "$SSH_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          [[ "$SSH_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]
+          [[ "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9_/-]+$ && "$DEPLOY_PATH" != / ]]
+          [[ "/${DEPLOY_PATH#/}/" != *"/../"* ]]
+          [[ "$PM2_APP_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]
+          for command in ssh rsync; do command -v "$command" >/dev/null; done
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check application
+        run: npm run check
+
+      - name: Build application
+        run: npm run build
+
+      - name: Transfer files and restart PM2
+        run: |
+          set -euo pipefail
+          deploy_temp=$(mktemp -d "$RUNNER_TEMP/initd-deploy.XXXXXX")
+          trap 'rm -rf -- "$deploy_temp"' EXIT
+          # Use the runner user's existing SSH config, keys/agent and known_hosts.
+          ssh_options=(-o BatchMode=yes
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=15)
+          remote="$SSH_USER@$SSH_HOST"
+
+          # .env is maintained on the server; .data contains persistent SSH pins.
+          ssh "${ssh_options[@]}" "$remote" "bash -s -- '$DEPLOY_PATH'" <<'REMOTE'
+          set -euo pipefail
+          cd "$1"
+          test -f .env || { echo 'Create the production .env in DEPLOY_PATH first.' >&2; exit 1; }
+          for command in node npm pm2 rsync; do command -v "$command" >/dev/null; done
+          node -e 'if (Number(process.versions.node.split(".")[0]) !== 24) { console.error("Node.js 24 is required on the server."); process.exit(1); }'
+          REMOTE
+
+          # Package the custom server and its runtime imports alongside the build.
+          package_dir="$deploy_temp/package"
+          mkdir -p "$package_dir/scripts" "$package_dir/src/lib/server"
+          cp -R build "$package_dir/"
+          cp server.js package.json package-lock.json .npmrc "$package_dir/"
+          cp scripts/sync-instance-nodes.mjs "$package_dir/scripts/"
+          cp src/lib/role.mjs "$package_dir/src/lib/"
+          cp src/lib/server/*.mjs "$package_dir/src/lib/server/"
+
+          # Quote SSH arguments for rsync, including temporary paths with spaces.
+          printf -v RSYNC_RSH '%q ' ssh "${ssh_options[@]}"
+          export RSYNC_RSH
+          # Delete stale build assets only; never delete server .env or .data.
+          rsync -az --delete "$package_dir/build/" "$remote:$DEPLOY_PATH/build/"
+          rsync -az --exclude='/build/' "$package_dir/" "$remote:$DEPLOY_PATH/"
+
+          ssh "${ssh_options[@]}" "$remote" "bash -s -- '$DEPLOY_PATH' '$PM2_APP_NAME'" <<'REMOTE'
+          set -euo pipefail
+          cd "$1"
+          app_name="$2"
+          # Skip the prepare script, which requires development-only Svelte tools.
+          npm ci --omit=dev --ignore-scripts
+          export NODE_ENV=production
+          if pm2 describe "$app_name" >/dev/null 2>&1; then
+            pm2 restart "$app_name" --update-env
+          else
+            pm2 start server.js --name "$app_name" --cwd "$PWD" --time
+          fi
+          # Fail the workflow if the application does not serve HTTP after startup.
+          node --input-type=module <<'HEALTH'
+          import 'dotenv/config';
+          import { setTimeout } from 'node:timers/promises';
+          const url = `http://127.0.0.1:${process.env.PORT || 3000}/login`;
+          for (let attempt = 0; attempt < 15; attempt++) {
+            try {
+              const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
+              if (response.ok) process.exit(0);
+            } catch {}
+            await setTimeout(2000);
+          }
+          console.error('Application health check failed. Inspect pm2 logs on the server.');
+          process.exit(1);
+          HEALTH
+          pm2 save
+          REMOTE
