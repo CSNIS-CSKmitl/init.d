@@ -15,6 +15,7 @@ concurrency:
 jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
+    environment: env
     # Use the runner that already has SSH access to the deployment server.
     # Add its custom label here if multiple Linux runners are registered.
     runs-on: [self-hosted, linux]
