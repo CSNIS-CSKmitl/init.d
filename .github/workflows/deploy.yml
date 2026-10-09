@@ -53,12 +53,16 @@ jobs:
             fi
           done
           # Keep values safe for SSH's remote command parsing and rsync paths.
-          [[ "$SSH_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
-          [[ "$SSH_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]
-          [[ "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9_/-]+$ && "$DEPLOY_PATH" != / ]]
-          [[ "/${DEPLOY_PATH#/}/" != *"/../"* ]]
-          [[ "$PM2_APP_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]
-          for command in ssh rsync; do command -v "$command" >/dev/null; done
+          fail() { echo "::error::$1"; exit 1; }
+          [[ "$SSH_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || fail 'SSH_HOST must be a hostname or IPv4 address without a URL scheme, user or port.'
+          [[ "$SSH_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]] || fail 'SSH_USER must be a Linux username.'
+          [[ "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9_./-]+$ && "$DEPLOY_PATH" != / ]] || fail 'DEPLOY_PATH must be an absolute directory path without spaces, such as /root/init.d.'
+          [[ "/${DEPLOY_PATH#/}/" != *"/../"* ]] || fail 'DEPLOY_PATH must not contain a .. path component.'
+          [[ "$PM2_APP_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]] || fail 'PM2_APP_NAME must contain only letters, numbers, dots, underscores or hyphens and start with a letter or number.'
+          for command in ssh rsync; do
+            command -v "$command" >/dev/null || fail "Required command is missing on the runner: $command"
+          done
+          echo 'Deploy configuration validated.'
 
       - name: Install dependencies
         run: npm ci
