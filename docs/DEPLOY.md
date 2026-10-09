@@ -20,3 +20,5 @@ Workflow ส่ง build และ runtime files พร้อม .env โดย�
 ก่อน restart ติดตั้งเฉพาะ production dependencies (ข้าม npm lifecycle scripts) แล้วตรวจ HTTP /login หลังรันสำเร็จจึง pm2 save และลบ node_modules/.svelte-kit/build/dist บน runner; Node tool cache และ npm cache ยังใช้ซ้ำได้
 
 ไม่ส่ง source ทั้งโปรเจกต์ ไม่ลบ data/, .data/ หรือ uploads บน server แต่ทับ .env จาก ENV_FILE ทุก deploy และไม่มี rollback อัตโนมัติ หากเปลี่ยน VITE_* ที่ใช้ฝังใน client ให้ตั้ง GitHub Variable ที่ workflow ใช้อ่านและ build ใหม่ ค่า server env อื่นแก้ใน ENV_FILE แล้ว deploy
+
+Deploy ผ่าน PM2 กำหนด PORT=3000 และ health check ใช้ port เดียวกัน แม้ ENV_FILE จะมีค่า PORT เดิม ให้ reverse proxy ชี้ไป port 3000; หลายแอปบนเครื่องเดียวกันต้องแยก IP หรือเครื่องเพื่อไม่ให้ port ชนกัน

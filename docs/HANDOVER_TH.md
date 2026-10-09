@@ -99,7 +99,7 @@ Hook นี้ควบคุมเฉพาะการล็อกอิน OA
 ```powershell
 npm run check
 npm run build
-$env:PORT = '3001'
+$env:PORT = '3000'
 $env:ORIGIN = 'https://ชื่อโดเมนจริงของเว็บ'
 npm run start
 ```

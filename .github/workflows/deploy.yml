@@ -214,6 +214,7 @@ jobs:
           stage='install production dependencies'
           npm ci --omit=dev --ignore-scripts
           export NODE_ENV=production
+          export PORT=3000
           stage='start or restart PM2'
           export DEPLOY_PM2_APP_NAME="$app_name"
           pm2 startOrRestart ecosystem.config.cjs --update-env
@@ -221,7 +222,10 @@ jobs:
           stage='application HTTP health check'
           node --env-file=.env --input-type=module <<'HEALTH'
           import { setTimeout } from 'node:timers/promises';
-          const url = `http://127.0.0.1:${process.env.PORT || 3000}/login`;
+          const bindHost = process.env.HOST || '127.0.0.1';
+          const host = ['0.0.0.0', '::', '[::]'].includes(bindHost) ? '127.0.0.1' : bindHost;
+          const authority = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+          const url = `http://${authority}:${process.env.PORT || 3000}/login`;
           for (let attempt = 0; attempt < 15; attempt++) {
             try {
               const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
