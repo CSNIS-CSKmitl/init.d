@@ -1,5 +1,6 @@
 import PocketBase from 'pocketbase';
 import { env } from '$env/dynamic/private';
+import { requiredEnv } from './env';
 import type { LeaseInstance } from '$lib/types';
 
 export function canAccessInstance(record: LeaseInstance, userId: string, isAdmin = false): boolean {
@@ -13,7 +14,7 @@ export function canManageOwners(record: LeaseInstance, userId: string, isAdmin =
 export async function adminPb(): Promise<PocketBase> {
 	const pb = new PocketBase(env.POCKETBASE_URL);
 	pb.autoCancellation(false);
-	await pb.admins.authWithPassword(env.PB_ADMIN_EMAIL, env.PB_ADMIN_PASSWORD);
+	await pb.admins.authWithPassword(requiredEnv('PB_ADMIN_EMAIL'), requiredEnv('PB_ADMIN_PASSWORD'));
 	return pb;
 }
 

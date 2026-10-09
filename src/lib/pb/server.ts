@@ -4,14 +4,9 @@
 
 import PocketBase from 'pocketbase';
 import type { RecordModel } from 'pocketbase';
-import { env } from '$env/dynamic/private';
+import { requiredEnv } from '$lib/server/env';
 import type { RequestEvent } from '@sveltejs/kit';
 import { AUTH_COOKIE } from '../constants';
-
-const PB_URL = env.POCKETBASE_URL;
-if (!PB_URL) {
-	throw new Error('POCKETBASE_URL is not set in .env');
-}
 
 interface StoredAuth {
 	token: string;
@@ -19,7 +14,7 @@ interface StoredAuth {
 }
 
 export function createPb(event: RequestEvent): PocketBase {
-	const pb = new PocketBase(PB_URL);
+	const pb = new PocketBase(requiredEnv('POCKETBASE_URL'));
 	// Disable auto-cancellation so concurrent calls in one request don't
 	// cancel each other (e.g. during form re-renders).
 	pb.autoCancellation(false);

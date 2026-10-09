@@ -5,6 +5,7 @@ import type { Actions, PageServerLoad } from './$types';
 import type { LeaseInstance } from '$lib/types';
 import PocketBase from 'pocketbase';
 import { env } from '$env/dynamic/private';
+import { requiredEnv } from '$lib/server/env';
 import { addOwnerEmails, adminPb, canManageOwners, resolveOwnerIds } from '$lib/server/instance-owners';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -81,7 +82,7 @@ export const actions: Actions = {
 			// 2. Authenticate as admin to delete (regular users can't delete)
 			const pbAdmin = new PocketBase(env.POCKETBASE_URL);
 			pbAdmin.autoCancellation(false);
-			await pbAdmin.admins.authWithPassword(env.PB_ADMIN_EMAIL, env.PB_ADMIN_PASSWORD);
+			await pbAdmin.admins.authWithPassword(requiredEnv('PB_ADMIN_EMAIL'), requiredEnv('PB_ADMIN_PASSWORD'));
 
 			await pbAdmin.collection('instances').delete(id);
 			return { success: true };

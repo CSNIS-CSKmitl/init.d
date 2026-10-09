@@ -428,8 +428,8 @@ export interface ProxmoxVncTicketParams {
     host: string;
     port: string | number;
     user: string;
-    token: string;
-    secret: string;
+    token?: string;
+    secret?: string;
     password?: string;
     node: string;
     typePath: 'qemu' | 'lxc';
@@ -508,6 +508,9 @@ async function postProxmoxProxy(
         console.log(`[Proxmox] Using session cookie authentication (User: ${user})`);
     } else {
         // Fallback to API Token header
+        if (!token || !secret) {
+            throw new Error('Configure PROXMOX_PASSWORD or both PROXMOX_TOKEN and PROXMOX_TOKEN_SECRET.');
+        }
         headers['Authorization'] = `PVEAPIToken=${user}!${token}=${secret}`;
         console.log(`[Proxmox] Using API Token authentication (User: ${user}!${token})`);
     }

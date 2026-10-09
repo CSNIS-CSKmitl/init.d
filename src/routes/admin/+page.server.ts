@@ -10,6 +10,7 @@ import { startProvisioning, removeProxmoxInstance, provisioningProgress } from '
 import { sendDiscordNotification } from '$lib/discord';
 import PocketBase from 'pocketbase';
 import { env } from '$env/dynamic/private';
+import { requiredEnv } from '$lib/server/env';
 import { addOwnerEmails, adminPb } from '$lib/server/instance-owners';
 import { deleteInstance, instanceIsBusy, instanceIsDeleted } from '$lib/server/instance-lifecycle';
 import { isIP } from 'node:net';
@@ -25,10 +26,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		pbAdmin.autoCancellation(false);
 		let loggedIn = false;
 		try {
-			await pbAdmin.collection('_superusers').authWithPassword(env.PB_ADMIN_EMAIL, env.PB_ADMIN_PASSWORD);
+			await pbAdmin.collection('_superusers').authWithPassword(requiredEnv('PB_ADMIN_EMAIL'), requiredEnv('PB_ADMIN_PASSWORD'));
 			loggedIn = true;
 		} catch (e) {
-			await pbAdmin.admins.authWithPassword(env.PB_ADMIN_EMAIL, env.PB_ADMIN_PASSWORD);
+			await pbAdmin.admins.authWithPassword(requiredEnv('PB_ADMIN_EMAIL'), requiredEnv('PB_ADMIN_PASSWORD'));
 		}
 
 		const list = await pbAdmin.collection('instances').getList<LeaseInstance>(1, 500, {

@@ -2,6 +2,7 @@ import { json, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import PocketBase from 'pocketbase';
 import { env } from '$env/dynamic/private';
+import { requiredEnv } from '$lib/server/env';
 import { AUTH_COOKIE } from '$lib/constants';
 
 // PocketBase handles the complete OAuth2 flow. This endpoint only persists the
@@ -29,7 +30,7 @@ export const POST: RequestHandler = async ({ request, cookies, url }) => {
 		if (!record.user_type) {
 			const service = new PocketBase(env.POCKETBASE_URL);
 			service.autoCancellation(false);
-			await service.admins.authWithPassword(env.PB_ADMIN_EMAIL, env.PB_ADMIN_PASSWORD);
+			await service.admins.authWithPassword(requiredEnv('PB_ADMIN_EMAIL'), requiredEnv('PB_ADMIN_PASSWORD'));
 			record = await service.collection('users').update(record.id, { user_type: DEFAULT_STUDENT_TYPE_ID });
 		}
 
