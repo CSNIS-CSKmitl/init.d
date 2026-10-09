@@ -34,10 +34,12 @@ npm run start
 | Secret | `SSH_HOST` | IP หรือ hostname ของ server |
 | Secret | `SSH_USER` | user SSH ที่เป็นเจ้าของ process PM2 และเขียนไฟล์ปลายทางได้ |
 | Variable | `DEPLOY_PATH` | absolute path ของแอป เช่น `/var/www/initd` (ไม่ใช้ช่องว่างหรือ `..`) |
-| Variable | `VITE_POCKETBASE_URL` | public PocketBase URL สำหรับฝังตอน build |
+| Variable (optional) | `VITE_POCKETBASE_URL` | ค่าเริ่มต้น `/api/db` ผ่าน proxy ของเว็บ ไม่ต้องตั้งซ้ำ; ตั้งเฉพาะเมื่อต้องการใช้ URL อื่นตอน build |
 | Variable | `PM2_APP_NAME` | ชื่อ process PM2 เดิม; ค่าเริ่มต้น `initd` |
 
 เตรียม server ครั้งแรก: สร้าง `DEPLOY_PATH` ให้ SSH user เขียนได้, ติดตั้ง Node.js **24**, npm, rsync และ PM2 และให้คำสั่งเหล่านี้อยู่ใน PATH ของ SSH แบบ non-interactive ก่อนรัน workflow สร้าง `.env` ใน path นี้ตาม `.env.example` โดยต้องมี `ORIGIN` และค่า production อื่น ๆ ให้ครบ หากมี process PM2 อยู่แล้ว ต้องใช้ `server.js` และ working directory ตรงกับ `DEPLOY_PATH`
+
+เก็บ production `.env` ไว้บน server ที่เดียว ไม่ต้องคัดลอก env ทั้งชุดไป GitHub และไม่ต้องใส่ใหม่ทุกครั้งที่ deploy ค่า `POCKETBASE_URL` ในไฟล์นี้ใช้ URL ภายในที่ server เข้าถึงได้ ส่วน browser ใช้ `/api/db` ที่ฝังตอน build เพื่อให้เว็บ proxy ต่อไป PocketBase การเปลี่ยน `POCKETBASE_URL` ใช้ restart PM2 เพื่อโหลดค่าใหม่; หากเปลี่ยน `VITE_POCKETBASE_URL` ต้อง build/deploy ใหม่ เพราะเป็นค่าที่ฝังในไฟล์ client
 
 ใช้ self-hosted Linux runner ที่ตั้งค่า SSH ไปยัง server ไว้แล้ว Workflow ใช้ SSH config, key หรือ agent และ known_hosts ของ user ที่รัน runner โดยตรง จึงไม่ต้องตั้ง `SSH_PRIVATE_KEY` หรือ `SSH_KNOWN_HOSTS` ใน GitHub ใช้ SSH port 22 ตามปกติ ทดสอบ `ssh -o BatchMode=yes <user>@<host> true` ด้วย user เดียวกับ service ของ runner ให้ผ่านก่อน ถ้ามีหลาย Linux runners ให้เพิ่ม label ของ runner ที่มี SSH access ใน `runs-on` ของ workflow
 

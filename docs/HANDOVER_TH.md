@@ -55,7 +55,7 @@ npm run dev
 | ตัวแปร | หน้าที่ |
 | --- | --- |
 | `POCKETBASE_URL` | URL ที่ฝั่ง SvelteKit/สคริปต์ใช้ต่อ PocketBase |
-| `VITE_POCKETBASE_URL` | URL ที่เบราว์เซอร์ใช้ต่อ PocketBase โดยตรง ต้องเป็น URL ที่ OAuth redirect และ realtime เข้าถึงได้ |
+| `VITE_POCKETBASE_URL` | ค่าเริ่มต้น `/api/db` ให้เบราว์เซอร์ต่อผ่าน proxy ของเว็บไปยัง `POCKETBASE_URL`; ฝังตอน build โดย workflow ตั้งค่าเริ่มต้นให้แล้ว |
 | `PB_ADMIN_EMAIL`, `PB_ADMIN_PASSWORD` | PocketBase superuser สำหรับงานหลังบ้านและสคริปต์ |
 | `PROXMOX_HOST`, `PROXMOX_PORT` | Proxmox API host และพอร์ต (ปกติ 8006) |
 | `PROXMOX_USER`, `PROXMOX_TOKEN`, `PROXMOX_TOKEN_SECRET` | Proxmox API token สำหรับ inventory, power, provisioning และ console |
