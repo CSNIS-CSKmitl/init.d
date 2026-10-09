@@ -186,3 +186,13 @@ jobs:
           stage='save PM2 process list'
           pm2 save
           REMOTE
+
+      - name: Clean build files after successful deploy
+        if: success()
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          # Only remove generated files from this job's runner checkout.
+          # Production files and the shared Node.js tool cache stay in place.
+          rm -rf -- node_modules .svelte-kit build
+          echo 'Removed runner dependencies and build output.'
