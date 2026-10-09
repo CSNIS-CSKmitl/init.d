@@ -99,11 +99,60 @@ jobs:
           ssh "${ssh_options[@]}" "$remote" "bash -s -- '$DEPLOY_PATH'" <<'REMOTE'
           set -Eeuo pipefail
           trap 'status=$?; echo "::error::Server prerequisite check failed at line $LINENO (exit $status)"; exit "$status"' ERR
-          # Non-interactive SSH does not load the user's nvm shell setup.
+          install_system_packages() {
+            if [[ "$EUID" -ne 0 ]]; then
+              echo '::error::Installing missing server packages requires the SSH root user.'
+              exit 1
+            fi
+            if ! command -v apt-get >/dev/null; then
+              echo '::error::Automatic system package installation supports Ubuntu/Debian (apt-get).'
+              exit 1
+            fi
+            if [[ "${apt_updated:-false}" != true ]]; then
+              apt-get update
+              apt_updated=true
+            fi
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@"
+          }
+
+          if ! command -v rsync >/dev/null; then
+            echo 'Installing rsync on deployment server.'
+            install_system_packages rsync
+          fi
+
+          ensure_node_download_tools() {
+            local packages=()
+            command -v curl >/dev/null || packages+=(curl)
+            command -v tar >/dev/null || packages+=(tar)
+            command -v xz >/dev/null || packages+=(xz-utils)
+            [[ -s /etc/ssl/certs/ca-certificates.crt ]] || packages+=(ca-certificates)
+            if (( ${#packages[@]} > 0 )); then
+              install_system_packages "${packages[@]}"
+            fi
+          }
+
+          # Load existing nvm, or install it if Node.js 24/npm are unavailable.
           export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
           if [[ -s "$NVM_DIR/nvm.sh" ]]; then
-            . "$NVM_DIR/nvm.sh"
-            nvm use 24 >/dev/null
+            . "$NVM_DIR/nvm.sh" --no-use
+            if ! nvm use 24 >/dev/null 2>&1; then
+              echo 'Installing Node.js 24 through existing nvm.'
+              ensure_node_download_tools
+              nvm install 24
+            fi
+          elif ! command -v node >/dev/null || ! command -v npm >/dev/null ||
+            ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) === 24 ? 0 : 1)'; then
+            echo 'Installing nvm and Node.js 24 on deployment server.'
+            ensure_node_download_tools
+            curl -fsSL --retry 3 https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.8/install.sh |
+              PROFILE=/dev/null METHOD=script bash
+            . "$NVM_DIR/nvm.sh" --no-use
+            nvm install 24
+          fi
+
+          if ! command -v pm2 >/dev/null; then
+            echo 'Installing PM2 for the selected Node.js version.'
+            npm install --global pm2
           fi
           mkdir -p -- "$1"
           cd "$1"
@@ -152,7 +201,7 @@ jobs:
           stage='load Node.js 24 from nvm'
           export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
           if [[ -s "$NVM_DIR/nvm.sh" ]]; then
-            . "$NVM_DIR/nvm.sh"
+            . "$NVM_DIR/nvm.sh" --no-use
             nvm use 24 >/dev/null
           fi
           cd "$1"

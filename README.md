@@ -38,7 +38,7 @@ npm run start
 | Variable (optional) | `VITE_POCKETBASE_URL` | ค่าเริ่มต้น `/api/db` ผ่าน proxy ของเว็บ ไม่ต้องตั้งซ้ำ; ตั้งเฉพาะเมื่อต้องการใช้ URL อื่นตอน build |
 | Variable | `PM2_APP_NAME` | ชื่อ process PM2 เดิม; ค่าเริ่มต้น `initd` |
 
-เตรียม server ครั้งแรก: ติดตั้ง Node.js **24**, npm, rsync และ PM2 และให้คำสั่งเหล่านี้อยู่ใน PATH ของ SSH แบบ non-interactive โดย SSH user ต้องมีสิทธิ์สร้าง/เขียน `DEPLOY_PATH` Workflow สร้างโฟลเดอร์และวาง `.env` ให้เอง ไม่ต้องสร้างไฟล์บน server ก่อน หากมี process PM2 อยู่แล้ว ต้องใช้ `server.js` และ working directory ตรงกับ `DEPLOY_PATH`
+เตรียม server ครั้งแรก: SSH ด้วย root ไปยัง Ubuntu/Debian ที่เข้าถึงอินเทอร์เน็ตได้ Workflow ติดตั้ง rsync ที่ขาดผ่าน `apt-get`, โหลด nvm เดิมหรือสร้าง nvm v0.40.8 หากจำเป็น, ติดตั้ง Node.js **24** พร้อม npm หากยังไม่มีรุ่นที่ต้องการ และติดตั้ง PM2 หากไม่พบใน PATH ของ Node ที่เลือก ใช้ของเดิมเมื่อพร้อมแล้ว ไม่ติดตั้งซ้ำทุก deploy อีกทั้งสร้าง `DEPLOY_PATH` และวาง `.env` ให้เอง หากมี process PM2 อยู่แล้ว ต้องใช้ `server.js` และ working directory ตรงกับ `DEPLOY_PATH`
 
 จัดการ production env ที่ GitHub Secret `ENV_FILE` ที่เดียว ตั้ง `ORIGIN`, `PORT`, `POCKETBASE_URL` และ credential ให้ครบ Workflow ส่งไฟล์นี้ผ่าน SSH ไปยัง `$DEPLOY_PATH/.env` ทุกครั้งก่อน restart PM2 ด้วย permission `600` และลบสำเนาชั่วคราวบน runner เมื่อ step จบ จึงไม่ต้องอัปโหลด `.env` ด้วยตนเอง การแก้ `.env` บน server โดยตรงจะถูกทับในการ deploy ครั้งถัดไป
 
