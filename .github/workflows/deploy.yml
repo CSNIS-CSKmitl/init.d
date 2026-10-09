@@ -166,16 +166,20 @@ jobs:
           node -e 'if (Number(process.versions.node.split(".")[0]) !== 24) { console.error("Node.js 24 is required on the server."); process.exit(1); }'
           REMOTE
 
-          # Package the custom server and its runtime imports alongside the build.
+          # Package only the files needed by the production process.
           stage='package application runtime'
           echo 'Packaging application runtime.'
           package_dir="$deploy_temp/package"
-          mkdir -p "$package_dir/scripts" "$package_dir/src/lib/server"
+          mkdir -p "$package_dir"
+          cp package.json ecosystem.config.cjs package-lock.json .npmrc "$package_dir/"
           cp -R build "$package_dir/"
-          cp server.js package.json package-lock.json .npmrc "$package_dir/"
-          cp scripts/sync-instance-nodes.mjs "$package_dir/scripts/"
-          cp src/lib/role.mjs "$package_dir/src/lib/"
-          cp src/lib/server/*.mjs "$package_dir/src/lib/server/"
+          cp -R server.js "$package_dir/"
+          mkdir -p "$package_dir/scripts"
+          cp -R scripts/sync-instance-nodes.mjs "$package_dir/scripts/"
+          mkdir -p "$package_dir/src/lib"
+          cp -R src/lib/role.mjs "$package_dir/src/lib/"
+          mkdir -p "$package_dir/src/lib/server"
+          cp -R src/lib/server/*.mjs "$package_dir/src/lib/server/"
 
           # Quote SSH arguments for rsync, including temporary paths with spaces.
           printf -v RSYNC_RSH '%q ' ssh "${ssh_options[@]}"
@@ -211,15 +215,11 @@ jobs:
           npm ci --omit=dev --ignore-scripts
           export NODE_ENV=production
           stage='start or restart PM2'
-          if pm2 describe "$app_name" >/dev/null 2>&1; then
-            pm2 restart "$app_name" --update-env
-          else
-            pm2 start server.js --name "$app_name" --cwd "$PWD" --time
-          fi
+          export DEPLOY_PM2_APP_NAME="$app_name"
+          pm2 startOrRestart ecosystem.config.cjs --update-env
           # Fail the workflow if the application does not serve HTTP after startup.
           stage='application HTTP health check'
-          node --input-type=module <<'HEALTH'
-          import 'dotenv/config';
+          node --env-file=.env --input-type=module <<'HEALTH'
           import { setTimeout } from 'node:timers/promises';
           const url = `http://127.0.0.1:${process.env.PORT || 3000}/login`;
           for (let attempt = 0; attempt < 15; attempt++) {
@@ -243,5 +243,5 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           # Only remove generated files from this job's runner checkout.
           # Production files and the shared Node.js tool cache stay in place.
-          rm -rf -- node_modules .svelte-kit build
+          rm -rf -- node_modules .svelte-kit build dist
           echo 'Removed runner dependencies and build output.'

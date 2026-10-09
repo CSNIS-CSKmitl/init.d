@@ -108,3 +108,8 @@ node --test scripts/test-instance-lifecycle.mjs scripts/test-admin-instances.mjs
 ## OAuth2 และเงื่อนไข Computer Science
 
 หน้า Login ใช้ PocketBase `oidc` โดยตรงและยังไม่ได้ขอ IAM scope เพิ่ม โค้ด PocketBase auth hook สำหรับตรวจสาขาอยู่ใน `pb_hooks/` แต่ยังไม่ยืนยันว่าติดตั้งบนเซิร์ฟเวอร์ PocketBase จึงยังถือว่าเงื่อนไข Computer Science ไม่ถูกบังคับที่ฐานข้อมูล รายละเอียดการตั้ง scope, การตรวจ claim และขั้นตอนเปิดใช้ hook อยู่ใน [คู่มือส่งต่อ](docs/HANDOVER_TH.md#oauth2-ของ-pocketbase-และ-iam-scopes)
+
+
+## GitHub Actions deploy
+
+วิธีตั้งค่า SSH, ENV_FILE, PM2 และ deploy อัตโนมัติ: [คู่มือ deploy](docs/DEPLOY.md)
