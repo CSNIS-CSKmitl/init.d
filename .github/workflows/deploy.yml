@@ -99,6 +99,12 @@ jobs:
           ssh "${ssh_options[@]}" "$remote" "bash -s -- '$DEPLOY_PATH'" <<'REMOTE'
           set -Eeuo pipefail
           trap 'status=$?; echo "::error::Server prerequisite check failed at line $LINENO (exit $status)"; exit "$status"' ERR
+          # Non-interactive SSH does not load the user's nvm shell setup.
+          export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+          if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+            . "$NVM_DIR/nvm.sh"
+            nvm use 24 >/dev/null
+          fi
           mkdir -p -- "$1"
           cd "$1"
           for command in node npm pm2 rsync; do
@@ -143,6 +149,12 @@ jobs:
           set -Eeuo pipefail
           stage='enter deployment directory'
           trap 'status=$?; echo "::error::Server deploy failed during: $stage (line $LINENO, exit $status)"; exit "$status"' ERR
+          stage='load Node.js 24 from nvm'
+          export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+          if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+            . "$NVM_DIR/nvm.sh"
+            nvm use 24 >/dev/null
+          fi
           cd "$1"
           app_name="$2"
           # Skip the prepare script, which requires development-only Svelte tools.
