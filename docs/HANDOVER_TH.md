@@ -104,7 +104,7 @@ $env:ORIGIN = 'https://ชื่อโดเมนจริงของเว็
 npm run start
 ```
 
-ให้ reverse proxy รองรับ HTTP และ WebSocket ของ `/ssh-ws` กับ `/proxmox-ws` และใช้ `ORIGIN` ตาม URL ที่ผู้ใช้เปิดจริง ส่วน PocketBase ต้องให้เบราว์เซอร์เข้าถึง URL ใน `VITE_POCKETBASE_URL` ได้ บริการจะทำงานต่อเนื่องได้ก็ต่อเมื่อ process manager ของเครื่องเซิร์ฟเวอร์คง `npm run start` ไว้; repository นี้ไม่มี service/CI deployment manifest ที่เป็นมาตรฐานกลาง
+ให้ reverse proxy รองรับ HTTP และ WebSocket ของ `/ssh-ws` กับ `/proxmox-ws` และใช้ `ORIGIN` ตาม URL ที่ผู้ใช้เปิดจริง ส่วน PocketBase ต้องให้เบราว์เซอร์เข้าถึง URL ใน `VITE_POCKETBASE_URL` ได้ บริการ production ใช้ PM2 รัน `server.js`; workflow `.github/workflows/deploy.yml` ให้ runner build และส่งไฟล์ผ่าน SSH ไปยังเซิร์ฟเวอร์ ดูการตั้งค่า Secrets/Variables และเตรียมเครื่องใน [README](../README.md#deploy-ผ่าน-github-actions-และ-pm2)
 
 ## คู่มือผู้ขอและเจ้าของร่วม
 

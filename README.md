@@ -23,6 +23,26 @@ npm run start
 
 กำหนด `PORT` และ `ORIGIN` ให้ตรง public URL ของ production server และตั้ง reverse proxy ให้รองรับ WebSocket `/ssh-ws` กับ `/proxmox-ws`
 
+## Deploy ผ่าน GitHub Actions และ PM2
+
+ใช้ [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml): push เข้า `main` หรือกด Run workflow เพื่อให้ runner ตรวจและ build แล้วส่งไฟล์ด้วย rsync ผ่าน SSH ไปยัง Linux server และ restart PM2 (สร้าง process หากยังไม่มี) หลังจากนั้นตรวจ HTTP `/login` ก่อน `pm2 save`
+
+ตั้งค่าใน GitHub → Settings → Secrets and variables → Actions:
+
+| ประเภท | ชื่อ | ค่า |
+| --- | --- | --- |
+| Secret | `SSH_HOST` | IP หรือ hostname ของ server |
+| Secret | `SSH_USER` | user SSH ที่เป็นเจ้าของ process PM2 และเขียนไฟล์ปลายทางได้ |
+| Variable | `DEPLOY_PATH` | absolute path ของแอป เช่น `/var/www/initd` (ไม่ใช้ช่องว่างหรือ `..`) |
+| Variable | `VITE_POCKETBASE_URL` | public PocketBase URL สำหรับฝังตอน build |
+| Variable | `PM2_APP_NAME` | ชื่อ process PM2 เดิม; ค่าเริ่มต้น `initd` |
+
+เตรียม server ครั้งแรก: สร้าง `DEPLOY_PATH` ให้ SSH user เขียนได้, ติดตั้ง Node.js **24**, npm, rsync และ PM2 และให้คำสั่งเหล่านี้อยู่ใน PATH ของ SSH แบบ non-interactive ก่อนรัน workflow สร้าง `.env` ใน path นี้ตาม `.env.example` โดยต้องมี `ORIGIN` และค่า production อื่น ๆ ให้ครบ หากมี process PM2 อยู่แล้ว ต้องใช้ `server.js` และ working directory ตรงกับ `DEPLOY_PATH`
+
+ใช้ self-hosted Linux runner ที่ตั้งค่า SSH ไปยัง server ไว้แล้ว Workflow ใช้ SSH config, key หรือ agent และ known_hosts ของ user ที่รัน runner โดยตรง จึงไม่ต้องตั้ง `SSH_PRIVATE_KEY` หรือ `SSH_KNOWN_HOSTS` ใน GitHub ใช้ SSH port 22 ตามปกติ ทดสอบ `ssh -o BatchMode=yes <user>@<host> true` ด้วย user เดียวกับ service ของ runner ให้ผ่านก่อน ถ้ามีหลาย Linux runners ให้เพิ่ม label ของ runner ที่มี SSH access ใน `runs-on` ของ workflow
+
+runner ต้องมี SSH และ rsync เช่นกัน Workflow ส่งเฉพาะ build และไฟล์ runtime ที่ `server.js` ใช้ เก็บ `.env` กับ `.data` เดิมบน server ไว้ และไม่รัน PocketBase migrations อัตโนมัติ การอัปเดตไฟล์และติดตั้ง dependency ทำใน path เดิม จึงอาจมี downtime ช่วง deploy และไม่มี rollback อัตโนมัติ ตั้ง `pm2 startup` บน server ครั้งแรกหากต้องการให้ process กลับมาหลัง reboot
+
 ## หน้าหลัก
 
 | หน้า | งาน |
