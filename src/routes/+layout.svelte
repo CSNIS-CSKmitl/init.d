@@ -53,6 +53,10 @@
 		{@render children()}
 	</main>
 	<footer class="relative border-t border-border px-6 py-6 text-center text-xs text-muted-foreground">
-		<span>© {new Date().getFullYear()} <a href="https://github.com/techasit5415" target="_blank" rel="noopener noreferrer" class="hover:text-foreground hover:underline">Techasit Vanitpattarakul</a></span>
+		<span>© {new Date().getFullYear()} <a href="https://github.com/techasit5415" target="_blank" rel="noopener noreferrer" class="hover:text-foreground hover:underline">Techasit Vanitpattarakul</a>
+		<a href="https://github.com/BoByed" target="_blank" rel="noopener noreferrer" class="hover:text-foreground hover:underline">Pannawat Srithongnark</a>
+		<a href="https://github.com/boon4681" target="_blank" rel="noopener noreferrer" class="hover:text-foreground hover:underline">Passawich Thongruang</a>
+
+		</span>
 	</footer>
 </div>
