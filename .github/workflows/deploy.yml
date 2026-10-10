@@ -13,23 +13,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  check:
+    name: Check
     if: github.ref == 'refs/heads/main'
     environment: env
-    # Use the runner that already has SSH access to the deployment server.
-    # Add its custom label here if multiple Linux runners are registered.
     runs-on: [self-hosted, linux]
     timeout-minutes: 20
     defaults:
       run:
         shell: bash
     env:
-      # Match .env: the browser connects through this app's PocketBase proxy.
       VITE_POCKETBASE_URL: ${{ vars.VITE_POCKETBASE_URL || '/api/db' }}
-      SSH_HOST: ${{ secrets.SSH_HOST }}
-      SSH_USER: ${{ secrets.SSH_USER }}
-      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
-      PM2_APP_NAME: ${{ vars.PM2_APP_NAME || 'initd' }}
 
     steps:
       - name: Checkout
@@ -42,6 +36,114 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check application
+        run: npm run check
+
+      - name: Clean generated files
+        if: always()
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          # Only remove generated files from this job's runner checkout.
+          # Production files and the shared Node.js tool cache stay in place.
+          rm -rf -- node_modules .svelte-kit build dist
+          echo 'Removed runner dependencies and build output.'
+
+  build:
+    name: Build
+    needs: check
+    if: github.ref == 'refs/heads/main'
+    environment: env
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      VITE_POCKETBASE_URL: ${{ vars.VITE_POCKETBASE_URL || '/api/db' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Package application runtime
+        run: |
+          set -euo pipefail
+          package_temp=$(mktemp -d "$RUNNER_TEMP/initd-package.XXXXXX")
+          trap 'rm -rf -- "$package_temp"' EXIT
+          # Package only the files needed by the production process.
+          echo 'Packaging application runtime.'
+          package_dir="$package_temp/package"
+          mkdir -p "$package_dir"
+          cp package.json ecosystem.config.cjs package-lock.json .npmrc "$package_dir/"
+          cp -R build "$package_dir/"
+          cp -R server.js "$package_dir/"
+          mkdir -p "$package_dir/scripts"
+          cp -R scripts/sync-instance-nodes.mjs "$package_dir/scripts/"
+          mkdir -p "$package_dir/src/lib"
+          cp -R src/lib/role.mjs "$package_dir/src/lib/"
+          mkdir -p "$package_dir/src/lib/server"
+          cp -R src/lib/server/*.mjs "$package_dir/src/lib/server/"
+
+          tar -czf "$GITHUB_WORKSPACE/initd-runtime.tar.gz" -C "$package_dir" .
+
+      - name: Upload application runtime
+        uses: actions/upload-artifact@v7
+        with:
+          name: initd-runtime
+          path: initd-runtime.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Clean generated files
+        if: always()
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          # Only remove generated files from this job's runner checkout.
+          # Production files and the shared Node.js tool cache stay in place.
+          rm -rf -- node_modules .svelte-kit build dist initd-runtime.tar.gz
+          echo 'Removed runner dependencies and build output.'
+
+  deploy:
+    name: Deploy
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment: env
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+      PM2_APP_NAME: ${{ vars.PM2_APP_NAME || 'initd' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Validate configuration
         env:
@@ -66,14 +168,11 @@ jobs:
           done
           echo 'Deploy configuration validated.'
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Check application
-        run: npm run check
-
-      - name: Build application
-        run: npm run build
+      - name: Download application runtime
+        uses: actions/download-artifact@v8
+        with:
+          name: initd-runtime
+          path: deployment
 
       - name: Transfer files and restart PM2
         env:
@@ -166,20 +265,10 @@ jobs:
           node -e 'if (Number(process.versions.node.split(".")[0]) !== 24) { console.error("Node.js 24 is required on the server."); process.exit(1); }'
           REMOTE
 
-          # Package only the files needed by the production process.
-          stage='package application runtime'
-          echo 'Packaging application runtime.'
+          stage='unpack application runtime'
           package_dir="$deploy_temp/package"
           mkdir -p "$package_dir"
-          cp package.json ecosystem.config.cjs package-lock.json .npmrc "$package_dir/"
-          cp -R build "$package_dir/"
-          cp -R server.js "$package_dir/"
-          mkdir -p "$package_dir/scripts"
-          cp -R scripts/sync-instance-nodes.mjs "$package_dir/scripts/"
-          mkdir -p "$package_dir/src/lib"
-          cp -R src/lib/role.mjs "$package_dir/src/lib/"
-          mkdir -p "$package_dir/src/lib/server"
-          cp -R src/lib/server/*.mjs "$package_dir/src/lib/server/"
+          tar -xzf "$GITHUB_WORKSPACE/deployment/initd-runtime.tar.gz" -C "$package_dir"
 
           # Quote SSH arguments for rsync, including temporary paths with spaces.
           printf -v RSYNC_RSH '%q ' ssh "${ssh_options[@]}"
@@ -196,7 +285,7 @@ jobs:
           echo 'Transferring environment file with permission 600.'
           rsync -az --chmod=F600 "$deploy_temp/.env" "$remote:$DEPLOY_PATH/.env"
 
-          stage='install server dependencies, restart PM2 and check health'
+          stage='install server dependencies and restart PM2'
           echo 'Installing server dependencies and restarting the application.'
           ssh "${ssh_options[@]}" "$remote" "bash -s -- '$DEPLOY_PATH' '$PM2_APP_NAME'" <<'REMOTE'
           set -Eeuo pipefail
@@ -218,6 +307,68 @@ jobs:
           stage='start or restart PM2'
           export DEPLOY_PM2_APP_NAME="$app_name"
           pm2 startOrRestart ecosystem.config.cjs --update-env
+          REMOTE
+
+      - name: Clean downloaded runtime
+        if: always()
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          rm -rf -- deployment
+
+  verify:
+    name: Verify
+    needs: deploy
+    if: github.ref == 'refs/heads/main'
+    environment: env
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+      PM2_APP_NAME: ${{ vars.PM2_APP_NAME || 'initd' }}
+
+    steps:
+      - name: Validate configuration
+        run: |
+          set -euo pipefail
+          for name in SSH_HOST SSH_USER DEPLOY_PATH; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing GitHub Actions secret or variable: $name"
+              exit 1
+            fi
+          done
+          # Keep values safe for SSH's remote command parsing and rsync paths.
+          fail() { echo "::error::$1"; exit 1; }
+          [[ "$SSH_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || fail 'SSH_HOST must be a hostname or IPv4 address without a URL scheme, user or port.'
+          [[ "$SSH_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]] || fail 'SSH_USER must be a Linux username.'
+          [[ "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9_./-]+$ && "$DEPLOY_PATH" != / ]] || fail 'DEPLOY_PATH must be an absolute directory path without spaces, such as /root/init.d.'
+          [[ "/${DEPLOY_PATH#/}/" != *"/../"* ]] || fail 'DEPLOY_PATH must not contain a .. path component.'
+          [[ "$PM2_APP_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]] || fail 'PM2_APP_NAME must contain only letters, numbers, dots, underscores or hyphens and start with a letter or number.'
+          for command in ssh; do
+            command -v "$command" >/dev/null || fail "Required command is missing on the runner: $command"
+          done
+          echo 'Deploy configuration validated.'
+
+      - name: Check application health and save PM2
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+            "$SSH_USER@$SSH_HOST" "bash -s -- '$DEPLOY_PATH'" <<'REMOTE'
+          set -Eeuo pipefail
+          stage='load deployment environment'
+          trap 'status=$?; echo "::error::Server verification failed during: $stage (line $LINENO, exit $status)"; exit "$status"' ERR
+          export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+          if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+            . "$NVM_DIR/nvm.sh" --no-use
+            nvm use 24 >/dev/null
+          fi
+          cd "$1"
+          export PORT=3000
           # Fail the workflow if the application does not serve HTTP after startup.
           stage='application HTTP health check'
           node --env-file=.env --input-type=module <<'HEALTH'
@@ -239,13 +390,3 @@ jobs:
           stage='save PM2 process list'
           pm2 save
           REMOTE
-
-      - name: Clean build files after successful deploy
-        if: success()
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          # Only remove generated files from this job's runner checkout.
-          # Production files and the shared Node.js tool cache stay in place.
-          rm -rf -- node_modules .svelte-kit build dist
-          echo 'Removed runner dependencies and build output.'
