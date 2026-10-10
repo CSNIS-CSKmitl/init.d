@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../app.css';
+	import { page } from '$app/state';
 	import favicon from '$lib/assets/favicon.svg';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import WhatsNewDialog from '$lib/components/WhatsNewDialog.svelte';
@@ -11,6 +12,7 @@
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
 	let announcementOpen = $state(false);
 	let showUpdates = $state(false);
+	let isLegalPage = $derived(['/privacy', '/terms'].includes(page.url.pathname.replace(/\/$/, '')));
 </script>
 
 <ModeWatcher defaultMode="dark" />
@@ -41,13 +43,15 @@
 	></div>
 
 	<Navbar onAnnouncement={() => (announcementOpen = true)} />
-	<AnnouncementCenter
-		userId={data.user?.id ?? null}
-		bind:open={announcementOpen}
-		onInitialCheck={(unseen) => (showUpdates = !unseen)}
-	/>
-	{#if showUpdates && !announcementOpen}
-		<WhatsNewDialog userId={data.user?.id ?? null} />
+	{#if !isLegalPage || announcementOpen}
+		<AnnouncementCenter
+			userId={data.user?.id ?? null}
+			bind:open={announcementOpen}
+			onInitialCheck={(unseen) => (showUpdates = !unseen)}
+		/>
+		{#if !isLegalPage && showUpdates && !announcementOpen}
+			<WhatsNewDialog userId={data.user?.id ?? null} />
+		{/if}
 	{/if}
 	<main class="relative mx-auto w-full max-w-[1400px] flex-1 px-6 py-10">
 		{@render children()}
@@ -58,5 +62,9 @@
 		<a href="https://github.com/boon4681" target="_blank" rel="noopener noreferrer" class="hover:text-foreground hover:underline">Passawich Thongruang</a>
 
 		</span>
+		<nav aria-label="นโยบายและข้อกำหนด" class="mt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
+		  <a href="/privacy" class="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-foreground">นโยบายความเป็นส่วนตัว</a>
+		  <a href="/terms" class="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-foreground">ข้อกำหนดการใช้งาน</a>
+		</nav>
 	</footer>
 </div>

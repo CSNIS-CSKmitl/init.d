@@ -1,0 +1,5 @@
+<script>
+  import LegalPage from '$lib/components/LegalPage.svelte';
+</script>
+
+<LegalPage kind="privacy" />
