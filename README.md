@@ -2,7 +2,7 @@
 
 เว็บรับคำขอ VM และ LXC container ของ CS KMITL ใช้ SvelteKit, PocketBase และ Proxmox VE ชื่อเดิมในบางไฟล์คือ LEASE
 
-**คู่มือส่งต่อฉบับเต็ม:** [docs/HANDOVER_TH.md](docs/HANDOVER_TH.md) — วิธีใช้สำหรับผู้ขอและแอดมิน, การติดตั้ง, ฐานข้อมูล/migration, Proxmox, node sync, การทดสอบ และการแก้ปัญหา
+**คู่มือส่งต่อฉบับเต็ม:** [Docs/Projects/init-d/docs/HANDOVER_TH.md](https://github.com/CSNIS-CSKmitl/Docs/blob/main/Projects/init-d/docs/HANDOVER_TH.md) — วิธีใช้สำหรับผู้ขอและแอดมิน, การติดตั้ง, ฐานข้อมูล/migration, Proxmox, node sync, การทดสอบ และการแก้ปัญหา
 
 ## เริ่มต้น
 
@@ -57,7 +57,7 @@ runner ต้องมี SSH และ rsync เช่นกัน Workflow ส
 | `/status` | ดูคำขอ, เพิ่ม/ลบเจ้าของร่วม, แก้หรือยกเลิกคำขอ pending; กดแถวเครื่องเพื่อดูกราฟ CPU/RAM/Network, IP ล่าสุด และจัดการ Power/Console/SSH |
 | `/admin` | ดูคิว, ตอบผู้ขอ, แก้ข้อมูลและ IP, Complete ด้วยตนเองหรือ Auto Provision, ลบ VM/CT |
 
-Popup “มีอะไรใหม่” หลังล็อกอินแก้ข้อความและเปิด/ปิดได้ใน [`src/lib/whats-new.ts`](src/lib/whats-new.ts) รายละเอียดอยู่ใน [คู่มือส่งต่อ](docs/HANDOVER_TH.md#ประกาศอัปเดตหลังล็อกอิน)
+Popup “มีอะไรใหม่” หลังล็อกอินแก้ข้อความและเปิด/ปิดได้ใน [`src/lib/whats-new.ts`](src/lib/whats-new.ts) รายละเอียดอยู่ใน [คู่มือส่งต่อ](https://github.com/CSNIS-CSKmitl/Docs/blob/main/Projects/init-d/docs/HANDOVER_TH.md#ประกาศอัปเดตหลังล็อกอิน)
 
 ประกาศกลางจัดการในโปรเจกต์ `../Announcements` โดย admin หรือ superadmin ใช้ collection `announcements` ใน PocketBase เดียวกัน เลือกปลายทาง `all` หรือ `initd` เพื่อแสดงในเว็บนี้ ผู้เข้าชมเห็นป๊อปอัปได้โดยไม่ต้องล็อกอิน และแสดงใหม่ทุกครั้งที่เปิดหรือรีโหลดเว็บ ปิดแล้วไม่เด้งซ้ำในการเปิดเว็บครั้งนั้น ยกเว้นมีประกาศใหม่หรือแก้ไขประกาศ ระบบตรวจทุก 30 วินาทีเมื่อแท็บเปิดอยู่ และเปิดอ่านซ้ำได้จากปุ่ม “ประกาศ” บนแถบเมนู
 
@@ -77,7 +77,7 @@ npm run sync:nodes:watch       # worker แยก
 
 ## ฐานข้อมูลและ migration
 
-ฐานข้อมูลปัจจุบันใช้ `instances.email` เป็น relation ไป `users`, `owners` เป็น relation เจ้าของร่วม และ `node` เป็น number ส่วน `pb_migrations/1700000000_create_instances.js` กับ `scripts/setup-instances.mjs` ยังเป็น schema รุ่นเก่า (`creator_email`) จึงไม่ใช่ขั้นตอนติดตั้งฐานข้อมูลใหม่ที่สมบูรณ์ ให้ backup/restore PocketBase schema ปัจจุบัน หรือสร้าง migration ใหม่ตาม [คู่มือ](docs/HANDOVER_TH.md#การย้ายฐานข้อมูลและ-migration) ก่อนเปิดเว็บ
+ฐานข้อมูลปัจจุบันใช้ `instances.email` เป็น relation ไป `users`, `owners` เป็น relation เจ้าของร่วม และ `node` เป็น number ส่วน `pb_migrations/1700000000_create_instances.js` กับ `scripts/setup-instances.mjs` ยังเป็น schema รุ่นเก่า (`creator_email`) จึงไม่ใช่ขั้นตอนติดตั้งฐานข้อมูลใหม่ที่สมบูรณ์ ให้ backup/restore PocketBase schema ปัจจุบัน หรือสร้าง migration ใหม่ตาม [คู่มือ](https://github.com/CSNIS-CSKmitl/Docs/blob/main/Projects/init-d/docs/HANDOVER_TH.md#การย้ายฐานข้อมูลและ-migration) ก่อนเปิดเว็บ
 
 อัปเกรดฐานข้อมูลเดิมที่ยังไม่มี `owners` ใช้ `node scripts/add-instance-owners.mjs` หลัง backup และตรวจ schema ส่วน `scripts/patch-instances.mjs` เติมบางฟิลด์ของรุ่นเก่าเท่านั้น และอาจสร้าง `node` เป็น text หากไม่มีฟิลด์นี้
 
@@ -105,16 +105,16 @@ node scripts/test-sync-instance-nodes.mjs
 node --test scripts/test-instance-lifecycle.mjs scripts/test-admin-instances.mjs
 ```
 
-การทดสอบที่ใช้ PocketBase/Proxmox จริงและบัญชีทดสอบอยู่ใน [คู่มือส่งต่อ](docs/HANDOVER_TH.md#สคริปต์และการทดสอบ)
+การทดสอบที่ใช้ PocketBase/Proxmox จริงและบัญชีทดสอบอยู่ใน [คู่มือส่งต่อ](https://github.com/CSNIS-CSKmitl/Docs/blob/main/Projects/init-d/docs/HANDOVER_TH.md#สคริปต์และการทดสอบ)
 
 ## OAuth2 และเงื่อนไข Computer Science
 
-หน้า Login ใช้ PocketBase `oidc` โดยตรงและยังไม่ได้ขอ IAM scope เพิ่ม โค้ด PocketBase auth hook สำหรับตรวจสาขาอยู่ใน `pb_hooks/` แต่ยังไม่ยืนยันว่าติดตั้งบนเซิร์ฟเวอร์ PocketBase จึงยังถือว่าเงื่อนไข Computer Science ไม่ถูกบังคับที่ฐานข้อมูล รายละเอียดการตั้ง scope, การตรวจ claim และขั้นตอนเปิดใช้ hook อยู่ใน [คู่มือส่งต่อ](docs/HANDOVER_TH.md#oauth2-ของ-pocketbase-และ-iam-scopes)
+หน้า Login ใช้ PocketBase `oidc` โดยตรงและยังไม่ได้ขอ IAM scope เพิ่ม โค้ด PocketBase auth hook สำหรับตรวจสาขาอยู่ใน `pb_hooks/` แต่ยังไม่ยืนยันว่าติดตั้งบนเซิร์ฟเวอร์ PocketBase จึงยังถือว่าเงื่อนไข Computer Science ไม่ถูกบังคับที่ฐานข้อมูล รายละเอียดการตั้ง scope, การตรวจ claim และขั้นตอนเปิดใช้ hook อยู่ใน [คู่มือส่งต่อ](https://github.com/CSNIS-CSKmitl/Docs/blob/main/Projects/init-d/docs/HANDOVER_TH.md#oauth2-ของ-pocketbase-และ-iam-scopes)
 
 
 ## GitHub Actions deploy
 
-วิธีตั้งค่า SSH, ENV_FILE, PM2 และ deploy อัตโนมัติ: [คู่มือ deploy](docs/DEPLOY.md)
+วิธีตั้งค่า SSH, ENV_FILE, PM2 และ deploy อัตโนมัติ: [คู่มือ deploy](https://github.com/CSNIS-CSKmitl/Docs/blob/main/Projects/init-d/docs/DEPLOY.md)
 
 ## เอกสารกฎหมาย
 
