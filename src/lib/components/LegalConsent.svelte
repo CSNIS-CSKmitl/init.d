@@ -3,7 +3,7 @@
   let open = $state(false); let confirmed = $state(false);
   const serviceKey = 'initd:legal-consent:v1';
   let storageKey = $derived(`${serviceKey}:${userId ?? 'anonymous'}`);
-  $effect(() => { if (typeof localStorage !== 'undefined') { open = localStorage.getItem(storageKey) !== 'accepted'; confirmed = false; } });
+  $effect(() => { if (typeof localStorage !== 'undefined') { open = Boolean(userId) && localStorage.getItem(storageKey) !== 'accepted'; confirmed = false; } });
   function accept() { if (!confirmed) return; localStorage.setItem(storageKey, 'accepted'); open = false; }
 </script>
 
