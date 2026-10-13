@@ -247,7 +247,7 @@ export const actions: Actions = {
 			}, {
 				expand: 'email'
 			});
-			sendDiscordNotification('created', record).catch((err) =>
+			await sendDiscordNotification('created', record).catch((err) =>
 				console.error('Failed to send discord notification:', err)
 			);
 		}

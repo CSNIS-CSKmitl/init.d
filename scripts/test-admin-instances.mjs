@@ -81,7 +81,7 @@ test('CTs and absent guests can be deleted without targeting an unrelated VM', a
 	assert.deepEqual(absent.calls, []);
 });
 
-function adminActions(extra = {}) {
+function adminActions(extra = {}, notify = async () => ({ ok: true })) {
 	const updates = [];
 	let removed = false;
 	const pb = { collection: () => ({
@@ -94,7 +94,8 @@ function adminActions(extra = {}) {
 			fail: (status, data) => ({ status, data }), redirect() {},
 		},
 		'$lib/proxmox': { provisioningProgress: new Map(), removeProxmoxInstance: async () => { removed = true; } },
-		'$lib/discord': {}, pocketbase: {}, '$env/dynamic/private': { env: {} },
+		'$lib/discord': { sendDiscordNotification: notify }, pocketbase: {}, '$env/dynamic/private': { env: {} },
+		'$lib/server/env': { requiredEnv: () => assert.fail('No production credentials in action tests') },
 		'$lib/server/instance-owners': { adminPb: async () => pb },
 		'$lib/server/instance-lifecycle': {
 			instanceIsBusy: () => false,
@@ -146,4 +147,25 @@ test('deleted history cannot be edited or resolved through forged admin submissi
 	assert.equal((await actions.resolve(event({ id: 'lease', mode: 'manual' }))).status, 409);
 	assert.equal((await actions.resolve(event({ ...fields, mode: 'auto', storage: 'local-lvm' }))).status, 409);
 	assert.deepEqual(updates, []);
+});
+
+test('manual completion waits for its Discord delivery attempt before returning', async () => {
+	let finish;
+	const delivery = new Promise(resolve => { finish = resolve; });
+	let notified = false;
+	const { actions, event } = adminActions({ status: 'pending' }, async type => {
+		assert.equal(type, 'completed');
+		notified = true;
+		await delivery;
+	});
+	let returned = false;
+	const response = actions.resolve(event({ id: 'lease', mode: 'manual' })).then(result => {
+		returned = true;
+		return result;
+	});
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(notified, true);
+	assert.equal(returned, false);
+	finish();
+	assert.equal((await response).ok, true);
 });

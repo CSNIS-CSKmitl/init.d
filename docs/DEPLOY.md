@@ -33,3 +33,13 @@ Workflow ส่ง build และ runtime files พร้อม .env โดย�
 ไม่ส่ง source ทั้งโปรเจกต์ ไม่ลบ data/, .data/ หรือ uploads บน server แต่ทับ .env จาก ENV_FILE ทุก deploy และไม่มี rollback อัตโนมัติ หากเปลี่ยน VITE_* ที่ใช้ฝังใน client ให้ตั้ง GitHub Variable ที่ workflow ใช้อ่านและ build ใหม่ ค่า server env อื่นแก้ใน ENV_FILE แล้ว deploy
 
 Deploy ผ่าน PM2 กำหนด PORT=3000 และ health check ใช้ port เดียวกัน แม้ ENV_FILE จะมีค่า PORT เดิม ให้ reverse proxy ชี้ไป port 3000; หลายแอปบนเครื่องเดียวกันต้องแยก IP หรือเครื่องเพื่อไม่ให้ port ชนกัน
+
+## การตรวจสอบการแจ้งเตือน Discord
+
+กำหนด `DISCORD_WEBHOOK_URL` ใน GitHub Environment `env` → Secret `ENV_FILE` โดยใช้ webhook ของช่องปลายทาง และแยกตัวแปรแต่ละรายการด้วยการขึ้นบรรทัดใหม่ ห้ามนำ `OIDC_USERINFO_URL=...` ต่อท้าย URL ของ webhook ระบบรองรับการตัดส่วนที่ต่อท้ายผิดในกรณีนี้เพื่อให้แจ้งเตือนได้ แต่ยังควรแก้ต้นฉบับใน Secret เพื่อไม่ให้ค่าผิดกลับมาเมื่อ deploy ครั้งถัดไป
+
+บนเซิร์ฟเวอร์ เปิดไดเรกทอรีที่ deploy แล้วรัน `npm run check:discord` เพื่อตรวจการตั้งค่าและการเข้าถึง webhook ด้วย GET โดยไม่ส่งข้อความ คำสั่งไม่แสดง URL, token หรือข้อมูลของช่อง หากพบ HTTP 404 ให้ตรวจว่า webhook ยังอยู่และ token ถูกต้อง หากเชื่อมต่อไม่ได้ ให้ตรวจ DNS และ outbound HTTPS ของเซิร์ฟเวอร์
+
+การส่งข้อความรอการยืนยันจาก Discord (`wait=true`) มี timeout และลองซ้ำเมื่อพบ rate limit ระยะสั้นหรือ HTTP 5xx ข้อความใน embed ถูกจำกัดความยาวตามที่ Discord รองรับ ความผิดพลาดของ Discord ไม่ยกเลิกคำขอหรือเปลี่ยนผลการ provision ดูผลส่งจาก `pm2 logs initd` หรือชื่อแอปที่กำหนดใน `PM2_APP_NAME` โดยค้นหา `[Discord Webhook]`
+
+อ้างอิง: [Discord Execute Webhook](https://docs.discord.com/developers/resources/webhook#execute-webhook), [Discord Rate Limits](https://docs.discord.com/developers/topics/rate-limits)

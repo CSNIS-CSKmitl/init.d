@@ -13,6 +13,8 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test:security": "node --test scripts/test-security.mjs scripts/test-pocketbase-iam-hook.mjs",
 		"test:metrics": "node --test scripts/test-instance-metrics.mjs",
+		"test:discord": "node --test scripts/test-discord.mjs",
+		"check:discord": "node scripts/check-discord.mjs",
 		"sync:nodes": "node scripts/sync-instance-nodes.mjs",
 		"sync:nodes:watch": "node scripts/sync-instance-nodes.mjs --watch --apply"
 	},

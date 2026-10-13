@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { type LeaseInstance, creatorEmail, creatorName } from './types';
+import { discordWebhookConfig, deliverDiscordWebhook } from './server/discord-webhook.mjs';
 
 function formatDate(iso: string) {
 	try {
@@ -18,10 +19,15 @@ export async function sendDiscordNotification(
 	item: LeaseInstance,
 	extra?: { node?: string; vmid?: number; error?: string }
 ) {
-	const webhookUrl = env.DISCORD_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL;
-	if (!webhookUrl) {
-		console.warn('[Discord Webhook] DISCORD_WEBHOOK_URL is not configured.');
-		return;
+	let webhook;
+	try {
+		webhook = discordWebhookConfig(env.DISCORD_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL);
+	} catch (error) {
+		console.error(`[Discord Webhook] ${error instanceof Error ? error.message : 'Invalid configuration.'}`);
+		return { ok: false, reason: 'configuration' };
+	}
+	if (webhook.repaired) {
+		console.warn('[Discord Webhook] OIDC_USERINFO_URL was appended to DISCORD_WEBHOOK_URL. Separate these settings with a newline in ENV_FILE.');
 	}
 
 	let title = '';
@@ -83,11 +89,12 @@ export async function sendDiscordNotification(
 	}
 
 	const payload = {
+		allowed_mentions: { parse: [] },
 		embeds: [
 			{
-				title,
+				title: title.slice(0, 256),
 				color,
-				fields,
+				fields: fields.map(field => ({ ...field, value: String(field.value || 'N/A').slice(0, 1024) })),
 				timestamp: new Date().toISOString(),
 				footer: {
 					text: 'CSKMITL Cloud Lease System'
@@ -97,17 +104,15 @@ export async function sendDiscordNotification(
 	};
 
 	try {
-		const res = await fetch(webhookUrl, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(payload)
-		});
-		if (!res.ok) {
-			console.error(`[Discord Webhook] Failed to send notification: ${res.status} ${await res.text()}`);
+		const result = await deliverDiscordWebhook(webhook.url, payload);
+		if (!result.ok) {
+			console.error(`[Discord Webhook] Delivery failed (${type}, instance ${item.id}): ${result.reason}; HTTP ${result.status ?? 'N/A'}; Discord code ${result.code ?? 'N/A'}. Check the webhook and ENV_FILE.`);
 		} else {
-			console.log(`[Discord Webhook] Sent notification for: ${item.hostname} (${type})`);
+			console.log(`[Discord Webhook] Sent notification for instance ${item.id} (${type}).`);
 		}
-	} catch (err) {
-		console.error('[Discord Webhook] Network error:', err);
+		return result;
+	} catch {
+		console.error(`[Discord Webhook] Delivery failed (${type}, instance ${item.id}).`);
+		return { ok: false, reason: 'delivery' };
 	}
 }

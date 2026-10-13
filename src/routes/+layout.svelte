@@ -56,15 +56,15 @@
 	<main class="relative mx-auto w-full max-w-[1400px] flex-1 px-6 py-10">
 		{@render children()}
 	</main>
-	<footer class="relative border-t border-border px-6 py-6 text-center text-xs text-muted-foreground">
+	<footer class="relative border-t border-border px-6 py-3 text-center text-[11px] text-muted-foreground">
 		<span>© {new Date().getFullYear()} <a href="https://github.com/techasit5415" target="_blank" rel="noopener noreferrer" class="hover:text-foreground hover:underline">Techasit Vanitpattarakul</a>
 		<a href="https://github.com/BoByed" target="_blank" rel="noopener noreferrer" class="hover:text-foreground hover:underline">Pannawat Srithongnark</a>
 		<a href="https://github.com/boon4681" target="_blank" rel="noopener noreferrer" class="hover:text-foreground hover:underline">Passawich Thongruang</a>
 
 		</span>
-		<nav aria-label="นโยบายและข้อกำหนด" class="mt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
-		  <a href="/privacy" class="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-foreground">นโยบายความเป็นส่วนตัว</a>
-		  <a href="/terms" class="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-foreground">ข้อกำหนดการใช้งาน</a>
+		<nav aria-label="นโยบายและข้อกำหนด" class="mt-1 flex flex-wrap items-center justify-center gap-x-4 gap-y-0">
+		  <a href="/privacy" class="inline-flex min-h-7 items-center underline underline-offset-4 hover:text-foreground">นโยบายความเป็นส่วนตัว</a>
+		  <a href="/terms" class="inline-flex min-h-7 items-center underline underline-offset-4 hover:text-foreground">ข้อกำหนดการใช้งาน</a>
 		</nav>
 	</footer>
 </div>

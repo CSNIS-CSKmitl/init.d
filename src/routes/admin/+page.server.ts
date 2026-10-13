@@ -145,7 +145,7 @@ export const actions: Actions = {
 				status: 'completed', provision_state: 'completed', provision_error: ''
 			}, { expand: 'email' });
 			provisioningProgress.delete(id);
-			sendDiscordNotification('completed', record).catch((err) =>
+			await sendDiscordNotification('completed', record).catch((err) =>
 				console.error('Failed to send discord notification:', err)
 			);
 			return { ok: true, id, recordId: id, mode };
