@@ -30,8 +30,7 @@ export function timedOutTask(record) {
 }
 
 /**
- * A successful migration does not prove the remaining provisioning steps ran.
- * Keep old timeout records pending verification until the admin checks them.
+ * A successful migration is followed by an automatic check of the existing VM.
  * @param {{status?: string, exitstatus?: string} | null} result
  */
 export function recoveredTaskProgress(result) {
@@ -39,7 +38,7 @@ export function recoveredTaskProgress(result) {
 		return { status: 'Failed', error: `Proxmox task failed: ${result.exitstatus}`, taskState: 'failed' };
 	}
 	if (result?.status === 'stopped' && result.exitstatus === 'OK') {
-		return { status: 'Proxmox task completed. Verify the VM/CT and remaining setup before marking this request complete.', taskState: 'stopped-ok' };
+		return { status: 'Migration completed. Automatically checking the existing VM configuration and IP address.', taskState: 'stopped-ok' };
 	}
 	if (result?.status === 'running') {
 		return { status: 'Proxmox task is still running. Waiting for completion; do not start another provisioning attempt.', taskState: 'running' };

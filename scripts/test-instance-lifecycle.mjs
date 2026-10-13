@@ -35,8 +35,11 @@ test('live Proxmox task status overrides an old timeout failure without declarin
 		assert.equal(leaseNeedsResolve(failed, progress), false);
 	}
 	const stopped = { status: 'Verify remaining setup', taskState: 'stopped-ok' };
-	assert.equal(leaseBadgeStatus(failed, stopped), 'pending');
-	assert.equal(leaseNeedsResolve(failed, stopped), true);
+	assert.equal(leaseBadgeStatus(failed, stopped), 'provisioning');
+	assert.equal(leaseNeedsResolve(failed, stopped), false);
+	const needsReview = { status: 'VM configuration does not match', taskState: 'needs-review' };
+	assert.equal(leaseBadgeStatus(failed, needsReview), 'pending');
+	assert.equal(leaseNeedsResolve(failed, needsReview), true);
 	assert.equal(leaseBadgeStatus(record({ status: 'deleted' }), stopped), 'deleted');
 });
 

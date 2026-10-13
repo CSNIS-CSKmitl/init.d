@@ -5,8 +5,10 @@ import { CT_ID, VM_ID } from '$static/constant';
 import { sendDiscordNotification } from './discord';
 import type PocketBase from 'pocketbase';
 import type { LeaseInstance } from './types';
-import { startInstanceProvisioning } from './server/instance-lifecycle';
+import { startInstanceProvisioning, instanceIsBusy } from './server/instance-lifecycle';
 import { waitForProxmoxTask, timedOutTask, recoveredTaskProgress } from './server/proxmox-tasks.mjs';
+import { verifiedMigrationPatch, commitVerifiedRecovery, type MigrationSnapshot } from './server/provisioning-recovery';
+import { adminPb } from './server/instance-owners';
 
 dotenv.config();
 
@@ -88,16 +90,22 @@ async function waitForTask(node: string, upid: string): Promise<void> {
 }
 
 const recoveredTasks = new Map<string, { expires: number; progress: ReturnType<typeof recoveredTaskProgress> }>();
+const recoveryChecks = new Map<string, { expires: number; progress: ReturnType<typeof recoveredTaskProgress> }>();
 
 export async function getTimedOutTaskProgress(record: LeaseInstance, fresh = false) {
     const task = timedOutTask(record);
     if (!task) return null;
+    const check = recoveryChecks.get(record.id);
+    if (!fresh && check && check.expires > Date.now()) return check.progress;
     const cached = recoveredTasks.get(task.upid);
     if (!fresh && cached && cached.expires > Date.now()) return cached.progress;
     let status = null;
     try { status = await proxmox.nodes.$(task.node).tasks.$(task.upid).status.$get(); }
     catch { /* An unavailable API cannot establish task failure. */ }
-    const progress = recoveredTaskProgress(status);
+    let progress = recoveredTaskProgress(status);
+    if (progress.taskState === 'stopped-ok' && (task.type !== 'qmigrate' || (record.type && record.type !== 'vm'))) {
+        progress = { status: 'Proxmox task completed. The remaining setup for this task needs administrator verification.', taskState: 'needs-review' };
+    }
     if (recoveredTasks.size >= 256) recoveredTasks.delete(recoveredTasks.keys().next().value!);
     recoveredTasks.set(task.upid, { progress, expires: Date.now() + 5000 });
     return progress;
@@ -367,6 +375,83 @@ export const createVM = async (
 }
 
 export const provisioningProgress = new Map<string, { status: string; error?: string }>();
+
+let recoveryTimer: ReturnType<typeof setInterval> | undefined;
+let recoveryRunning = false;
+
+export function startProvisioningRecovery() {
+    if (recoveryTimer || process.env.PROVISION_RECOVERY_ENABLED === 'false') return;
+    const run = async () => {
+        if (recoveryRunning) return;
+        recoveryRunning = true;
+        try {
+            const pb = await adminPb();
+            const records = await pb.collection('instances').getFullList<LeaseInstance>({
+                filter: 'status = "failed" && provision_error ~ "Timed out waiting for task UPID:"',
+                expand: 'email',
+            });
+            for (const item of records) {
+                if (instanceIsBusy(item.id)) continue;
+                try {
+                    const task = timedOutTask(item);
+                    if (item.type !== 'vm' || task?.type !== 'qmigrate') continue;
+                    const taskStatus = await proxmox.nodes.$(task.node).tasks.$(task.upid).status.$get();
+                    if (taskStatus.status !== 'stopped' || taskStatus.exitstatus !== 'OK') continue;
+                    const guests = await proxmox.cluster.resources.$get({ type: 'vm' });
+                    const guest = guests.find(value => Number(value.vmid) === item.vmid);
+                    if (!guest || guest.type !== 'qemu' || !guest.node) continue;
+                    const targetNode = guest.node;
+                    const vm = proxmox.nodes.$(targetNode).qemu.$(item.vmid!);
+                    const config = await vm.config.$get() as any;
+                    const network = String(config.net0 || '');
+                    const mac = /(?:^|,)(?:virtio|e1000|e1000e|rtl8139|vmxnet3)=([0-9a-f:]+)/i.exec(network)?.[1].toLowerCase();
+                    const interfaces = await vm.agent['network-get-interfaces'].$get() as any;
+                    const snapshot: MigrationSnapshot = {
+                        taskStatus,
+                        vmid: Number(guest.vmid), node: targetNode, type: guest.type,
+                        hostname: config.name, locked: Boolean(config.lock), template: Boolean(config.template),
+                        cores: Number(config.cores) * Number(config.sockets || 1), memoryMiB: Number(config.memory),
+                        disk: String(config.scsi0 || ''), network,
+                        ipv4: (interfaces.result || [])
+                            .filter((iface: any) => mac && String(iface['hardware-address'] || '').toLowerCase() === mac)
+                            .flatMap((iface: any) => iface['ip-addresses'] || [])
+                            .filter((address: any) => address['ip-address-type'] === 'ipv4')
+                            .map((address: any) => address['ip-address']),
+                    };
+                    const decision = verifiedMigrationPatch(item, snapshot);
+                    if (!decision.patch) {
+                        if (recoveryChecks.size >= 256) recoveryChecks.delete(recoveryChecks.keys().next().value!);
+                        recoveryChecks.set(item.id, { expires: Date.now() + 35000, progress: {
+                            status: decision.reason, taskState: 'needs-review',
+                        } });
+                        continue;
+                    }
+                    const result = await commitVerifiedRecovery(pb, item, decision.patch);
+                    if (!result.completed) continue;
+                    recoveryChecks.delete(item.id);
+                    const terminal = { status: 'Complete' };
+                    provisioningProgress.set(item.id, terminal);
+                    setTimeout(() => {
+                        if (provisioningProgress.get(item.id) === terminal) provisioningProgress.delete(item.id);
+                    }, 120000).unref();
+                    if (result.changed && result.record) {
+                        console.log(`[Provisioning recovery] Completed verified VM ${item.vmid}.`);
+                        await sendDiscordNotification('completed', { ...item, ...result.record }, { node: guest.node, vmid: item.vmid });
+                    }
+                } catch {
+                    console.warn(`[Provisioning recovery] Could not verify instance ${item.id}; will retry without changing its VM.`);
+                }
+            }
+        } catch {
+            console.warn('[Provisioning recovery] Could not read the recovery queue; will retry.');
+        } finally {
+            recoveryRunning = false;
+        }
+    };
+    recoveryTimer = setInterval(() => { void run(); }, 30000);
+    recoveryTimer.unref();
+    void run();
+}
 
 export const startProvisioning = async (
     pb: PocketBase,

@@ -45,6 +45,6 @@ test('running and unconfirmed legacy tasks stay blocked; task completion still n
 	assert.equal(recoveredTaskProgress({ status: 'running' }).taskState, 'running');
 	assert.equal(recoveredTaskProgress(null).taskState, 'unknown');
 	assert.equal(recoveredTaskProgress({ status: 'stopped', exitstatus: 'OK' }).taskState, 'stopped-ok');
-	assert.match(recoveredTaskProgress({ status: 'stopped', exitstatus: 'OK' }).status, /Verify/);
+	assert.match(recoveredTaskProgress({ status: 'stopped', exitstatus: 'OK' }).status, /Automatically checking/);
 	assert.equal(recoveredTaskProgress({ status: 'stopped', exitstatus: 'failed' }).status, 'Failed');
 });

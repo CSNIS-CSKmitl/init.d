@@ -13,7 +13,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const pb = await adminPb();
 	const records = await pb.collection('instances').getFullList<LeaseInstance>({
 		filter: 'status = "failed" && provision_error ~ "Timed out waiting for task UPID:"',
-		fields: 'id,status,vmid,provision_error',
+		fields: 'id,status,type,vmid,provision_error',
 	});
 	for (const record of records) {
 		const progress = await getTimedOutTaskProgress(record);

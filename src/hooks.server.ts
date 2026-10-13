@@ -1,10 +1,16 @@
 // SvelteKit server hook — runs on every request.
 // Resolves the authenticated `users` record into `event.locals.user`.
 
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, ServerInit } from '@sveltejs/kit';
+import { building, dev } from '$app/environment';
+import { startProvisioningRecovery } from '$lib/proxmox';
 import { createPb } from '$lib/pb/server';
 import type { UserRole } from '$lib/types';
 import { isAppAdmin } from '$lib/role.mjs';
+
+export const init: ServerInit = () => {
+	if (!building && !dev) startProvisioningRecovery();
+};
 
 interface UserTypeRef {
 	type?: string;

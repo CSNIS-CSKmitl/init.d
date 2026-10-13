@@ -46,6 +46,7 @@ function guestAPI({ type = 'qemu', name = 'lease-vm', template = false, running 
 		'$static/constant': { CT_ID: new Map(), VM_ID: new Map() },
 		'./discord': {}, './server/instance-lifecycle': {},
 		'./server/proxmox-tasks.mjs': taskHelpers,
+		'./server/provisioning-recovery': {}, './server/instance-owners': {},
 	});
 	return { removeProxmoxInstance, calls };
 }
