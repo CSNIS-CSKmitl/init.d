@@ -247,7 +247,7 @@
 
 	<Separator />
 
-	<details class="group rounded-lg border border-border bg-card">
+	<details open class="group rounded-lg border border-border bg-card">
 		<summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
 			<span class="flex items-center gap-2"><MessageSquareText class="h-4 w-4 text-muted-foreground" /> ข้อความถึงผู้ขอ</span>
 		</summary>
@@ -392,7 +392,7 @@
 
 	<!-- Edit fields -->
 	{#if !isDeleted}
-	<details class="group rounded-lg border border-border bg-card">
+	<details open class="group rounded-lg border border-border bg-card">
 		<summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
 			<span class="flex items-center gap-2"><Settings2 class="h-4 w-4 text-muted-foreground" /> แก้ไขข้อมูลและการเชื่อมต่อ</span>
 		</summary>

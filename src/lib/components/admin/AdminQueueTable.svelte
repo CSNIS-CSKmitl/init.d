@@ -433,7 +433,7 @@
     {#if activeItem}
       <Dialog.Header class="sticky top-0 z-10 border-b border-border bg-card px-5 py-4 pr-14">
         <div class="min-w-0">
-          <Dialog.Title class="truncate text-base font-semibold text-foreground">{activeItem.hostname}</Dialog.Title>
+          <Dialog.Title class="truncate text-base font-semibold text-foreground">แก้ไขคำขอ · {activeItem.hostname}</Dialog.Title>
           <Dialog.Description class="sr-only">รายละเอียดคำขอ {activeItem.hostname}</Dialog.Description>
         </div>
         <Button type="button" variant="ghost" size="icon-sm" class="absolute top-3 right-4" onclick={() => (openIds = new Set())} aria-label="ปิดรายละเอียด">

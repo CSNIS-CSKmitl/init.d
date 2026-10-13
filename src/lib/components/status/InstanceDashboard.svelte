@@ -46,6 +46,7 @@
 	let actionError = $state<string | null>(null);
 	let actionLoading = $state<PowerAction | null>(null);
 	let timeframe = $state<'live' | 'hour' | 'day' | 'week' | 'month' | 'year'>('live');
+	let liveIp = $state('');
 
 	let paused = $derived(metrics?.qmpstatus === 'paused');
 	let running = $derived(metrics?.status === 'running');
@@ -113,10 +114,22 @@
 		}
 	}
 
+	async function refreshIp() {
+		if (!mounted || !ready || document.hidden) return;
+		try {
+			const response = await fetch(`/api/instance-ip?instanceId=${encodeURIComponent(item.id)}`, { cache: 'no-store' });
+			const data = await response.json();
+			if (response.ok && typeof data.ip === 'string' && data.ip) liveIp = data.ip;
+		} catch {
+			// Keep the last known address when Proxmox or the guest agent is unavailable.
+		}
+	}
+
 	onMount(() => {
 		mounted = true;
+		liveIp = item.IP ?? '';
 		livePaused = document.hidden;
-		if (ready) void refresh(); else loading = false;
+		if (ready) { void refresh(); void refreshIp(); } else loading = false;
 		const timer = window.setInterval(() => { void refresh(); }, METRICS_POLL_MS);
 		function visibilityChanged() {
 			livePaused = document.hidden;
@@ -259,7 +272,7 @@
 				<div class="rounded-lg border border-border bg-muted/40 p-3"><p class="text-xs font-semibold text-primary">ข้อความจากแอดมิน</p><p class="mt-1 whitespace-pre-wrap text-sm">{item.admin_reply}</p></div>
 			{/if}
 			<div class="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-				<div><p class="text-xs text-muted-foreground">Network</p><p>{item.network_type} · {item.dns_name || 'ไม่มี DNS'}</p>{#if item.IP}<p class="text-xs text-muted-foreground">IP {item.IP}</p>{/if}</div>
+				<div><p class="text-xs text-muted-foreground">Network</p><p>{item.network_type} · {item.dns_name || 'ไม่มี DNS'}</p>{#if liveIp}<p class="text-xs text-muted-foreground">IP {liveIp}</p>{/if}</div>
 				<div><p class="text-xs text-muted-foreground">Open ports</p><p>{ports.join(', ') || '—'}</p></div>
 				<div><p class="text-xs text-muted-foreground">Group</p><p>{passionGroupName(item)}</p></div>
 			</div>

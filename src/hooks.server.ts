@@ -4,12 +4,14 @@
 import type { Handle, ServerInit } from '@sveltejs/kit';
 import { building, dev } from '$app/environment';
 import { startProvisioningRecovery } from '$lib/proxmox';
+import { startNightlyIpRefresh } from '$lib/server/nightly-ip-refresh';
 import { createPb } from '$lib/pb/server';
 import type { UserRole } from '$lib/types';
 import { isAppAdmin } from '$lib/role.mjs';
 
 export const init: ServerInit = () => {
 	if (!building && !dev) startProvisioningRecovery();
+	if (!building && !dev) startNightlyIpRefresh();
 };
 
 interface UserTypeRef {
