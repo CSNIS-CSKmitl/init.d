@@ -69,10 +69,12 @@ export async function writeSocketAuditLog(request, { userId, instanceId, action,
 		const pb = new PocketBase(process.env.POCKETBASE_URL);
 		pb.autoCancellation(false);
 		await pb.admins.authWithPassword(process.env.PB_ADMIN_EMAIL, process.env.PB_ADMIN_PASSWORD);
-		const forwarded = process.env.TRUST_PROXY === 'true'
+		const trustedProxy = process.env.TRUST_PROXY === 'true';
+		const realIp = trustedProxy ? String(request.headers['x-real-ip'] || '').trim() : '';
+		const forwarded = trustedProxy
 			? String(request.headers['x-forwarded-for'] || '').split(',')[0].trim()
 			: '';
-		const sourceIp = forwarded || request.socket.remoteAddress || '';
+		const sourceIp = realIp || forwarded || request.socket.remoteAddress || '';
 		await pb.collection('instance_access_logs').create({
 			user: userId,
 			instance: instanceId,

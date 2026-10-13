@@ -1,11 +1,22 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import { adminPb } from './instance-owners';
+import { env } from '$env/dynamic/private';
 
 export type AuditAction = 'instance_view' | 'console' | 'power_start' | 'power_shutdown' | 'power_reboot' | 'power_stop' | 'power_reset' | 'power_suspend' | 'power_resume' | 'power_hibernate';
 
 function clean(value: string | null | undefined, max: number): string | undefined {
 	const text = value?.trim();
 	return text ? text.slice(0, max) : undefined;
+}
+
+function sourceIp(event: RequestEvent): string {
+	if (env.TRUST_PROXY === 'true') {
+		const realIp = event.request.headers.get('x-real-ip')?.trim();
+		if (realIp) return realIp;
+		const forwardedIp = event.request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+		if (forwardedIp) return forwardedIp;
+	}
+	return event.getClientAddress();
 }
 
 export async function writeAuditLog(event: RequestEvent, input: {
@@ -19,7 +30,7 @@ export async function writeAuditLog(event: RequestEvent, input: {
 		await pb.collection('instance_access_logs').create({
 			user: input.userId,
 			instance: input.instanceId,
-			source_ip: clean(event.getClientAddress(), 64),
+			source_ip: clean(sourceIp(event), 64),
 			action: input.action,
 			path: clean(event.url.pathname, 256),
 			user_agent: clean(event.request.headers.get('user-agent'), 512),
