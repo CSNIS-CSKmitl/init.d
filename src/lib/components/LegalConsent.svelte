@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  let open = $state(false);
-  let confirmed = $state(false);
-  const storageKey = 'initd:legal-consent:v1';
-  onMount(() => { open = localStorage.getItem(storageKey) !== 'accepted'; });
+  let { userId = null }: { userId?: string | null } = $props();
+  let open = $state(false); let confirmed = $state(false);
+  const serviceKey = 'initd:legal-consent:v1';
+  let storageKey = $derived(`${serviceKey}:${userId ?? 'anonymous'}`);
+  $effect(() => { if (typeof localStorage !== 'undefined') { open = localStorage.getItem(storageKey) !== 'accepted'; confirmed = false; } });
   function accept() { if (!confirmed) return; localStorage.setItem(storageKey, 'accepted'); open = false; }
 </script>
 
