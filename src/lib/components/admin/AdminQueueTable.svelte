@@ -128,12 +128,37 @@
   // Status filter above the table so a long queue can be narrowed to
   // "what actually needs me right now" while triaging in bulk.
   let filterTab = $state<"all" | LeaseBadgeStatus>("all");
+  let searchQuery = $state("");
+  const normalizedSearch = $derived(searchQuery.trim().toLocaleLowerCase());
+
+  function searchableText(item: LeaseInstance): string {
+    return [
+      item.id,
+      item.hostname,
+      item.dns_name,
+      item.IP,
+      item.vmid,
+      item.node,
+      item.purpose_notes,
+      item.ports,
+      item.expand?.email?.name,
+      item.expand?.email?.email,
+      creatorEmail(item),
+      creatorName(item),
+      passionGroupName(item),
+    ]
+      .filter((value) => value !== null && value !== undefined)
+      .join(" ")
+      .toLocaleLowerCase();
+  }
+
   const filteredItems = $derived(
-    filterTab === "all"
-      ? items
-      : items.filter(
-          (i) => leaseBadgeStatus(i, progressMap[i.id]) === filterTab,
-        ),
+    items.filter((i) => {
+      const matchesStatus =
+        filterTab === "all" || leaseBadgeStatus(i, progressMap[i.id]) === filterTab;
+      const matchesSearch = !normalizedSearch || searchableText(i).includes(normalizedSearch);
+      return matchesStatus && matchesSearch;
+    }),
   );
   const filterCounts = $derived.by(() => {
     const c: Record<"all" | LeaseBadgeStatus, number> = {
@@ -176,6 +201,24 @@
 	     and the rest of the queue stays fully visible and clickable above
 	     and below it the whole time. -->
   <div>
+    <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <label class="relative block min-w-0 flex-1 sm:max-w-md">
+        <span class="sr-only">ค้นหารายการคำขอ</span>
+        <input
+          type="search"
+          bind:value={searchQuery}
+          placeholder="ค้นหา hostname, อีเมล, VMID, IP หรือรายละเอียด"
+          class="h-9 w-full rounded-md border border-border bg-background px-3 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
+          autocomplete="off"
+        />
+      </label>
+      {#if normalizedSearch}
+        <span class="font-mono text-[11px] text-muted-foreground">
+          พบ {filteredItems.length} จาก {items.length} รายการ
+        </span>
+      {/if}
+    </div>
+
     <Tabs.Root bind:value={filterTab} class="mb-3 gap-3">
       <Tabs.List class="font-mono text-xs">
         <Tabs.Trigger value="all">All ({filterCounts.all})</Tabs.Trigger>

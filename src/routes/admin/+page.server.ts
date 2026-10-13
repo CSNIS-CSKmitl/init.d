@@ -32,12 +32,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 			await pbAdmin.admins.authWithPassword(requiredEnv('PB_ADMIN_EMAIL'), requiredEnv('PB_ADMIN_PASSWORD'));
 		}
 
-		const list = await pbAdmin.collection('instances').getList<LeaseInstance>(1, 500, {
+		// Load every page so older requests remain available to the admin queue.
+		// A single getList(1, 500) silently hid records after the first 500.
+		const list = await pbAdmin.collection('instances').getFullList<LeaseInstance>({
+			batch: 200,
 			sort: '-created',
 			expand: 'passion_group,email,owners'
 		});
 
-		return { items: await addOwnerEmails(pbAdmin, list.items) };
+		return { items: await addOwnerEmails(pbAdmin, list) };
 	} catch (e) {
 		console.error('admin load failed', e);
 		return { items: [] };
