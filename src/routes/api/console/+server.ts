@@ -6,8 +6,10 @@ import type { LeaseInstance } from '$lib/types';
 import { canAccessInstance } from '$lib/server/instance-owners';
 import { resolveProxmoxGuest, ProxmoxGuestNotFoundError } from '$lib/server/proxmox-guest';
 import { createConsoleGrant } from '$lib/server/console-grant.mjs';
+import { writeAuditLog } from '$lib/server/audit-log';
 
-export const POST: RequestHandler = async ({ request, locals, cookies, url }) => {
+export const POST: RequestHandler = async (event) => {
+	const { request, locals, cookies, url } = event;
 	// 1. Verify user is logged in
 	if (!locals.user) {
 		return json({ error: 'Unauthorized. Please sign in.' }, { status: 401 });
@@ -103,6 +105,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies, url }) =>
 			path: wsPath
 		});
 		const wsUrl = `${wsPath}&grant=${encodeURIComponent(grant)}`;
+		await writeAuditLog(event, { userId: locals.user.id, instanceId, action: 'console', metadata: { vmid, node, type: typePath } });
 
 		return json({
 			success: true,

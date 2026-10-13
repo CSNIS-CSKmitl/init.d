@@ -5,6 +5,7 @@ import type { LeaseInstance } from '$lib/types';
 import { canAccessInstance } from '$lib/server/instance-owners';
 import { resolveProxmoxGuest, ProxmoxGuestNotFoundError } from '$lib/server/proxmox-guest';
 import { rememberPowerTask } from '$lib/server/power-tasks';
+import { writeAuditLog, type AuditAction } from '$lib/server/audit-log';
 
 const actions = ['start', 'shutdown', 'reboot', 'stop', 'reset', 'suspend', 'resume', 'hibernate'] as const;
 type PowerAction = (typeof actions)[number];
@@ -34,7 +35,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	}
 };
 
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async (event) => {
+	const { request, locals } = event;
 	if (!locals.user) throw error(401, 'Unauthorized');
 
 	let body: { instanceId?: string; action?: string };
@@ -74,6 +76,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			? await target.status.suspend.$post({ todisk: true }) as string
 			: await target.status[action].$post() as string;
 		rememberPowerTask(upid, instanceId, locals.user.id, guest.node);
+		await writeAuditLog(event, { userId: locals.user.id, instanceId, action: `power_${action}` as AuditAction, metadata: { node: guest.node, vmid: record.vmid, upid } });
 
 		return json({ success: true, upid, node: guest.node });
 	} catch (e: any) {

@@ -15,7 +15,7 @@
   <header>
     <p class="legal-site">{siteName}</p>
     <h1 id="legal-title">{document.title}</h1>
-    <p class="legal-updated">ปรับปรุงล่าสุด <time datetime="2026-10-11">11 ตุลาคม 2569</time></p>
+    <p class="legal-updated">ปรับปรุงล่าสุด <time datetime="2026-10-13">13 ตุลาคม 2569</time></p>
     <p class="legal-intro">{document.intro}</p>
   </header>
 
@@ -68,3 +68,4 @@
   .legal-contact { margin-top: 2.5rem; padding: 1.25rem; border: 1px solid var(--border, var(--color-strong-app, #d9dedb)); border-radius: 0.75rem; font-size: 0.95rem; }
   .legal-contact p + p { margin-top: 0.5rem; }
 </style>
+

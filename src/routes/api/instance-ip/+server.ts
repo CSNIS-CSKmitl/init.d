@@ -4,8 +4,10 @@ import { adminPb, canAccessInstance } from '$lib/server/instance-owners';
 import type { LeaseInstance } from '$lib/types';
 import { resolveProxmoxGuest, ProxmoxGuestNotFoundError } from '$lib/server/proxmox-guest';
 import { readProxmoxIp } from '$lib/server/proxmox-ip';
+import { writeAuditLog } from '$lib/server/audit-log';
 
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET: RequestHandler = async (event) => {
+	const { url, locals } = event;
 	if (!locals.user) throw error(401, 'Unauthorized');
 	const instanceId = url.searchParams.get('instanceId');
 	if (!instanceId) throw error(400, 'Missing instanceId');
@@ -27,6 +29,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			const pb = await adminPb();
 			await pb.collection('instances').update(record.id, { IP: observed });
 		}
+		await writeAuditLog(event, { userId: locals.user.id, instanceId: record.id, action: 'instance_view', metadata: { available, ip_changed: changed } });
 		return json({ ip: observed ?? previous, observed, changed, available, source: guest.type === 'qemu' ? 'qemu-guest-agent' : 'lxc-interfaces' }, { headers: { 'Cache-Control': 'no-store' } });
 	} catch (e: unknown) {
 		if (isHttpError(e)) throw e;

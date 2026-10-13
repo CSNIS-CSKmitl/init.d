@@ -9,6 +9,16 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 async function refreshAll() {
 	try {
 		const pb = await adminPb();
+		const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+		const expiredLogs = await pb.collection('instance_access_logs').getFullList<{ id: string }>({ filter: `created < "${cutoff}"` });
+		for (const log of expiredLogs) await pb.collection('instance_access_logs').delete(log.id);
+		try {
+			const expiredServiceLogs = await pb.collection('service_access_logs').getFullList<{ id: string }>({ filter: `created < "${cutoff}"` });
+			for (const log of expiredServiceLogs) await pb.collection('service_access_logs').delete(log.id);
+		} catch (error) {
+			// Older installations may not have the shared collection until migration runs.
+			console.warn('[Nightly IP refresh] Shared service log cleanup skipped:', error instanceof Error ? error.message : error);
+		}
 		const records = await pb.collection('instances').getFullList<LeaseInstance>({ filter: 'status = "completed" && vmid > 0' });
 		for (const record of records) {
 			try {

@@ -1,6 +1,6 @@
 # คู่มือส่งต่อระบบ init.d
 
-ปรับตามโค้ด ณ 24 กันยายน 2026 และโครงสร้าง PocketBase ที่ตรวจได้ก่อนหน้านี้ คู่มือนี้ใช้สำหรับผู้ขอ VM/CT ผู้ดูแลคิว และผู้รับช่วงดูแลระบบ สถานะการติดตั้งบนเครื่อง PocketBase ระบุแยกจากไฟล์ที่เตรียมไว้ใน repository ค่าบัญชี รหัสผ่าน token และ URL ภายในให้รับจากผู้ดูแลผ่านช่องทางที่ปลอดภัย ไม่บันทึกลง Git หรือเอกสารนี้
+ปรับตามโค้ด ณ 13 ตุลาคม 2026 และโครงสร้าง PocketBase ที่ตรวจได้ก่อนหน้านี้ คู่มือนี้ใช้สำหรับผู้ขอ VM/CT ผู้ดูแลคิว และผู้รับช่วงดูแลระบบ สถานะการติดตั้งบนเครื่อง PocketBase ระบุแยกจากไฟล์ที่เตรียมไว้ใน repository ค่าบัญชี รหัสผ่าน token และ URL ภายในให้รับจากผู้ดูแลผ่านช่องทางที่ปลอดภัย ไม่บันทึกลง Git หรือเอกสารนี้
 
 ## สารบัญ
 
@@ -126,7 +126,8 @@ hostname ยอมรับตัวอักษรอังกฤษพิม�
 - ผู้ขอแก้รายชื่อเจ้าของร่วมจากส่วน **Owners → Save owners** ได้ทั้งก่อนและหลังอนุมัติ การบันทึกแทนที่รายชื่อทั้งหมด; ลบอีเมลที่ไม่ต้องการออกก่อนกด Save
 - เจ้าของร่วมดูคำขอและเข้าถึงเครื่องได้ แต่แก้คำขอ ยกเลิก หรือจัดการเจ้าของร่วมไม่ได้ ผู้ขอยังคงเป็นเจ้าของหลักในฟิลด์ `email`
 - กดตรงไหนก็ได้ในแถวรายการ หรือกด Enter/Space เมื่อโฟกัสแถว เพื่อเปิด popup เดียวที่รวมข้อมูลคำขอและเจ้าของร่วม; บนมือถือแตะการ์ดรายการ ไม่มีแถวรายละเอียดกางใต้ตารางแล้ว
-- หน้าต่างจัดการแสดงสถานะปัจจุบัน, โหนดจริง, CPU, RAM, Network, uptime และ disk อัปเดตอัตโนมัติทุก 2 วินาที พร้อมเวลาอัปเดตล่าสุด ค่า Network คำนวณ bytes/s จากผลต่าง counter ปัจจุบันของ Proxmox และตั้ง baseline ใหม่หลังรีบูต/ย้ายโหนด/ขาดการเชื่อมต่อ กราฟเริ่มต้นเป็นข้อมูลสด 5 นาทีที่เก็บระหว่างเปิดหน้าต่าง เลือกกราฟย้อนหลัง 1 ชั่วโมง/วัน/สัปดาห์/เดือน/ปีจาก Proxmox RRD ได้ (โหลดกราฟย้อนหลังทุก 30 วินาที) ระบบหยุดดึงข้อมูลเมื่อซ่อนแท็บและเชื่อมต่อใหม่เมื่อกลับมา ปิดหน้าต่างแล้วยกเลิกคำขอและ timer ค่ากราฟย้อนหลังอาจยังไม่มีใน guest ที่เพิ่งสร้างหรือถ้า Proxmox RRD ไม่พร้อม
+- หน้าต่างจัดการแสดงสถานะปัจจุบัน, โหนดจริง, CPU, RAM, Network, uptime และ disk อัปเดตอัตโนมัติทุก 2 วินาที พร้อมเวลาอัปเดตล่าสุด ค่า Network คำนวณ bytes/s จากผลต่าง counter ปัจจุบันของ Proxmox และตั้ง baseline ใหม่หลังรีบูต/ย้ายโหนด/ขาดการเชื่อมต่อ กราฟเริ่มต้นเป็นข้อมูลสด 5 นาทีที่เก็บระหว่างเปิดหน้าต่าง เลือกกราฟย้อนหลัง 1 ชั่วโมง/วัน/สัปดาห์/เดือน/ปีจาก Proxmox RRD ได้ ระบบหยุดดึงข้อมูลเมื่อซ่อนแท็บและเชื่อมต่อใหม่เมื่อกลับมา ปิดหน้าต่างแล้วยกเลิกคำขอและ timer ค่ากราฟย้อนหลังอาจยังไม่มีใน guest ที่เพิ่งสร้างหรือถ้า Proxmox RRD ไม่พร้อม
+- IP ของ guest ตรวจครั้งเดียวเมื่อเปิดหน้า Instance ผ่าน `/api/instance-ip` แล้วแสดงค่าที่อ่านได้ทันที ผู้ใช้ไม่มีปุ่มรีเฟรช IP เอง การตรวจ QEMU ใช้ QEMU Guest Agent และจับคู่ MAC ของ `net0`; การตรวจ LXC ใช้รายการ interfaces ของ Proxmox ระบบไม่ลบ IP เดิมเมื่อ guest ปิดหรือ agent ไม่ตอบ และจะบันทึกค่าใหม่ด้วยบัญชีบริการ PocketBase เมื่อ IP เปลี่ยน ฝั่งเซิร์ฟเวอร์มีงานตรวจทุกคืนหนึ่งรอบสำหรับ instance ที่ `completed` ทั้งหมด จึงไม่ใช้ polling IP ระหว่างเปิดหน้า
 - ในหน้าต่างเดียวกันมี Console และ SSH กับคำสั่ง **Start, Shutdown, Reboot, Force Stop**; VM มี **Pause/Resume, Hibernate และ Reset** เพิ่มเติม Hibernate ใช้ Proxmox `suspend` แบบ `todisk` และต้องมีพื้นที่เก็บ vmstate/สิทธิ์ที่เหมาะสม Shutdown เป็นการปิดแบบปกติ ส่วน Force Stop/Reset อาจทำข้อมูลที่ยังไม่บันทึกสูญหาย ระบบถามยืนยันก่อนคำสั่งที่รบกวนการทำงาน
 
 ### Console กับ SSH ต่างกันอย่างไร
@@ -139,12 +140,12 @@ API `/api/instance-metrics` และ `/api/instance-power` ตรวจสิ�
 
 ## คู่มือแอดมิน
 
-แอดมินเข้าหน้า `/admin` เพื่อดูคิวทั้งหมดและกรอง All/Pending/Provisioning/Failed/Completed เปิดรายละเอียดของแต่ละรายการเพื่อดูสเปค ผู้ขอ เจ้าของร่วม วันใช้งาน เครือข่าย และเหตุผล
+แอดมินเข้าหน้า `/admin` เพื่อดูคิวทั้งหมดและกรอง All/Pending/Provisioning/Failed/Completed เปิดรายละเอียดของแต่ละรายการเพื่อดูสเปค ผู้ขอ เจ้าของร่วม วันใช้งาน เครือข่าย และเหตุผล การคลิกที่ใดก็ได้ในแถวเปิดรายละเอียดครั้งเดียว ฟิลด์ข้อความ/Resolve/Edit จะแสดงใน popup เดียวกัน และมีปุ่มปิดที่มุมขวาบนซึ่งจัดลำดับซ้อนกับ popup สถานะเครื่องอย่างชัดเจน
 
 1. **Message to requester**: พิมพ์คำตอบแล้ว Send/Update; ใช้ Clear reply เพื่อลบคำตอบ ผู้ขอเห็นที่ `/status`
 2. **Edit lease fields**: ปรับ CPU/RAM/Disk, ports, VMID และ node ของ record ค่า node ในฐานข้อมูลเป็นเลข เช่น `4` แทน `pve4` ค่าที่แก้ตรงนี้เป็นข้อมูลคำขอ; ถ้าจะเปลี่ยนสเปค guest ที่มีอยู่ต้องตรวจ Proxmox แยกด้วย
 3. **Resolve → Manual**: ใช้เมื่อสร้าง VM/CT บน Proxmox แล้ว กด Complete เพื่อเปลี่ยน `status` เป็น `completed` เท่านั้น ควรกรอก VMID/CTID และ node ให้ตรงก่อน เพื่อให้ปุ่มจัดการเครื่องทำงาน
-4. **Resolve → Auto**: กรอก VMID/CTID, หมายเลข node และ storage แล้วกด Provision เว็บจะ clone จาก base template, config, ย้าย node หากจำเป็น, เก็บ IP ถ้าหาได้ และเปลี่ยนสถานะเป็น `completed` เมื่อสำเร็จ ผลคืบหน้าแสดงจาก memory ของ process ที่รันงานอยู่
+4. **Resolve → Auto**: กรอก VMID/CTID, หมายเลข node และ storage แล้วกด Provision เว็บจะ clone จาก base template, config, ย้าย node หากจำเป็น, ขยายดิสก์บน node ปลายทางหลัง migration เสร็จ, restart เพื่อขอ IP ใหม่, เก็บ IP ถ้าหาได้ และเปลี่ยนสถานะเป็น `completed` เมื่อสำเร็จ ผลคืบหน้าแสดงจาก memory ของ process ที่รันงานอยู่ สำหรับ VM ที่ต้องย้ายลำดับคือ clone/config → start → `qmigrate` → resize บนปลายทาง → restart; ไม่ resize บน template node ก่อนย้าย
 5. หาก Auto ล้มเหลว ให้ตรวจ guest/task บน Proxmox ก่อนกด Retry เพราะบางขั้นตอนอาจสร้าง guest ไปแล้ว การ retry ด้วย VMID เดิมอาจชนของเดิม
 
 ขั้นตอน Auto Provision ปัจจุบันจะสั่ง shutdown guest หลังตั้งค่าเสร็จ ผู้ใช้จึงต้องกด Start เมื่อต้องการใช้งาน
@@ -174,15 +175,23 @@ popup ไม่ใช้ PocketBase collection จึงไม่ต้อง mi
 | `templates` | Quick Preset ที่เติมค่าในฟอร์ม |
 | `instances` | คำขอและข้อมูล VM/CT หลัง provision |
 
-โครงสร้าง `instances` ที่ตรวจจากฐานข้อมูลจริง: `email` เป็น **relation ไป `users` และเก็บ user ID ของผู้ขอ** ไม่ใช่ข้อความอีเมล; `owners` เป็น relation ไป `users` ได้สูงสุด 10 คน; `type` เป็น `vm`/`container`; `status` เป็น `pending`/`completed`; `vmid` เป็น number; `node` เป็น **number** (เช่น `4` คือ `pve4`); `specs` เป็น JSON `{cpu, ram, disk}`; ฟิลด์อื่นที่หน้าเว็บใช้ ได้แก่ `hostname`, `os_template`, `network_type`, `dns_name`, `ports`, `purpose_notes`, `start_date`, `end_date`, `quantity`, `IP`, `admin_reply`, `admin_reply_at`, `provision_state`, `created`, `updated`
+โครงสร้าง `instances` ที่ตรวจจากฐานข้อมูลจริง: `email` เป็น **relation ไป `users` และเก็บ user ID ของผู้ขอ** ไม่ใช่ข้อความอีเมล; `owners` เป็น relation ไป `users` ได้สูงสุด 10 คน; `type` เป็น `vm`/`container`; `status` เป็น `pending`/`completed`/`failed`/`deleted`; `vmid` เป็น number; `node` เป็น **number** (เช่น `4` คือ `pve4`); `specs` เป็น JSON `{cpu, ram, disk}`; ฟิลด์อื่นที่หน้าเว็บใช้ ได้แก่ `hostname`, `os_template`, `network_type`, `dns_name`, `ports`, `purpose_notes`, `start_date`, `end_date`, `quantity`, `IP`, `admin_reply`, `admin_reply_at`, `provision_state`, `provision_error`, `datedelete`, `created`, `updated`
 
 กฎ `instances` ปัจจุบัน: ผู้ขอและเจ้าของร่วมอ่านได้, `user_type.type = admin` อ่านได้ทั้งหมด, การสร้าง record ให้ PocketBase superuser เท่านั้น เพราะหน้าเว็บสร้างคำขอผ่านเซิร์ฟเวอร์หลังตรวจฟิลด์แล้ว การแก้/ลบระดับ PocketBase ให้แอดมินเท่านั้น หน้าเว็บจึงตรวจสิทธิ์ก่อนใช้ PocketBase superuser เขียนเจ้าของร่วมและยกเลิกคำขอ อย่าเปิดสิทธิ์สร้างหรือแก้ collection ให้ผู้ใช้ทั่วไปโดยไม่ตรวจ action ฝั่ง server
 
 กฎความปลอดภัยที่ปรับใน PocketBase: `users.create/update` ไม่รับฟิลด์ `user_type` จากผู้ใช้ และ `instances.create` ล็อกให้ PocketBase superuser เท่านั้น วิธีนี้กันผู้ใช้สร้าง record ปลอมพร้อม `status`, `vmid` หรือ `IP` ผ่าน PocketBase API โดยตรง **แต่ไม่ใช่การตรวจ IAM/CS** เพราะ `/auth/oidc` อาจกำหนด `user_type` เริ่มต้นหลัง PocketBase ยืนยัน token `users.list/view` คงกฎเดิม เพราะ PocketBase นี้ใช้ร่วมกับโครงการอื่นที่มี role `superadmin` และ `teachers`; อย่าถอด role เหล่านี้จากกฎฐานข้อมูลร่วมเพียงเพื่อปรับสิทธิ์เว็บ VM/CT สคริปต์ `node scripts/harden-pocketbase-rules.mjs` แสดง dry run และ `node scripts/harden-pocketbase-rules.mjs --apply` ใช้กฎจริงพร้อมสำรองกฎเก่าลง `.data/pocketbase-rules-backup-*.json` ก่อนแก้
 
-เว็บและ WebSocket ให้สิทธิ์แอดมินเฉพาะ `user_type.type = admin` เท่านั้น `superadmin` เป็นบทบาทของอีกโครงการ ไม่ได้เพิ่มสิทธิ์ในเว็บนี้ ส่วน PocketBase superuser ที่เก็บใน `PB_ADMIN_EMAIL` เป็นบัญชีบริการสำหรับงานหลังบ้าน ไม่ใช่ role ของผู้ใช้เว็บ
+เว็บและ WebSocket ให้สิทธิ์แอดมินเฉพาะ `user_type.type = admin` เท่านั้น `superadmin` เป็นบทบาทของอีกโครงการ ไม่ได้เพิ่มสิทธิ์ในเว็บนี้ ส่วน PocketBase superuser ที่เก็บใน `PB_ADMIN_EMAIL` เป็นบัญชีบริการสำหรับงานหลังบ้าน ไม่ใช่ role ของผู้ใช้เว็บ ฟังก์ชัน `adminPb()` ใน `src/lib/server/instance-owners.ts` ใช้สร้าง client ที่ยืนยันตัวตนด้วย `PB_ADMIN_EMAIL`/`PB_ADMIN_PASSWORD`; ใช้เฉพาะฝั่งเซิร์ฟเวอร์สำหรับเขียนข้อมูลที่ผู้ใช้ทั่วไปไม่มีสิทธิ์ เช่น IP ที่ตรวจพบใหม่และการจัดการเจ้าของร่วม ห้ามนำ credential หรือฟังก์ชันนี้ไป import ใน component ฝั่ง browser
 
 SSH ในเว็บใช้ IP ของ instance จาก PocketBase และตรวจผู้ขอ/เจ้าของร่วม/แอดมินก่อนเชื่อมต่อ Host key ครั้งแรกจะถูก pin ใน `SSH_HOST_KEYS_FILE`; ครั้งต่อไปหาก key เปลี่ยนจะถูกปฏิเสธ ควรยืนยัน fingerprint กับผู้ดูแลเครื่องก่อนเชื่อมต่อครั้งแรก แล้วสำรองไฟล์ pin นี้ไว้เมื่อย้ายเซิร์ฟเวอร์
+
+### API ตรวจ IP และการอัปเดตอัตโนมัติ
+
+`GET /api/instance-ip?instanceId=<id>` รับคำขอจากผู้ใช้ที่ล็อกอินแล้ว และตรวจสิทธิ์ด้วย `canAccessInstance` เช่นเดียวกับ API สถานะและ power ผู้ขอ เจ้าของร่วม และแอดมินดูได้เฉพาะ instance ที่ตนมีสิทธิ์และมีสถานะ `completed` เท่านั้น การตอบกลับมี `ip`, `observed`, `changed`, `available` และแหล่งข้อมูล (`qemu-guest-agent` หรือ `lxc-interfaces`)
+
+แม้ผู้ใช้เป็นผู้เปิดหน้าและเป็นคนเริ่มคำขออ่าน IP การเขียนค่า `instances.IP` ทำผ่าน `adminPb()` บนเซิร์ฟเวอร์เท่านั้น ผู้ใช้จึงไม่มีช่องทางแก้ IP โดยตรง หาก Proxmox guest ไม่พบจะตอบ `404`; หาก instance ยังไม่พร้อมจะตอบ `409`; หาก Proxmox ติดต่อไม่ได้จะเก็บค่าเดิมและตอบสถานะที่อ่านไม่ได้โดยไม่ลบข้อมูล
+
+งานกลางคืนอยู่ใน `src/lib/server/nightly-ip-refresh.ts` และเริ่มจาก `src/hooks.server.ts` เฉพาะ production งานจะรอรอบเที่ยงคืนของเครื่องเซิร์ฟเวอร์ จากนั้นอ่าน instance ที่ `status = completed` และ `vmid > 0` ทีละรายการ ตรวจ guest ปัจจุบันจาก cluster inventory และเขียนเฉพาะเมื่อ IP เปลี่ยน งานนี้ไม่เริ่มใน dev/build และไม่ทำงานถ้า process เว็บหยุดอยู่ จึงควรให้ PM2 ทำงานต่อเนื่องหรือใช้ worker ภายนอกหากต้องการความแน่นอนสูง
 
 ## การย้ายฐานข้อมูลและ migration
 

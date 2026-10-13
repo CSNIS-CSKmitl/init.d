@@ -55,3 +55,13 @@ Deploy ผ่าน PM2 กำหนด PORT=3000 และ health check ใช�
 การกู้รายการนี้แก้เฉพาะข้อมูลในฐานข้อมูล ไม่ clone, migrate, restart หรือ shutdown เครื่องที่มีอยู่ ถ้ารายการเปลี่ยนระหว่างตรวจจะไม่เขียนทับ และถ้า VM ไม่ตรงคำขอหรือข้อมูลยังไม่ครบ จะระบุสิ่งที่รอตรวจแทนการยืนยัน Complete ผิดพลาด งานประเภทอื่นที่เคย timeout ยังต้องตรวจขั้นตอนที่เหลือตามประเภทงาน ไม่ใช่การกู้ pipeline ทุกขั้นตอนทั่วไป
 
 ตั้ง `PROVISION_RECOVERY_ENABLED=false` เพื่อปิดงานตรวจเบื้องหลัง การรัน dev และช่วง build ไม่เปิดงานนี้
+
+## การตรวจ IP ของ VM/CT
+
+เว็บมี endpoint `GET /api/instance-ip?instanceId=<id>` สำหรับอ่าน IP จาก Proxmox โดยตรง ผู้ใช้ที่เป็นผู้ขอ เจ้าของร่วม หรือแอดมินเปิดดูได้เมื่อ instance อยู่สถานะ `completed` แต่การเขียนค่าใหม่ลง `instances.IP` ทำบนเซิร์ฟเวอร์ด้วย `adminPb()` เท่านั้น จึงไม่เปิดสิทธิ์แก้ IP ให้ผู้ใช้ทั่วไป
+
+สำหรับ VM ระบบอ่าน `qemu` Guest Agent (`network-get-interfaces`) และเลือก IPv4 ของ interface ที่ MAC ตรงกับค่า `net0` ก่อน หากหา MAC ไม่ได้จึงใช้ IPv4 ของ interface ที่ไม่ใช่ loopback สำหรับ CT ระบบอ่าน `lxc` interfaces โดยตรง ระบบตัด loopback และ link-local ออก และไม่ลบค่า IP เดิมหาก guest ปิดหรือ agent ยังไม่พร้อม
+
+เมื่อผู้ใช้เปิดหน้า Instance ระบบเรียก endpoint หนึ่งครั้งเพื่อแสดง IP ปัจจุบัน ไม่มี polling IP ระหว่างเปิดหน้า ทุกคืน production server จะทำงานจาก `src/lib/server/nightly-ip-refresh.ts` หนึ่งรอบ ตรวจ instance ที่ `completed` ทั้งหมดแบบลำดับเดียว และอัปเดตเฉพาะ record ที่ IP เปลี่ยน งานนี้เริ่มโดย `src/hooks.server.ts` หลัง process production ขึ้นและใช้เวลาเที่ยงคืนตาม timezone ของเครื่องเซิร์ฟเวอร์ หากต้องการตรวจสอบ ให้ดู log `[Nightly IP refresh]` และตรวจค่า `instances.IP` ใน PocketBase
+
+การตรวจ nightly จะไม่ทำงานระหว่าง `npm run dev`, ระหว่าง build หรือหลัง process หยุด หากเว็บมีหลาย process/หลาย replica ให้เปิดงานนี้เพียง process เดียวหรือย้ายงานไป worker ภายนอก เพื่อป้องกันการตรวจและเขียนซ้ำ

@@ -61,6 +61,32 @@ export async function authorizedInstance(auth, instanceId) {
 	}
 }
 
+/** Record a successful WebSocket-backed access event without exposing credentials to the client. */
+/** @param {import('node:http').IncomingMessage} request @param {{userId: string, instanceId: string, action: string, metadata?: Record<string, unknown>}} input */
+export async function writeSocketAuditLog(request, { userId, instanceId, action, metadata = {} }) {
+	try {
+		if (!process.env.POCKETBASE_URL || !process.env.PB_ADMIN_EMAIL || !process.env.PB_ADMIN_PASSWORD) return;
+		const pb = new PocketBase(process.env.POCKETBASE_URL);
+		pb.autoCancellation(false);
+		await pb.admins.authWithPassword(process.env.PB_ADMIN_EMAIL, process.env.PB_ADMIN_PASSWORD);
+		const forwarded = process.env.TRUST_PROXY === 'true'
+			? String(request.headers['x-forwarded-for'] || '').split(',')[0].trim()
+			: '';
+		const sourceIp = forwarded || request.socket.remoteAddress || '';
+		await pb.collection('instance_access_logs').create({
+			user: userId,
+			instance: instanceId,
+			source_ip: sourceIp.slice(0, 64),
+			action,
+			path: String(request.url || '').split('?')[0].slice(0, 256),
+			user_agent: String(request.headers['user-agent'] || '').slice(0, 512),
+			metadata
+		});
+	} catch (error) {
+		console.error('[Audit log] Could not write WebSocket access log:', error instanceof Error ? error.message : error);
+	}
+}
+
 /** @param {import('node:http').IncomingMessage} request @param {NonNullable<Awaited<ReturnType<typeof authenticateSocket>>>} auth @param {string | undefined} secret */
 export async function authorizeConsoleSocket(request, auth, secret) {
 	const requestUrl = request.url || '';

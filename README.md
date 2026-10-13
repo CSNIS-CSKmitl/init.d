@@ -54,7 +54,7 @@ runner ต้องมี SSH และ rsync เช่นกัน Workflow ส
 | --- | --- |
 | `/login` | เข้าเว็บผ่าน PocketBase `oidc` หรือบัญชี `users` |
 | `/request` | ขอ VM/CT และระบุเจ้าของร่วมก่อนส่ง |
-| `/status` | ดูคำขอ, เพิ่ม/ลบเจ้าของร่วม, แก้หรือยกเลิกคำขอ pending; กดแถวเครื่องเพื่อดูกราฟ CPU/RAM/Network และจัดการ Power/Console/SSH |
+| `/status` | ดูคำขอ, เพิ่ม/ลบเจ้าของร่วม, แก้หรือยกเลิกคำขอ pending; กดแถวเครื่องเพื่อดูกราฟ CPU/RAM/Network, IP ล่าสุด และจัดการ Power/Console/SSH |
 | `/admin` | ดูคิว, ตอบผู้ขอ, แก้ข้อมูลและ IP, Complete ด้วยตนเองหรือ Auto Provision, ลบ VM/CT |
 
 Popup “มีอะไรใหม่” หลังล็อกอินแก้ข้อความและเปิด/ปิดได้ใน [`src/lib/whats-new.ts`](src/lib/whats-new.ts) รายละเอียดอยู่ใน [คู่มือส่งต่อ](docs/HANDOVER_TH.md#ประกาศอัปเดตหลังล็อกอิน)
@@ -94,6 +94,8 @@ Auto บันทึก `provisioning` ก่อนเริ่มงาน, `co
 
 หน้า admin แก้ IP ใน Edit lease fields ได้ (IPv4/IPv6 หรือเว้นว่างเพื่อล้าง) เป็นการแก้ค่าในฐานข้อมูลและปลายทาง SSH ต้องตั้ง network ภายใน guest แยกเมื่อเปลี่ยน IP จริง ปุ่ม Delete VM / CT ต้องพิมพ์ hostname เพื่อยืนยัน ระบบหาโหนดปัจจุบันจาก Proxmox, ตรวจชนิด/hostname และไม่อนุญาตลบ template จากนั้นหยุดเครื่องและรอ task ลบสำเร็จ แล้วเก็บรายการเดิมใน PocketBase เป็นประวัติ โดยตั้ง `status` และ `provision_state` เป็น `deleted`, ล้าง `vmid`/`node` และบันทึกวันเวลาที่ลบใน `datedelete` (เก็บ UTC แสดงเวลาไทย) ข้อมูลคำขอและ IP เดิมยังอยู่ หากลบล้มเหลวจะเก็บ VMID/Node และ error ไว้ให้ admin ลองลบใหม่ รายการที่ลบแล้วแสดงในตัวกรอง Deleted และไม่สามารถแก้ข้อมูลเครื่องหรือ provision ซ้ำได้ การกดลบซ้ำไม่เปลี่ยนวันที่ลบเดิม
 
+IP ของ VM/CT จะถูกอ่านจาก Proxmox ผ่าน `/api/instance-ip` เมื่อเปิดหน้า Instance และตรวจครบทุกเครื่องวันละครั้งจากงาน production nightly refresh การอัปเดตฐานข้อมูลใช้ `adminPb()` บนเซิร์ฟเวอร์ ผู้ใช้ดูค่าได้แต่ไม่มีปุ่มแก้หรือรีเฟรช IP โดยตรง
+
 ## ตรวจงาน
 
 ```sh
@@ -113,3 +115,9 @@ node --test scripts/test-instance-lifecycle.mjs scripts/test-admin-instances.mjs
 ## GitHub Actions deploy
 
 วิธีตั้งค่า SSH, ENV_FILE, PM2 และ deploy อัตโนมัติ: [คู่มือ deploy](docs/DEPLOY.md)
+
+## เอกสารกฎหมาย
+
+- [นโยบายความเป็นส่วนตัว](https://init-d.cskmitl.com/privacy)
+- [ข้อกำหนดการใช้งาน](https://init-d.cskmitl.com/terms)
+

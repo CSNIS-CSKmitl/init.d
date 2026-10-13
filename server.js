@@ -6,7 +6,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { Client as SshClient } from 'ssh2';
 import { isIP } from 'node:net';
 import { startNodeSync } from './scripts/sync-instance-nodes.mjs';
-import { authenticateSocket, authorizedInstance, authorizeConsoleSocket, isAllowedOrigin } from './src/lib/server/ws-auth.mjs';
+import { authenticateSocket, authorizedInstance, authorizeConsoleSocket, isAllowedOrigin, writeSocketAuditLog } from './src/lib/server/ws-auth.mjs';
 import { createHostVerifier } from './src/lib/server/ssh-hostkeys.mjs';
 
 if (!process.env.ORIGIN) throw new Error('ORIGIN must be set to the public URL of this portal.');
@@ -158,6 +158,7 @@ wss.on('connection', (ws, request, auth) => {
 								}
 
 								sshStream = stream;
+								void writeSocketAuditLog(request, { userId: auth.userId, instanceId, action: 'ssh', metadata: { host, port: sshPort, username } });
 								ws.send(JSON.stringify({ type: 'connected' }));
 
 								stream.on('data', (buf) => {
