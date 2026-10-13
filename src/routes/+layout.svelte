@@ -53,7 +53,7 @@
 			<WhatsNewDialog userId={data.user?.id ?? null} />
 		{/if}
 	{/if}
-	<main class="relative mx-auto w-full max-w-[1400px] flex-1 px-6 py-10">
+	<main class="relative mx-auto w-full max-w-[1400px] min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-10">
 		{@render children()}
 	</main>
 	<footer class="relative border-t border-border px-6 py-3 text-center text-[11px] text-muted-foreground">

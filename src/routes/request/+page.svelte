@@ -523,7 +523,7 @@
 							placeholder="api-gateway-prod"
 						/>
 						<span
-							class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-xs whitespace-nowrap text-muted-foreground"
+							class="pointer-events-none absolute top-1/2 right-3 max-w-[calc(100%-1rem)] -translate-y-1/2 truncate font-mono text-xs text-muted-foreground"
 						>
 							{DNS_SUFFIX}
 						</span>

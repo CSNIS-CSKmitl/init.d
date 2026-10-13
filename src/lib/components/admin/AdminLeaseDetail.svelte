@@ -40,6 +40,7 @@
 		progressMap = {},
 		onOpenConsole,
 		onOpenSsh,
+		onOpenDashboard,
 	}: {
 		item: LeaseInstance;
 		form: { error?: string; id?: string; recordId?: string } | null;
@@ -47,6 +48,7 @@
 		progressMap?: Record<string, { status: string; error?: string }>;
 		onOpenConsole: (item: LeaseInstance) => void;
 		onOpenSsh: (item: LeaseInstance) => void;
+		onOpenDashboard: (item: LeaseInstance) => void;
 	} = $props();
 
 	const badgeStatus = $derived(leaseBadgeStatus(item, progressMap[item.id]));
@@ -128,7 +130,7 @@
 <div class="flex flex-col gap-6 px-6 py-5">
 	<!-- Overview -->
 	<section class="flex flex-col gap-3">
-		<div class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+		<div class="grid min-w-0 grid-cols-1 gap-x-4 gap-y-3 text-sm sm:grid-cols-2">
 			<div>
 				<div class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Group</div>
 				<div class="font-bold text-foreground">{passionGroupName(item)}</div>
@@ -245,7 +247,12 @@
 
 	<Separator />
 
-	<!-- Message to requester — always editable, no view/edit toggle to click through. -->
+	<details class="group rounded-lg border border-border bg-card">
+		<summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+			<span class="flex items-center gap-2"><MessageSquareText class="h-4 w-4 text-muted-foreground" /> ข้อความถึงผู้ขอ</span>
+		</summary>
+		<div class="border-t border-border px-4 py-4">
+	<!-- Message to requester -->
 	<section class="flex flex-col gap-2">
 		<div class="flex items-center justify-between">
 			<h3 class="flex items-center gap-1.5 font-mono text-xs font-bold text-foreground uppercase">
@@ -282,6 +289,9 @@
 		{/if}
 	</section>
 
+		</div>
+	</details>
+
 	<Separator />
 
 	<!-- Resolve / Retry -->
@@ -314,11 +324,6 @@
 					<ToggleGroup.Item value="manual" class="font-mono text-[10px] tracking-wider uppercase">Manual</ToggleGroup.Item>
 					<ToggleGroup.Item value="auto" class="font-mono text-[10px] tracking-wider uppercase">Auto</ToggleGroup.Item>
 				</ToggleGroup.Root>
-				<p class="font-mono text-[10px] text-muted-foreground">
-					{resolveMode === "manual"
-						? "Manual — mark this lease complete; the VM/CT already exists on Proxmox."
-						: "Auto — provision a new VM/CT on Proxmox right now using the values below."}
-				</p>
 
 				{#if resolveMode === "auto"}
 					<Field.FieldGroup class="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -335,9 +340,6 @@
 							<Input id={`resolve-storage-${item.id}`} name="storage" bind:value={resolveStorage} required class="font-mono text-xs" placeholder="local-lvm" />
 						</Field.Field>
 					</Field.FieldGroup>
-					<p class="font-mono text-[10px] text-muted-foreground">
-						vmid/node are prefilled from this lease's current values (set via Edit Fields below) when available — change them here only if provisioning to a different target.
-					</p>
 				{/if}
 
 				<div class="flex justify-end">
@@ -390,6 +392,11 @@
 
 	<!-- Edit fields -->
 	{#if !isDeleted}
+	<details class="group rounded-lg border border-border bg-card">
+		<summary class="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+			<span class="flex items-center gap-2"><Settings2 class="h-4 w-4 text-muted-foreground" /> แก้ไขข้อมูลและการเชื่อมต่อ</span>
+		</summary>
+		<div class="border-t border-border px-4 py-4">
 	<section class="flex flex-col gap-2">
 		<h3 class="flex items-center gap-1.5 font-mono text-xs font-bold text-foreground uppercase">
 			<Settings2 class="h-3.5 w-3.5" /> Edit lease fields
@@ -426,9 +433,6 @@
 						<Input id={`edit-ip-${item.id}`} name="IP" bind:value={editIp} class="font-mono text-xs" placeholder="192.168.15.100" disabled={busy} />
 					</Field.Field>
 			</Field.FieldGroup>
-			<p class="font-mono text-[10px] text-muted-foreground">
-				VMID/Node saved here become the defaults Resolve → Auto prefills for this lease. IP updates the lease record and SSH target; configure the guest network separately if its address changes.
-			</p>
 			<div class="flex justify-end">
 				<Button type="submit" size="sm" class="w-fit font-mono" disabled={busy}>Save Fields</Button>
 			</div>
@@ -453,25 +457,29 @@
 			</Button>
 		</form>
 	</section>
+		</div>
+	</details>
 
 	{/if}
 	{#if item.status === 'completed' && !busy && item.vmid}
 		<Separator />
 		<section class="flex flex-col gap-2">
 			<h3 class="font-mono text-xs font-bold text-foreground uppercase">Remote access</h3>
-			<div class="flex flex-col gap-2 sm:flex-row">
-				<Button type="button" onclick={() => onOpenConsole(item)} class="flex-1 justify-start font-mono">
+			<div class="flex min-w-0 flex-col gap-2 sm:flex-row">
+				<Button type="button" variant="outline" onclick={() => onOpenDashboard(item)} class="min-w-0 flex-1 justify-start font-mono">
 					<MonitorPlay data-icon="inline-start" />
-					<span class="flex flex-col items-start">
+					<span class="truncate text-left">ดูสถานะเครื่อง</span>
+				</Button>
+				<Button type="button" onclick={() => onOpenConsole(item)} class="min-w-0 flex-1 justify-start font-mono">
+					<MonitorPlay data-icon="inline-start" />
+					<span class="min-w-0 truncate text-left">
 						<span>Console</span>
-						<span class="text-[10px] font-normal opacity-80">Browser noVNC — no credentials needed</span>
 					</span>
 				</Button>
-				<Button type="button" variant="outline" onclick={() => onOpenSsh(item)} class="flex-1 justify-start font-mono">
+				<Button type="button" variant="outline" onclick={() => onOpenSsh(item)} class="min-w-0 flex-1 justify-start font-mono">
 					<SquareTerminal data-icon="inline-start" />
-					<span class="flex flex-col items-start">
+					<span class="min-w-0 truncate text-left">
 						<span>SSH</span>
-						<span class="text-[10px] font-normal opacity-70">WebTTY — requires host credentials</span>
 					</span>
 				</Button>
 			</div>

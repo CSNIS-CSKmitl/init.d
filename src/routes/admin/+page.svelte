@@ -137,18 +137,12 @@
 	});
 </script>
 
-<div class="flex flex-col gap-12">
-	<!-- Header — INFRASTRUCTURE_QUEUE -->
+<div class="flex flex-col gap-7">
 	<div
-		class="flex flex-col items-start justify-between gap-4 border-b border-border pb-6 sm:flex-row sm:items-center"
+		class="flex flex-col items-start justify-between gap-4 border-b border-border pb-5 sm:flex-row sm:items-center"
 	>
 		<div class="flex flex-col gap-1">
-			<h1 class="font-mono text-xl font-medium tracking-tight text-foreground">
-				// INFRASTRUCTURE_QUEUE
-			</h1>
-			<p class="text-sm text-foreground/70">
-				รายการคิวสเปค ระยะเวลา และพอร์ตที่ขอใช้งานเซิร์ฟเวอร์จาก PocketBase
-			</p>
+			<h1 class="text-2xl font-semibold tracking-tight text-foreground">จัดการคำขอใช้งานเซิร์ฟเวอร์</h1>
 		</div>
 
 		<Badge variant="outline" class="gap-2 font-mono text-xs text-muted-foreground">
@@ -160,7 +154,7 @@
 						: 'bg-destructive'}"
 			></span>
 			<span
-				>PB_STREAM: {connectionState === 'live'
+				>{connectionState === 'live'
 					? 'ACTIVE'
 					: connectionState === 'connecting'
 						? 'SYNCING'
@@ -173,5 +167,5 @@
 	<AdminStats {stats} />
 
 	<!-- Data Table -->
-	<AdminQueueTable {items} {form} {progressMap} />
+	<AdminQueueTable {items} {form} {progressMap} userId={data.user?.id ?? ''} />
 </div>

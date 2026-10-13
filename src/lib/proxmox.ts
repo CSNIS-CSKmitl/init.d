@@ -287,17 +287,6 @@ export const createVM = async (
             ipconfig0: 'ip=dhcp',
         });
 
-        if (detail.specs?.disk && detail.specs.disk > 4) {
-            if (onProgress) await onProgress(`Resizing VM disk to ${detail.specs.disk}G...`);
-            console.log(`Resizing VM disk to ${detail.specs.disk}G on ${baseNode}`);
-            const resizeResponse = await proxmox.nodes.$(baseNode).qemu.$(id).resize.$put({
-                disk: 'scsi0',
-                size: `+${detail.specs.disk - 4}G`,
-            });
-            await waitForTask(baseNode, resizeResponse)
-            console.log('Resize response:', resizeResponse);
-        }
-
         let ipAddress = '';
         if (needsMigration) {
             if (onProgress) await onProgress('Starting VM for online migration...');
@@ -321,6 +310,21 @@ export const createVM = async (
 
 
 
+        }
+
+        // Resize only after a cross-node migration. This keeps the migration
+        // small and ensures the requested disk is expanded on the final
+        // target storage instead of the template node.
+        if (detail.specs?.disk && detail.specs.disk > 4) {
+            const resizeNode = needsMigration ? node : baseNode;
+            if (onProgress) await onProgress(`Resizing VM disk to ${detail.specs.disk}G on ${resizeNode}...`);
+            console.log(`Resizing VM disk to ${detail.specs.disk}G on ${resizeNode}`);
+            const resizeResponse = await proxmox.nodes.$(resizeNode).qemu.$(id).resize.$put({
+                disk: 'scsi0',
+                size: `+${detail.specs.disk - 4}G`,
+            });
+            await waitForTask(resizeNode, resizeResponse)
+            console.log('Resize response:', resizeResponse);
         }
 
         // Restart Virtual machine to ensure it not used IP from template

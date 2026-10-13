@@ -1,13 +1,14 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import type { LeaseInstance } from "$lib/types";
   import { passionGroupName, creatorEmail, creatorName } from "$lib/types";
-  import { enhance } from "$app/forms";
   import { cn } from "$lib/utils";
   import { leaseBadgeStatus, type LeaseBadgeStatus } from "$lib/leaseStatus";
   import SshSessions from "$lib/components/status/SshSessions.svelte";
   import ProxmoxTerminal from "$lib/components/status/ProxmoxTerminal.svelte";
   import ProxmoxVnc from "$lib/components/status/ProxmoxVnc.svelte";
   import AdminLeaseDetail from "$lib/components/admin/AdminLeaseDetail.svelte";
+  import InstanceDashboard from "$lib/components/status/InstanceDashboard.svelte";
   import * as Table from "$lib/components/ui/table";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Empty from "$lib/components/ui/empty";
@@ -17,12 +18,11 @@
   import { Spinner } from "$lib/components/ui/spinner";
   import {
     Terminal,
+    X,
     MessageSquareText,
     Inbox,
     ChevronRight,
     ChevronDown,
-    Check,
-    X,
   } from "@lucide/svelte";
 
   // ---------------------------------------------------------------------
@@ -77,6 +77,18 @@
     }
   }
 
+  async function openDetailConsole(item: LeaseInstance) {
+    openIds = new Set();
+    await tick();
+    await openConsole(item);
+  }
+
+  async function openDetailSsh(item: LeaseInstance) {
+    openIds = new Set();
+    await tick();
+    openSsh(item);
+  }
+
   function closeConsole() {
     consoleTarget = null;
     consoleWsUrl = null;
@@ -99,6 +111,7 @@
     form: { error?: string; id?: string; recordId?: string } | null;
     provisioning?: boolean;
     progressMap?: Record<string, { status: string; error?: string }>;
+    userId: string;
   };
 
   let {
@@ -106,27 +119,26 @@
     form,
     provisioning = false,
     progressMap = {},
+    userId,
   }: Props = $props();
 
   // ---------------------------------------------------------------------
-  // Detail rows — every per-lease action (reply, resolve/retry, edit
-  // fields, provision, console/ssh entry points) lives in ONE place, one
-  // consistent shape, expanding directly beneath its own row so it's never
-  // ambiguous which lease it belongs to. `openIds` is a set, not a single
-  // id, so several requests can be open and worked on at once — each gets
-  // its own <AdminLeaseDetail> instance below with fully independent form
-  // state (see that component for why).
+  // Open one request at a time so the queue stays visible while reviewing it.
   // ---------------------------------------------------------------------
   let openIds = $state<Set<string>>(new Set());
   function toggleDetail(id: string) {
-    const next = new Set(openIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    openIds = next;
+    openIds = openIds.has(id) ? new Set() : new Set([id]);
+  }
+  const activeItem = $derived.by(() => items.find((item) => openIds.has(item.id)) ?? null);
+  let dashboardTarget = $state<LeaseInstance | null>(null);
+
+  async function openDashboard(item: LeaseInstance) {
+    openIds = new Set();
+    await tick();
+    dashboardTarget = item;
   }
 
-  // Status filter above the table so a long queue can be narrowed to
-  // "what actually needs me right now" while triaging in bulk.
+  // Search and status filters stay together so the queue is easy to scan.
   let filterTab = $state<"all" | LeaseBadgeStatus>("all");
   let searchQuery = $state("");
   const normalizedSearch = $derived(searchQuery.trim().toLocaleLowerCase());
@@ -174,11 +186,11 @@
   });
 
   const statusMeta: Record<LeaseBadgeStatus, { label: string }> = {
-    failed: { label: "Failed" },
-    provisioning: { label: "Provisioning" },
-    pending: { label: "Pending" },
-    completed: { label: "Completed" },
-    deleted: { label: "Deleted" },
+    failed: { label: "ผิดพลาด" },
+    provisioning: { label: "กำลังทำงาน" },
+    pending: { label: "รอดำเนินการ" },
+    completed: { label: "เสร็จแล้ว" },
+    deleted: { label: "เก็บเป็นประวัติ" },
   };
 </script>
 
@@ -201,13 +213,13 @@
 	     and the rest of the queue stays fully visible and clickable above
 	     and below it the whole time. -->
   <div>
-    <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div class="mb-3 flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
       <label class="relative block min-w-0 flex-1 sm:max-w-md">
         <span class="sr-only">ค้นหารายการคำขอ</span>
         <input
           type="search"
           bind:value={searchQuery}
-          placeholder="ค้นหา hostname, อีเมล, VMID, IP หรือรายละเอียด"
+          placeholder="ค้นหา hostname, อีเมล, VMID หรือ IP"
           class="h-9 w-full rounded-md border border-border bg-background px-3 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
           autocomplete="off"
         />
@@ -221,20 +233,20 @@
 
     <Tabs.Root bind:value={filterTab} class="mb-3 gap-3">
       <Tabs.List class="font-mono text-xs">
-        <Tabs.Trigger value="all">All ({filterCounts.all})</Tabs.Trigger>
+        <Tabs.Trigger value="all">ทั้งหมด ({filterCounts.all})</Tabs.Trigger>
         <Tabs.Trigger value="pending"
-          >Pending ({filterCounts.pending})</Tabs.Trigger
+          >รอดำเนินการ ({filterCounts.pending})</Tabs.Trigger
         >
         <Tabs.Trigger value="provisioning"
-          >Provisioning ({filterCounts.provisioning})</Tabs.Trigger
+          >กำลังทำงาน ({filterCounts.provisioning})</Tabs.Trigger
         >
         <Tabs.Trigger value="failed"
-          >Failed ({filterCounts.failed})</Tabs.Trigger
+          >ผิดพลาด ({filterCounts.failed})</Tabs.Trigger
         >
         <Tabs.Trigger value="completed"
-          >Completed ({filterCounts.completed})</Tabs.Trigger
+          >เสร็จแล้ว ({filterCounts.completed})</Tabs.Trigger
         >
-        <Tabs.Trigger value="deleted">Deleted ({filterCounts.deleted})</Tabs.Trigger>
+        <Tabs.Trigger value="deleted">ประวัติที่ลบ ({filterCounts.deleted})</Tabs.Trigger>
       </Tabs.List>
     </Tabs.Root>
 
@@ -244,7 +256,7 @@
           <Empty.Title
             class="font-mono text-xs uppercase tracking-widest text-muted-foreground"
           >
-            Nothing in this filter
+            ไม่พบรายการที่ตรงกับเงื่อนไข
           </Empty.Title>
         </Empty.Header>
       </Empty.Root>
@@ -258,16 +270,16 @@
               class="bg-muted font-mono text-xs uppercase tracking-wider text-muted-foreground hover:bg-muted"
             >
               <Table.Head class="p-4 font-bold text-muted-foreground"
-                >Status</Table.Head
+                >สถานะ</Table.Head
               >
               <Table.Head class="p-4 font-bold text-muted-foreground"
-                >Request</Table.Head
+                >คำขอ</Table.Head
               >
               <Table.Head class="p-4 font-bold text-muted-foreground"
-                >Requester</Table.Head
+                >ผู้ขอ</Table.Head
               >
               <Table.Head class="p-4 font-bold text-muted-foreground"
-                >Specs</Table.Head
+                >ทรัพยากร</Table.Head
               >
               <Table.Head class="p-4 text-right font-bold text-muted-foreground"
               ></Table.Head>
@@ -284,8 +296,16 @@
               {@const isActive = openIds.has(item.id)}
               <Table.Row
                 onclick={() => toggleDetail(item.id)}
+                onkeydown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    toggleDetail(item.id);
+                  }
+                }}
+                role="button"
+                tabindex={0}
                 class={cn(
-                  "cursor-pointer align-top transition-colors hover:bg-muted/40",
+                  "cursor-pointer align-top transition-colors hover:bg-muted/40 focus-visible:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-inset",
                   isActive && "bg-primary/5 hover:bg-primary/10",
                 )}
               >
@@ -378,25 +398,6 @@
                     role="presentation"
                     onclick={(e) => e.stopPropagation()}
                   >
-                    {#if badgeStatus === "pending"}
-                      <!-- Zero-input quick action: Manual resolve needs nothing but the
-											     id, so the single most common bulk-triage action never has to
-											     touch the detail pane at all. -->
-                      <form method="POST" action="?/resolve" use:enhance>
-                        <input type="hidden" name="id" value={item.id} />
-                        <input type="hidden" name="mode" value="manual" />
-                        <Button
-                          type="submit"
-                          variant="outline"
-                          size="sm"
-                          class="font-mono"
-                          title="Mark complete — the VM/CT already exists on Proxmox"
-                        >
-                          <Check data-icon="inline-start" />
-                          Complete
-                        </Button>
-                      </form>
-                    {/if}
                     <Button
                       type="button"
                       variant={isActive ? "secondary" : "ghost"}
@@ -404,7 +405,7 @@
                       onclick={() => toggleDetail(item.id)}
                       class="font-mono"
                     >
-                      {isActive ? "Close" : "Open"}
+                      {isActive ? "ปิดรายละเอียด" : "ดูรายละเอียด"}
                       {#if isActive}
                         <ChevronDown data-icon="inline-end" />
                       {:else}
@@ -414,38 +415,6 @@
                   </div>
                 </Table.Cell>
               </Table.Row>
-              {#if isActive}
-                <Table.Row class="hover:bg-transparent">
-                  <Table.Cell colspan={5} class="bg-muted/20 p-0">
-                    <div
-                      class="flex items-center justify-between border-t border-border px-6 py-3"
-                    >
-                      <span
-                        class="font-mono text-[10px] font-bold tracking-wider text-muted-foreground uppercase"
-                        >Details</span
-                      >
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onclick={() => toggleDetail(item.id)}
-                        aria-label="Collapse detail"
-                        class="shrink-0"
-                      >
-                        <X />
-                      </Button>
-                    </div>
-                    <AdminLeaseDetail
-                      {item}
-                      {form}
-                      {provisioning}
-                      {progressMap}
-                      onOpenConsole={openConsole}
-                      onOpenSsh={openSsh}
-                    />
-                  </Table.Cell>
-                </Table.Row>
-              {/if}
             {/each}
           </Table.Body>
         </Table.Root>
@@ -455,13 +424,54 @@
 {/if}
 
 <Dialog.Root
+  open={!!activeItem}
+  onOpenChange={(open) => {
+    if (!open) openIds = new Set();
+  }}
+>
+  <Dialog.Content showCloseButton={false} class="!w-[calc(100vw-1rem)] !max-w-4xl max-h-[calc(100dvh-1rem)] overflow-x-hidden overflow-y-auto p-0 sm:!w-[calc(100vw-2rem)]">
+    {#if activeItem}
+      <Dialog.Header class="sticky top-0 z-10 border-b border-border bg-card px-5 py-4 pr-14">
+        <div class="min-w-0">
+          <Dialog.Title class="truncate text-base font-semibold text-foreground">{activeItem.hostname}</Dialog.Title>
+          <Dialog.Description class="sr-only">รายละเอียดคำขอ {activeItem.hostname}</Dialog.Description>
+        </div>
+        <Button type="button" variant="ghost" size="icon-sm" class="absolute top-3 right-4" onclick={() => (openIds = new Set())} aria-label="ปิดรายละเอียด">
+          <X />
+        </Button>
+      </Dialog.Header>
+      <AdminLeaseDetail
+        item={activeItem}
+        {form}
+        {provisioning}
+        {progressMap}
+        onOpenConsole={openDetailConsole}
+        onOpenSsh={openDetailSsh}
+        onOpenDashboard={openDashboard}
+      />
+    {/if}
+  </Dialog.Content>
+</Dialog.Root>
+
+{#if dashboardTarget}
+  <InstanceDashboard
+    item={dashboardTarget}
+    {userId}
+    form={null}
+    onClose={() => (dashboardTarget = null)}
+    onConsole={openConsole}
+    onSsh={openSsh}
+  />
+{/if}
+
+<Dialog.Root
   open={!!(consoleTarget && terminalType)}
   onOpenChange={(o: boolean) => {
     if (!o) closeConsole();
   }}
 >
   <Dialog.Content
-    class="flex h-[92vh] w-[96vw] max-w-[96vw] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-[96vw]"
+    class="flex h-[calc(100dvh-1rem)] !w-[calc(100vw-1rem)] !max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:h-[92vh] sm:!w-[96vw] sm:!max-w-[96vw]"
   >
     <Dialog.Header
       class="flex-row items-center justify-between border-b border-border bg-muted px-4 py-3 sm:px-6"

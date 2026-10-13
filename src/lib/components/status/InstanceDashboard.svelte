@@ -9,7 +9,7 @@
 	import { Spinner } from '$lib/components/ui/spinner';
 	import MetricChart from './MetricChart.svelte';
 	import OwnerManager from './OwnerManager.svelte';
-	import { RefreshCw, Terminal, Power, RotateCw, Pause, Play, Square, Monitor } from '@lucide/svelte';
+	import { RefreshCw, Terminal, Power, RotateCw, Pause, Play, Square, Monitor, X } from '@lucide/svelte';
 
 	let {
 		item,
@@ -187,13 +187,14 @@
 </script>
 
 <Dialog.Root open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
-	<Dialog.Content class="max-h-[92vh] w-[min(96vw,1120px)] max-w-[96vw] gap-5 overflow-y-auto p-4 sm:max-w-[1120px] sm:p-6">
-		<Dialog.Header>
+	<Dialog.Content showCloseButton={false} class="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] gap-5 overflow-x-hidden overflow-y-auto p-4 sm:max-h-[92vh] sm:w-[min(96vw,1120px)] sm:max-w-[1120px] sm:p-6">
+		<Dialog.Header class="relative pr-10">
 			<div class="flex flex-wrap items-start justify-between gap-3 pr-8">
 				<div>
 					<Dialog.Title class="break-all font-mono text-xl">{item.hostname}</Dialog.Title>
 					<Dialog.Description class="mt-1">{vm ? 'Virtual Machine' : 'Container'}{ready ? ` · VMID ${item.vmid} · ${metrics?.node ?? item.node ?? '—'}` : item.status === 'deleted' ? ' · ลบแล้ว' : ' · รอดำเนินการ'}</Dialog.Description>
 				</div>
+				<Button variant="ghost" size="icon-sm" class="absolute top-0 right-0" onclick={onClose} aria-label="ปิดรายละเอียด"><X /></Button>
 				<Badge variant={running ? 'default' : 'secondary'}>{ready ? (loading ? 'กำลังโหลด' : paused ? 'paused' : metrics?.status ?? 'unknown') : item.status}</Badge>
 			</div>
 		</Dialog.Header>

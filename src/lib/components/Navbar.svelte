@@ -47,7 +47,7 @@
 	class="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur transition-colors duration-300"
 >
 	<div
-		class="mx-auto flex h-14 max-w-[1400px] items-center justify-between gap-4 px-4 sm:gap-6 sm:px-6"
+		class="mx-auto flex h-14 min-w-0 max-w-[1400px] items-center justify-between gap-2 px-3 sm:gap-6 sm:px-6"
 	>
 		<div class="flex flex-col justify-center">
 			<a
