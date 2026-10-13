@@ -27,6 +27,19 @@ function database(initial, failedDeletedWrites = 0) {
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const noop = () => {};
 
+test('live Proxmox task status overrides an old timeout failure without declaring provisioning complete', () => {
+	const failed = record({ status: 'failed', provision_state: 'failed' });
+	for (const taskState of ['running', 'unknown']) {
+		const progress = { status: 'Waiting for the original task', taskState };
+		assert.equal(leaseBadgeStatus(failed, progress), 'provisioning');
+		assert.equal(leaseNeedsResolve(failed, progress), false);
+	}
+	const stopped = { status: 'Verify remaining setup', taskState: 'stopped-ok' };
+	assert.equal(leaseBadgeStatus(failed, stopped), 'pending');
+	assert.equal(leaseNeedsResolve(failed, stopped), true);
+	assert.equal(leaseBadgeStatus(record({ status: 'deleted' }), stopped), 'deleted');
+});
+
 test('auto failure persists state and error across a page refresh', async () => {
 	const db = database(record());
 	await startInstanceProvisioning(db.pb, record(), { vmid: 123, node: 3 }, async () => {}, async () => { throw new Error('Clone failed'); }, noop, noop, noop);

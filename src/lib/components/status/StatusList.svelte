@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import type { LeaseInstance } from '$lib/types';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
+	import { leaseBadgeStatus } from '$lib/leaseStatus';
 	import InstanceDashboard from './InstanceDashboard.svelte';
 	import ProxmoxTerminal from './ProxmoxTerminal.svelte';
 	import ProxmoxVnc from './ProxmoxVnc.svelte';
@@ -106,7 +107,7 @@
 	<div class="space-y-3 md:hidden">
 		{#each items as item (item.id)}
 			<button type="button" onclick={() => (dashboardTarget = item)} aria-haspopup="dialog" class="w-full rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-primary/50 hover:bg-muted/30">
-				<div class="flex items-start justify-between gap-2"><span class="break-all font-mono text-sm font-semibold text-primary">{item.hostname}</span><StatusBadge status={item.status} /></div>
+				<div class="flex items-start justify-between gap-2"><span class="break-all font-mono text-sm font-semibold text-primary">{item.hostname}</span><StatusBadge status={leaseBadgeStatus(item, item.provision_progress)} /></div>
 				<p class="mt-1 text-xs text-muted-foreground">{item.os_template} · {item.type === 'vm' ? 'VM' : 'CT'}</p>
 				<div class="mt-3 flex flex-wrap gap-3 text-xs text-foreground"><span class="inline-flex items-center gap-1"><Cpu class="size-3 text-muted-foreground" />{item.specs.cpu}C</span><span class="inline-flex items-center gap-1"><MemoryStick class="size-3 text-muted-foreground" />{item.specs.ram}G</span><span class="inline-flex items-center gap-1"><HardDrive class="size-3 text-muted-foreground" />{item.specs.disk}G</span></div>
 				<p class="mt-3 text-xs text-muted-foreground">แตะเพื่อดูรายละเอียด{item.status === 'completed' ? 'และจัดการเครื่อง' : ''}</p>
@@ -139,7 +140,7 @@
 						<Table.Cell><Badge variant="outline">{item.type}</Badge><p class="mt-1 text-xs text-muted-foreground">{item.network_type}</p></Table.Cell>
 						<Table.Cell class="text-sm"><div class="flex items-center gap-3"><span class="inline-flex items-center gap-1"><Cpu class="size-3" />{item.specs.cpu}</span><span class="inline-flex items-center gap-1"><MemoryStick class="size-3" />{item.specs.ram}G</span><span class="inline-flex items-center gap-1"><HardDrive class="size-3" />{item.specs.disk}G</span></div></Table.Cell>
 						<Table.Cell class="text-sm">{date(item.start_date)} → {date(item.end_date)}</Table.Cell>
-						<Table.Cell class="text-right"><StatusBadge status={item.status} /><div class="mt-2"><span class="inline-flex rounded-md border border-border px-3 py-1.5 text-xs">{item.status === 'completed' ? 'จัดการเครื่อง' : 'รายละเอียด'}</span></div></Table.Cell>
+						<Table.Cell class="text-right"><StatusBadge status={leaseBadgeStatus(item, item.provision_progress)} /><div class="mt-2"><span class="inline-flex rounded-md border border-border px-3 py-1.5 text-xs">{item.status === 'completed' ? 'จัดการเครื่อง' : 'รายละเอียด'}</span></div></Table.Cell>
 					</Table.Row>
 				{/each}
 			</Table.Body>

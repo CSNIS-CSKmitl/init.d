@@ -59,6 +59,8 @@ export interface LeaseInstance {
 	IP?: string;
 	provision_state?: string;
 	provision_error?: string;
+	// Read-only status resolved from Proxmox for legacy timeout records.
+	provision_progress?: { status: string; error?: string; taskState?: string };
 	datedelete?: string;
 	// Optional admin reply shown back on /status. Populated by admins from
 	// the `/admin` dashboard; users never set these directly.

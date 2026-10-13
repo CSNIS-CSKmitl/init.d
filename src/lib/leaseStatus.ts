@@ -5,7 +5,7 @@
 
 export type LeaseBadgeStatus = "failed" | "provisioning" | "pending" | "completed" | "deleted";
 
-export type LeaseProgress = { status: string; error?: string } | undefined;
+export type LeaseProgress = { status: string; error?: string; taskState?: string } | undefined;
 
 export function leaseBadgeStatus(
 	item: { status: string; provision_state?: string },
@@ -14,6 +14,8 @@ export function leaseBadgeStatus(
 	if (item.status === "deleted" || item.provision_state === "deleted") return "deleted";
 	if (item.provision_state === "deleting") return "provisioning";
 	if (item.status === "completed") return "completed";
+	if (progress?.taskState === 'running' || progress?.taskState === 'unknown') return 'provisioning';
+	if (progress?.taskState === 'stopped-ok') return 'pending';
 	if (item.provision_state === "failed" || item.status === "failed") return "failed";
 	if (item.provision_state === "provisioning") return "provisioning";
 	if (progress?.status === "Failed") return "failed";

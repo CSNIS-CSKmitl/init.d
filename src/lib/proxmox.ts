@@ -6,6 +6,7 @@ import { sendDiscordNotification } from './discord';
 import type PocketBase from 'pocketbase';
 import type { LeaseInstance } from './types';
 import { startInstanceProvisioning } from './server/instance-lifecycle';
+import { waitForProxmoxTask, timedOutTask, recoveredTaskProgress } from './server/proxmox-tasks.mjs';
 
 dotenv.config();
 
@@ -79,20 +80,34 @@ function buildVmNet0(network: string): string {
 async function waitForTask(node: string, upid: string): Promise<void> {
     console.log(`Waiting for task ${upid} on node ${node} to complete...`);
     if (!upid) return; // Some synchronous resize endpoints return no task.
-    const deadline = Date.now() + 10 * 60 * 1000;
-    while (Date.now() < deadline) {
-        const statusObj = await proxmox.nodes.$(node).tasks.$(upid).status.$get() as any;
-        if (statusObj.status === 'stopped') {
-            if (statusObj.exitstatus === 'OK') {
-                console.log(`Task ${upid} completed successfully.`);
-                return;
-            } else {
-                throw new Error(`Task ${upid} failed with exit status: ${statusObj.exitstatus}`);
-            }
-        }
-        await new Promise(resolve => setTimeout(resolve, 2000));
+    await waitForProxmoxTask(
+        () => proxmox.nodes.$(node).tasks.$(upid).status.$get() as Promise<any>,
+        { onUnavailable: () => console.warn(`Cannot check task ${upid} on ${node}; keeping the operation pending and retrying.`) },
+    );
+    console.log(`Task ${upid} completed successfully.`);
+}
+
+const recoveredTasks = new Map<string, { expires: number; progress: ReturnType<typeof recoveredTaskProgress> }>();
+
+export async function getTimedOutTaskProgress(record: LeaseInstance, fresh = false) {
+    const task = timedOutTask(record);
+    if (!task) return null;
+    const cached = recoveredTasks.get(task.upid);
+    if (!fresh && cached && cached.expires > Date.now()) return cached.progress;
+    let status = null;
+    try { status = await proxmox.nodes.$(task.node).tasks.$(task.upid).status.$get(); }
+    catch { /* An unavailable API cannot establish task failure. */ }
+    const progress = recoveredTaskProgress(status);
+    if (recoveredTasks.size >= 256) recoveredTasks.delete(recoveredTasks.keys().next().value!);
+    recoveredTasks.set(task.upid, { progress, expires: Date.now() + 5000 });
+    return progress;
+}
+
+export async function assertTimedOutTaskStopped(record: LeaseInstance) {
+    const progress = await getTimedOutTaskProgress(record, true);
+    if (progress && ['running', 'unknown'].includes(progress.taskState)) {
+        throw new Error(progress.status);
     }
-    throw new Error(`Timed out waiting for task ${upid}. Check Proxmox before retrying.`);
 }
 
 export const createCT = async (

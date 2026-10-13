@@ -7,6 +7,7 @@ import PocketBase from 'pocketbase';
 import { env } from '$env/dynamic/private';
 import { requiredEnv } from '$lib/server/env';
 import { addOwnerEmails, adminPb, canManageOwners, resolveOwnerIds } from '$lib/server/instance-owners';
+import { getTimedOutTaskProgress } from '$lib/proxmox';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -31,7 +32,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		]);
 		const unique = [...new Map([...requested, ...shared].map((item) => [item.id, item])).values()]
 			.sort((a, b) => b.created.localeCompare(a.created));
-		return { items: await addOwnerEmails(await adminPb(), unique), email, userId: locals.user.id };
+		const enriched = await addOwnerEmails(await adminPb(), unique);
+		const items = await Promise.all(enriched.map(async item => ({
+			...item, provision_progress: await getTimedOutTaskProgress(item) ?? undefined,
+		})));
+		return { items, email, userId: locals.user.id };
 	} catch (cause) {
 		console.error('[status] Failed to load instances:', cause);
 		throw error(502, 'Could not load your VM/CT list. Please retry.');

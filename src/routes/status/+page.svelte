@@ -15,6 +15,11 @@
 	let items = $state<LeaseInstance[]>(untrack(() => [...data.items]));
 	let showDiscordModal = $state<boolean>(false);
 	$effect(() => { items = [...data.items]; });
+	$effect(() => {
+		if (!items.some(item => item.provision_progress || item.provision_state === 'provisioning')) return;
+		const interval = setInterval(() => { void invalidateAll(); }, 10000);
+		return () => clearInterval(interval);
+	});
 
 	onMount(() => {
 		if (page.url.searchParams.has('submitted')) {

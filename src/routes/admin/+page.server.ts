@@ -6,7 +6,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { LeaseInstance } from '$lib/types';
-import { startProvisioning, removeProxmoxInstance, provisioningProgress } from '$lib/proxmox';
+import { startProvisioning, removeProxmoxInstance, provisioningProgress, assertTimedOutTaskStopped } from '$lib/proxmox';
 import { sendDiscordNotification } from '$lib/discord';
 import PocketBase from 'pocketbase';
 import { env } from '$env/dynamic/private';
@@ -78,6 +78,7 @@ export const actions: Actions = {
 			const pb = await adminPb();
 			const record = await pb.collection('instances').getOne<LeaseInstance>(id);
 			if (instanceIsDeleted(record)) return fail(409, { error: 'Deleted leases are retained as history and cannot be edited.', recordId: id });
+			await assertTimedOutTaskStopped(record);
 			if (instanceIsBusy(id) || ['provisioning', 'deleting'].includes(record.provision_state ?? '')) {
 				return fail(409, { error: 'Wait for the current operation to finish before editing.', recordId: id });
 			}
@@ -109,6 +110,7 @@ export const actions: Actions = {
 		try {
 			const pb = await adminPb();
 			const existing = await pb.collection('instances').getOne<LeaseInstance>(id, { expand: 'email' });
+			await assertTimedOutTaskStopped(existing);
 			if (instanceIsDeleted(existing)) return fail(409, { error: 'Deleted leases cannot be resolved again. Create a new request.', recordId: id });
 			if (instanceIsBusy(id) || ['provisioning', 'deleting'].includes(existing.provision_state ?? '')) {
 				return fail(409, { error: 'An operation is already in progress.', recordId: id });
@@ -162,6 +164,7 @@ export const actions: Actions = {
 		try {
 			const pb = await adminPb();
 			const record = await pb.collection('instances').getOne<LeaseInstance>(id);
+			await assertTimedOutTaskStopped(record);
 			if (String(fd.get('confirm_hostname') ?? '').trim() !== record.hostname) {
 				return fail(400, { error: 'Type the hostname to confirm deletion.', recordId: id });
 			}

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
 import { isIP } from 'node:net';
+import * as taskHelpers from '../src/lib/server/proxmox-tasks.mjs';
 
 function loadModule(path, dependencies) {
 	const source = readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -44,6 +45,7 @@ function guestAPI({ type = 'qemu', name = 'lease-vm', template = false, running 
 		dotenv: { config() {} },
 		'$static/constant': { CT_ID: new Map(), VM_ID: new Map() },
 		'./discord': {}, './server/instance-lifecycle': {},
+		'./server/proxmox-tasks.mjs': taskHelpers,
 	});
 	return { removeProxmoxInstance, calls };
 }
@@ -81,7 +83,7 @@ test('CTs and absent guests can be deleted without targeting an unrelated VM', a
 	assert.deepEqual(absent.calls, []);
 });
 
-function adminActions(extra = {}, notify = async () => ({ ok: true })) {
+function adminActions(extra = {}, notify = async () => ({ ok: true }), taskGuard = async () => {}) {
 	const updates = [];
 	let removed = false;
 	const pb = { collection: () => ({
@@ -93,7 +95,7 @@ function adminActions(extra = {}, notify = async () => ({ ok: true })) {
 			error: (status, message) => Object.assign(new Error(message), { status }),
 			fail: (status, data) => ({ status, data }), redirect() {},
 		},
-		'$lib/proxmox': { provisioningProgress: new Map(), removeProxmoxInstance: async () => { removed = true; } },
+		'$lib/proxmox': { provisioningProgress: new Map(), removeProxmoxInstance: async () => { removed = true; }, assertTimedOutTaskStopped: taskGuard },
 		'$lib/discord': { sendDiscordNotification: notify }, pocketbase: {}, '$env/dynamic/private': { env: {} },
 		'$lib/server/env': { requiredEnv: () => assert.fail('No production credentials in action tests') },
 		'$lib/server/instance-owners': { adminPb: async () => pb },
@@ -168,4 +170,18 @@ test('manual completion waits for its Discord delivery attempt before returning'
 	assert.equal(returned, false);
 	finish();
 	assert.equal((await response).ok, true);
+});
+
+test('a timed-out task that is still running cannot be resolved, rebound or deleted', async () => {
+	const { actions, updates, event, removed } = adminActions({ status: 'failed' }, undefined, async () => {
+		throw new Error('Proxmox task is still running.');
+	});
+	const fields = { id: 'lease', cpu: '2', ram: '4', disk: '20', vmid: '123', node: '3', confirm_hostname: 'lease-vm' };
+	for (const action of ['resolve', 'update', 'delete']) {
+		const result = await actions[action](event(fields));
+		assert.notEqual(result.ok, true);
+		assert.ok(result.status >= 400);
+	}
+	assert.deepEqual(updates, []);
+	assert.equal(removed(), false);
 });

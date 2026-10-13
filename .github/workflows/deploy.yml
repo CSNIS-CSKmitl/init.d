@@ -44,6 +44,7 @@ jobs:
         run: |
           npm run check
           npm run test:discord
+          npm run test:provisioning
 
       - name: Clean generated files
         if: always()

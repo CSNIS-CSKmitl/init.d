@@ -1,15 +1,20 @@
 <script lang="ts">
 	import type { LeaseStatus } from "$lib/types";
 	import { Badge } from "$lib/components/ui/badge";
-	import { CheckCircle2, CircleDashed, CircleX, Trash2 } from "@lucide/svelte";
+	import { CheckCircle2, CircleDashed, CircleX, Trash2, LoaderCircle } from "@lucide/svelte";
 
-	let { status }: { status: LeaseStatus } = $props();
+	let { status }: { status: LeaseStatus | 'provisioning' } = $props();
 </script>
 
 {#if status === "deleted"}
 	<Badge variant="secondary" class="uppercase tracking-widest">
 		<Trash2 />
 		deleted
+	</Badge>
+{:else if status === "provisioning"}
+	<Badge variant="outline" class="uppercase tracking-widest">
+		<LoaderCircle class="animate-spin" />
+		provisioning
 	</Badge>
 {:else if status === "pending"}
 	<Badge variant="outline" class="uppercase tracking-widest">

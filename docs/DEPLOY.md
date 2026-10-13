@@ -43,3 +43,11 @@ Deploy ผ่าน PM2 กำหนด PORT=3000 และ health check ใช�
 การส่งข้อความรอการยืนยันจาก Discord (`wait=true`) มี timeout และลองซ้ำเมื่อพบ rate limit ระยะสั้นหรือ HTTP 5xx ข้อความใน embed ถูกจำกัดความยาวตามที่ Discord รองรับ ความผิดพลาดของ Discord ไม่ยกเลิกคำขอหรือเปลี่ยนผลการ provision ดูผลส่งจาก `pm2 logs initd` หรือชื่อแอปที่กำหนดใน `PM2_APP_NAME` โดยค้นหา `[Discord Webhook]`
 
 อ้างอิง: [Discord Execute Webhook](https://docs.discord.com/developers/resources/webhook#execute-webhook), [Discord Rate Limits](https://docs.discord.com/developers/topics/rate-limits)
+
+## งาน Proxmox ที่ใช้เวลานานและรายการ timeout เดิม
+
+ระบบรอผล task จาก Proxmox โดยไม่ตัดสินว่า Failed เพราะเกิน 10 นาที งานที่ยังเป็น `running` จะรอต่อ และความขัดข้องชั่วคราวขณะอ่านสถานะไม่ถือเป็นความล้มเหลวของงาน จะรายงาน Failed เมื่อ Proxmox ส่ง `stopped` พร้อม exit status ที่ไม่ใช่ `OK` เท่านั้น
+
+รายการเก่าที่บันทึกข้อความ `Timed out waiting for task UPID:...` จะตรวจ UPID เดิมและ VMID จาก Proxmox เพื่อแสดงสถานะปัจจุบันในหน้า Admin และ Status โดยไม่เริ่ม clone หรือ migration ใหม่ ขณะงานยังทำงานหรือยังยืนยันผลไม่ได้ จะป้องกันการ resolve, เปลี่ยน VMID และลบรายการนั้น
+
+หาก task เดิมจบด้วย `OK` รายการจะรอให้ผู้ดูแลตรวจ VM/CT และขั้นตอนที่เหลือก่อนยืนยัน Complete เนื่องจากกระบวนการเดิมหยุดไปตอน timeout และการย้ายสำเร็จเพียงอย่างเดียวไม่ยืนยันว่าการตั้งค่า เปิดเครื่อง หรืออ่าน IP เสร็จแล้ว การแสดงผลนี้ไม่แก้ประวัติในฐานข้อมูลโดยอัตโนมัติ และยังไม่รองรับการกู้ pipeline ทั้งหมดหลัง restart กระบวนการเว็บ
