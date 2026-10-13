@@ -5,6 +5,7 @@
 	import Navbar from '$lib/components/Navbar.svelte';
 	import WhatsNewDialog from '$lib/components/WhatsNewDialog.svelte';
 	import AnnouncementCenter from '$lib/components/AnnouncementCenter.svelte';
+	import LegalConsent from '$lib/components/LegalConsent.svelte';
 	import { ModeWatcher } from 'mode-watcher';
 	import type { LayoutData } from './$types';
 	import type { Snippet } from 'svelte';
@@ -67,4 +68,5 @@
 		  <a href="/terms" class="inline-flex min-h-7 items-center underline underline-offset-4 hover:text-foreground">ข้อกำหนดการใช้งาน</a>
 		</nav>
 	</footer>
+	<LegalConsent />
 </div>
