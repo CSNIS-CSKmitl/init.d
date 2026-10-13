@@ -1,4 +1,5 @@
 migrate((app) => {
+	try { app.findCollectionByNameOrId('instance_access_logs'); return; } catch (_) { /* create below */ }
 	const users = app.findCollectionByNameOrId('users');
 	const instances = app.findCollectionByNameOrId('instances');
 	const logs = new Collection({
