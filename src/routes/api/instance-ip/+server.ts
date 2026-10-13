@@ -29,7 +29,19 @@ export const GET: RequestHandler = async (event) => {
 			const pb = await adminPb();
 			await pb.collection('instances').update(record.id, { IP: observed });
 		}
-		await writeAuditLog(event, { userId: locals.user.id, instanceId: record.id, action: 'instance_view', metadata: { available, ip_changed: changed } });
+		await writeAuditLog(event, {
+			userId: locals.user.id,
+			instanceId: record.id,
+			action: 'instance_view',
+			metadata: {
+				available,
+				ip_changed: changed,
+				instance_name: record.hostname,
+				instance_type: record.type,
+				vmid: record.vmid ?? null,
+				node: record.node ?? null
+			}
+		});
 		return json({ ip: observed ?? previous, observed, changed, available, source: guest.type === 'qemu' ? 'qemu-guest-agent' : 'lxc-interfaces' }, { headers: { 'Cache-Control': 'no-store' } });
 	} catch (e: unknown) {
 		if (isHttpError(e)) throw e;
