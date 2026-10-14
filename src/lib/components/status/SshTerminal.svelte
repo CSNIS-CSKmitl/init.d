@@ -237,7 +237,7 @@
 
 <div class="flex h-full min-h-0 w-full flex-col overflow-y-auto bg-background p-3 font-mono text-sm text-foreground">
 	{#if status === "disconnected" || status === "error"}
-		<Card.Root class="m-auto w-full max-w-md shadow-2xl">
+		<Card.Root class="mx-auto my-4 w-full max-w-md shadow-2xl">
 			<Card.Header>
 				<div class="flex items-center gap-3">
 					<div class="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
