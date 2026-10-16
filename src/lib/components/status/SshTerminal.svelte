@@ -235,9 +235,9 @@
 	});
 </script>
 
-<div class="flex h-full min-h-0 w-full flex-col overflow-y-auto bg-background p-3 font-mono text-sm text-foreground">
+	<div class="flex h-full min-h-0 w-full flex-col overflow-y-auto overscroll-contain bg-background p-2 font-mono text-sm text-foreground sm:p-3">
 	{#if status === "disconnected" || status === "error"}
-		<Card.Root class="mx-auto my-4 w-full max-w-md shadow-2xl">
+		<Card.Root class="mx-auto my-2 w-full max-w-md shrink-0 shadow-2xl sm:my-4">
 			<Card.Header>
 				<div class="flex items-center gap-3">
 					<div class="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -262,8 +262,8 @@
 
 				<form onsubmit={handleConnect}>
 					<Field.FieldGroup>
-						<div class="grid grid-cols-4 gap-3">
-							<Field.Field class="col-span-3">
+						<div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
+							<Field.Field class="sm:col-span-3">
 								<Field.FieldLabel for="host">Host / IP</Field.FieldLabel>
 								<Input
 									type="text"
@@ -275,7 +275,7 @@
 									class="opacity-70"
 								/>
 							</Field.Field>
-							<Field.Field class="col-span-1">
+							<Field.Field class="sm:col-span-1">
 								<Field.FieldLabel for="port">Port</Field.FieldLabel>
 								<Input
 									type="text"

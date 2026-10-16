@@ -153,7 +153,7 @@
 {/if}
 
 <Dialog.Root open={!!(consoleTarget && terminalType)} onOpenChange={(open) => { if (!open) closeConsole(); }}>
-	<Dialog.Content showCloseButton={false} class="flex h-[92vh] w-[96vw] max-w-[96vw] flex-col gap-0 overflow-hidden rounded-xl border border-border bg-card p-0 shadow-2xl sm:max-w-[96vw]">
+	<Dialog.Content showCloseButton={false} class="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] !w-[calc(100vw-1rem)] !max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-xl border border-border bg-card p-0 shadow-2xl sm:!w-[96vw] sm:!max-w-[96vw]">
 		{#if consoleTarget && terminalType}
 			<Dialog.Header class="flex-row items-center justify-between gap-2.5 space-y-0 border-b border-border bg-muted px-4 py-3 sm:px-6">
 				<div class="flex min-w-0 items-center gap-2.5"><Terminal class="size-4 text-primary" /><div class="min-w-0"><Dialog.Title class="truncate font-mono text-sm font-semibold">{consoleTarget.hostname} {terminalType === 'ssh' ? 'SSH Terminal' : 'Console'}</Dialog.Title><p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">NODE: {consoleTarget.node} · VMID: {consoleTarget.vmid} · TYPE: {consoleTarget.type}</p></div></div>
