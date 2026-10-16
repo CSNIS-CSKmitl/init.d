@@ -13,7 +13,18 @@
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
 	let announcementOpen = $state(false);
 	let showUpdates = $state(false);
+	let legalAccepted = $state(false);
 	let isLegalPage = $derived(['/privacy', '/terms'].includes(page.url.pathname.replace(/\/$/, '')));
+
+	$effect(() => {
+		if (isLegalPage || !data.user?.id) {
+			legalAccepted = true;
+			return;
+		}
+		if (typeof localStorage !== 'undefined') {
+			legalAccepted = localStorage.getItem(`initd:legal-consent:v1:${data.user.id}`) === 'accepted';
+		}
+	});
 </script>
 
 <ModeWatcher defaultMode="dark" />
@@ -44,13 +55,13 @@
 	></div>
 
 	<Navbar onAnnouncement={() => (announcementOpen = true)} />
-	{#if !isLegalPage || announcementOpen}
+	{#if legalAccepted && (!isLegalPage || announcementOpen)}
 		<AnnouncementCenter
 			userId={data.user?.id ?? null}
 			bind:open={announcementOpen}
 			onInitialCheck={(unseen) => (showUpdates = !unseen)}
 		/>
-		{#if !isLegalPage && showUpdates && !announcementOpen}
+		{#if legalAccepted && !isLegalPage && showUpdates && !announcementOpen}
 			<WhatsNewDialog userId={data.user?.id ?? null} />
 		{/if}
 	{/if}
@@ -68,5 +79,5 @@
 		  <a href="/terms" class="inline-flex min-h-7 items-center underline underline-offset-4 hover:text-foreground">ข้อกำหนดการใช้งาน</a>
 		</nav>
 	</footer>
-  <LegalConsent userId={data.user?.id ?? null} enabled={!isLegalPage} />
+  <LegalConsent userId={data.user?.id ?? null} enabled={!isLegalPage} onAccepted={() => (legalAccepted = true)} />
 </div>

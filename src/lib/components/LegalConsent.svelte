@@ -1,10 +1,10 @@
 <script lang="ts">
-  let { userId = null, enabled = true }: { userId?: string | null; enabled?: boolean } = $props();
+  let { userId = null, enabled = true, onAccepted }: { userId?: string | null; enabled?: boolean; onAccepted?: () => void } = $props();
   let open = $state(false); let confirmed = $state(false);
   const serviceKey = 'initd:legal-consent:v1';
   let storageKey = $derived(`${serviceKey}:${userId ?? 'anonymous'}`);
   $effect(() => { if (typeof localStorage !== 'undefined') { open = enabled && Boolean(userId) && localStorage.getItem(storageKey) !== 'accepted'; confirmed = false; } });
-  function accept() { if (!confirmed) return; localStorage.setItem(storageKey, 'accepted'); open = false; }
+  function accept() { if (!confirmed) return; localStorage.setItem(storageKey, 'accepted'); open = false; onAccepted?.(); }
 </script>
 
 {#if open}
