@@ -208,7 +208,10 @@
 		{#if isDeleted}
 			<Alert.Root class="gap-1 border-border bg-muted p-3">
 				<Alert.Title class="flex items-center gap-2"><Trash2 class="h-3.5 w-3.5" /> Deleted</Alert.Title>
-				<Alert.Description class="text-xs">เก็บรายการนี้เป็นประวัติ · วันที่ลบ: {item.datedelete ? deletedAt(item.datedelete) : 'ไม่พบวันที่ลบ'} (เวลาไทย)</Alert.Description>
+				<Alert.Description class="text-xs">
+					เก็บรายการนี้เป็นประวัติ · วันที่ลบ: {item.datedelete ? deletedAt(item.datedelete) : 'ไม่พบวันที่ลบ'} (เวลาไทย)
+					<span class="mt-1 block font-mono text-[11px]">VMID {item.deleted_vmid ?? '—'} · Node {item.deleted_node ?? '—'} · IP {item.deleted_ip ?? item.IP ?? '—'} · MAC {item.deleted_mac ?? '—'}</span>
+				</Alert.Description>
 			</Alert.Root>
 		{:else if provisionProgress}
 			<Alert.Root class={cn("gap-0 p-3", isFailed ? "border-destructive/20 bg-destructive/5 text-destructive" : "border-info/20 bg-info/5 text-info")}>

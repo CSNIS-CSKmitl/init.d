@@ -7,6 +7,13 @@ export const instanceIsBusy = (id: string) => active.has(id);
 export const instanceIsDeleted = (record: { status: string; provision_state?: string }) =>
 	record.status === 'deleted' || record.provision_state === 'deleted';
 
+export type DeletedInstanceIdentity = {
+	vmid?: number | null;
+	node?: string | number | null;
+	ip?: string | null;
+	mac?: string | null;
+};
+
 export async function startInstanceProvisioning(
 	pb: PocketBase,
 	record: LeaseInstance,
@@ -71,7 +78,7 @@ export async function startInstanceProvisioning(
 export async function deleteInstance(
 	pb: PocketBase,
 	record: LeaseInstance,
-	removeGuest: () => Promise<void>,
+	removeGuest: () => Promise<DeletedInstanceIdentity | void>,
 ): Promise<void> {
 	if (instanceIsDeleted(record)) return; // Preserve the original deletion timestamp on retries.
 	if (active.has(record.id) || ['provisioning', 'deleting'].includes(record.provision_state ?? '')) {
@@ -81,11 +88,19 @@ export async function deleteInstance(
 	let deletedPatch: Record<string, unknown> | undefined;
 	try {
 		await pb.collection('instances').update(record.id, { status: 'failed', provision_state: 'deleting' });
-		await removeGuest();
+		const identity = (await removeGuest()) ?? {
+			vmid: record.vmid ?? null,
+			node: record.node ?? null,
+			ip: record.IP ?? null,
+		};
 		// Keep the lease as history and revoke the guest binding in the same write.
 		deletedPatch = {
 			status: 'deleted', provision_state: 'deleted', provision_error: '',
 			vmid: null, node: null, datedelete: new Date().toISOString(),
+			deleted_vmid: identity.vmid ?? record.vmid ?? null,
+			deleted_node: identity.node ?? record.node ?? null,
+			deleted_ip: identity.ip ?? record.IP ?? null,
+			deleted_mac: identity.mac ?? null,
 		};
 		await pb.collection('instances').update(record.id, deletedPatch);
 	} catch (cause) {

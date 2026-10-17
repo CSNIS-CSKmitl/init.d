@@ -10,6 +10,10 @@ export function instanceStateFields(current) {
 		{ name: 'vmid', type: 'number', required: false, onlyInt: true, min: 0 },
 		{ name: 'node', type: 'number', required: false, onlyInt: true, min: 0 },
 		{ name: 'datedelete', type: 'date', required: false },
+		{ name: 'deleted_vmid', type: 'number', required: false, onlyInt: true, min: 0 },
+		{ name: 'deleted_node', type: 'text', required: false, max: 128 },
+		{ name: 'deleted_ip', type: 'text', required: false, max: 128 },
+		{ name: 'deleted_mac', type: 'text', required: false, max: 32 },
 	]) {
 		if (!fields.some(existing => existing.name === field.name)) fields.push(field);
 	}

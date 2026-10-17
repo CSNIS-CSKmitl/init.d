@@ -62,6 +62,11 @@ export interface LeaseInstance {
 	// Read-only status resolved from Proxmox for legacy timeout records.
 	provision_progress?: { status: string; error?: string; taskState?: string };
 	datedelete?: string;
+	// Immutable identity snapshot captured before a guest is deleted.
+	deleted_vmid?: number;
+	deleted_node?: string | number;
+	deleted_ip?: string;
+	deleted_mac?: string;
 	// Optional admin reply shown back on /status. Populated by admins from
 	// the `/admin` dashboard; users never set these directly.
 	admin_reply?: string;

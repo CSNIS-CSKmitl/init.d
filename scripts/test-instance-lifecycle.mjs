@@ -98,7 +98,7 @@ test('successful deletion preserves the row, clears the binding and records the 
 	const initial = record({ status: 'completed', vmid: 123, node: 3, hostname: 'lease-vm', IP: '192.168.1.123' });
 	const db = database(initial);
 	const before = Date.now();
-	await deleteInstance(db.pb, initial, async () => { db.events.push('proxmox-deleted'); });
+	await deleteInstance(db.pb, initial, async () => { db.events.push('proxmox-deleted'); return { vmid: 123, node: 'pve3', ip: '192.168.1.123', mac: 'AA:BB:CC:DD:EE:FF' }; });
 	assert.ok(db.events.indexOf('update:deleted') > db.events.indexOf('proxmox-deleted'));
 	assert.equal(db.saved.status, 'deleted');
 	assert.equal(db.saved.provision_state, 'deleted');
@@ -106,6 +106,10 @@ test('successful deletion preserves the row, clears the binding and records the 
 	assert.equal(db.saved.node, null);
 	assert.equal(db.saved.hostname, initial.hostname);
 	assert.equal(db.saved.IP, initial.IP);
+	assert.equal(db.saved.deleted_vmid, 123);
+	assert.equal(db.saved.deleted_node, 'pve3');
+	assert.equal(db.saved.deleted_ip, initial.IP);
+	assert.equal(db.saved.deleted_mac, 'AA:BB:CC:DD:EE:FF');
 	assert.equal(db.saved.id, initial.id);
 	assert.ok(Date.parse(db.saved.datedelete) >= before && Date.parse(db.saved.datedelete) <= Date.now());
 	assert.equal(leaseBadgeStatus(db.saved, { status: 'Failed' }), 'deleted');

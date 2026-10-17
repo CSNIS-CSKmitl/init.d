@@ -503,16 +503,24 @@ export const startProvisioning = async (
     );
 };
 
-export async function removeProxmoxInstance(record: LeaseInstance): Promise<void> {
+function guestMac(config: Record<string, unknown>): string | null {
+    const network = String(config.net0 || '');
+    return /(?:^|,)(?:virtio|e1000|e1000e|rtl8139|vmxnet3)=([0-9a-f:]+)/i.exec(network)?.[1]?.toLowerCase()
+        ?? /(?:^|,)hwaddr=([0-9a-f:]+)/i.exec(network)?.[1]?.toLowerCase()
+        ?? null;
+}
+
+export async function removeProxmoxInstance(record: LeaseInstance): Promise<{ vmid?: number; node?: string; ip?: string; mac?: string } | void> {
     if (!record.vmid) return; // A request that never created a guest.
     // Query the cluster afresh: a failed migration may leave the guest on the template node.
     const guests = await proxmox.cluster.resources.$get({ type: 'vm' });
     const guest = guests.find(guest => Number(guest.vmid) === Number(record.vmid));
-    if (!guest) return; // Already removed on Proxmox; allow cleanup of the DB row.
+    if (!guest) return { vmid: Number(record.vmid), node: record.node ? String(record.node) : undefined, ip: record.IP };
     const expectedType = record.type === 'vm' ? 'qemu' : 'lxc';
     if (guest.type !== expectedType || !guest.node) throw new Error('VMID belongs to a different guest type. Check the lease binding.');
     const target = (proxmox.nodes.$(guest.node) as any)[expectedType].$(record.vmid);
     const config = await target.config.$get();
+    const mac = guestMac(config);
     if (config.template) throw new Error('Templates cannot be deleted from the lease dashboard.');
     if ((config.name ?? config.hostname) !== record.hostname) {
         throw new Error('Proxmox hostname does not match this lease. Check VMID before deleting.');
@@ -526,6 +534,7 @@ export async function removeProxmoxInstance(record: LeaseInstance): Promise<void
     const deleteTask = await target.$delete({ purge: true });
     if (!deleteTask) throw new Error('Proxmox did not return a deletion task.');
     await waitForTask(guest.node, deleteTask);
+    return { vmid: Number(record.vmid), node: String(guest.node), ip: record.IP, mac: mac ?? undefined };
 }
 
 export interface ProxmoxVncTicketParams {
