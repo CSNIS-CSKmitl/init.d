@@ -33,8 +33,13 @@ const backup = resolve(directory, `instances-state-schema-${new Date().toISOStri
 writeFileSync(backup, JSON.stringify(collection, null, 2), { flag: 'wx' });
 await pb.collections.update(collection.id, { fields });
 const saved = await pb.collections.getOne(collection.id);
-for (const name of ['status', 'provision_state', 'provision_error', 'IP', 'vmid', 'node', 'datedelete']) {
+for (const name of ['status', 'provision_state', 'provision_error', 'IP', 'vmid', 'node', 'datedelete', 'provision_started_at', 'provision_completed_at']) {
 	if (!saved.fields.some(field => field.name === name)) throw new Error(`Schema verification failed: ${name}`);
+}
+for (const dateName of ['provision_started_at', 'provision_completed_at']) {
+	if (saved.fields.find(field => field.name === dateName)?.type !== 'date') {
+		throw new Error(`Field ${dateName} must be of type date.`);
+	}
 }
 for (const state of ['failed', 'deleted']) {
 	if (!saved.fields.find(field => field.name === 'status').values.includes(state)) throw new Error(`State ${state} was not saved.`);

@@ -7,41 +7,90 @@
 	import AdminStats from '$lib/components/admin/AdminStats.svelte';
 	import AdminQueueTable from '$lib/components/admin/AdminQueueTable.svelte';
 	import { Badge } from '$lib/components/ui/badge';
-	import { leaseBadgeStatus } from '$lib/leaseStatus';
+	import {
+		computeAdminStats,
+		filterInstancesByTimeRange,
+		type AdminStatusFilter,
+		type AdminTimeRange,
+		type AdminTypeFilter
+	} from '$lib/admin-stats';
 
-	let { data, form }: { data: PageData; form: { error?: string; id?: string; recordId?: string } | null } = $props();
+	let {
+		data,
+		form
+	}: {
+		data: PageData & { loadedAt?: string; loadError?: string | null };
+		form: { error?: string; id?: string; recordId?: string } | null;
+	} = $props();
 
 	// Live list — starts from the SSR snapshot and grows as the realtime
 	// subscription fires.
 	let items = $state<LeaseInstance[]>(untrack(() => [...data.items]));
 	let connectionState = $state<'connecting' | 'live' | 'offline'>('connecting');
-	let progressMap = $state<Record<string, { status: string; error?: string }>>({});
+	let progressMap = $state<Record<string, { status: string; error?: string; taskState?: string }>>({});
+	let timeRange = $state<AdminTimeRange>('all');
+	let statusFilter = $state<AdminStatusFilter>('all');
+	let typeFilter = $state<AdminTypeFilter>('all');
+	let lastUpdatedAt = $state<string>(untrack(() => data.loadedAt ?? new Date().toISOString()));
+	let statsError = $state<string | null>(untrack(() => data.loadError ?? null));
+	let refreshing = $state<boolean>(false);
 
 	// Keep items synchronized when data.items updates (e.g. after invalidateAll)
 	$effect(() => {
 		items = [...data.items];
+		statsError = data.loadError ?? null;
+		if (data.loadedAt) {
+			lastUpdatedAt = data.loadedAt;
+		} else {
+			lastUpdatedAt = new Date().toISOString();
+		}
 	});
+
+	async function fetchProvisionStatus() {
+		const res = await fetch('/api/provision-status');
+		if (!res.ok) return null;
+		return (await res.json()) as Record<string, { status: string; error?: string; taskState?: string }>;
+	}
+
+	async function handleRefresh() {
+		if (refreshing) return;
+		refreshing = true;
+		try {
+			await invalidateAll();
+			const latestProgress = await fetchProvisionStatus().catch(() => null);
+			if (latestProgress) {
+				progressMap = latestProgress;
+			}
+			lastUpdatedAt = new Date().toISOString();
+		} catch (err) {
+			console.error('Failed to refresh admin stats', err);
+			statsError = 'ไม่สามารถรีเฟรชข้อมูลสถิติได้';
+		} finally {
+			refreshing = false;
+		}
+	}
 
 	$effect(() => {
 		let active = true;
 		const poll = async () => {
 			try {
-				const res = await fetch('/api/provision-status');
-				if (res.ok) {
-					const data = await res.json();
-					if (active) {
-						progressMap = data;
-						// Trigger page data reload if any pending item completes provisioning
-						let hasCompleted = false;
-						for (const item of items) {
-							if (item.status !== 'deleted' && ((data[item.id]?.status === 'Complete' && item.status !== 'completed') ||
-								(data[item.id]?.status === 'Failed' && item.status !== 'failed'))) {
-								hasCompleted = true;
-							}
+				const latest = await fetchProvisionStatus();
+				if (latest && active) {
+					progressMap = latest;
+					// Trigger page data reload if any pending item completes provisioning
+					let hasCompleted = false;
+					for (const item of items) {
+						if (
+							item.status !== 'deleted' &&
+							((latest[item.id]?.status === 'Complete' && item.status !== 'completed') ||
+								(latest[item.id]?.status === 'Failed' && item.status !== 'failed'))
+						) {
+							hasCompleted = true;
 						}
-						if (hasCompleted) {
-							invalidateAll();
-						}
+					}
+					if (hasCompleted) {
+						await invalidateAll();
+						lastUpdatedAt = new Date().toISOString();
 					}
 				}
 			} catch (err) {
@@ -58,16 +107,9 @@
 		};
 	});
 
-	// Same classifier the table uses for its badges, so this bar can never
-	// disagree with what the admin sees row-by-row (it used to: this only
-	// checked `item.status`, while the table also folds in live progress).
-	const stats = $derived.by(() => {
-		const counts = { total: items.length, pending: 0, provisioning: 0, failed: 0, completed: 0, deleted: 0 };
-		for (const item of items) {
-			counts[leaseBadgeStatus(item, progressMap[item.id])]++;
-		}
-		return counts;
-	});
+	// Same classifier the table uses for its badges, computed over the selected time range.
+	const stats = $derived(computeAdminStats(items, progressMap, { range: timeRange }));
+	const rangeItems = $derived(filterInstancesByTimeRange(items, timeRange));
 
 	$effect(() => {
 		const pb = pbBrowser();
@@ -77,18 +119,21 @@
 			try {
 				// Subscribe to the whole collection — admins have listRule
 				// access to every row.
-				const col = (pb as unknown as {
-					collection(name: string): {
-						subscribe(
-							topic: string,
-							cb: (e: { action: string; record: { id: string } & Record<string, unknown> }) => void,
-							opts?: { expand?: string }
-						): Promise<() => void>;
-					};
-				}).collection('instances');
+				const col = (
+					pb as unknown as {
+						collection(name: string): {
+							subscribe(
+								topic: string,
+								cb: (e: { action: string; record: { id: string } & Record<string, unknown> }) => void,
+								opts?: { expand?: string }
+							): Promise<() => void>;
+						};
+					}
+				).collection('instances');
 				unsub = await col.subscribe(
 					'*',
 					(event) => {
+						lastUpdatedAt = new Date().toISOString();
 						if (event.action === 'create') {
 							// Invalidate to trigger page reload using superuser client so we get expanded email
 							invalidateAll();
@@ -142,7 +187,9 @@
 		class="flex flex-col items-start justify-between gap-4 border-b border-border pb-5 sm:flex-row sm:items-center"
 	>
 		<div class="flex flex-col gap-1">
-			<h1 class="text-2xl font-semibold tracking-tight text-foreground">จัดการคำขอใช้งานเซิร์ฟเวอร์</h1>
+			<h1 class="text-2xl font-semibold tracking-tight text-foreground">
+				จัดการคำขอใช้งานเซิร์ฟเวอร์
+			</h1>
 		</div>
 
 		<Badge variant="outline" class="gap-2 font-mono text-xs text-muted-foreground">
@@ -164,8 +211,26 @@
 	</div>
 
 	<!-- Mini Dashboard Analytics -->
-	<AdminStats {stats} />
+	<AdminStats
+		{stats}
+		bind:timeRange
+		bind:statusFilter
+		bind:typeFilter
+		loading={refreshing && items.length === 0}
+		error={statsError}
+		{lastUpdatedAt}
+		isRealtime={connectionState === 'live'}
+		{refreshing}
+		onRefresh={handleRefresh}
+	/>
 
 	<!-- Data Table -->
-	<AdminQueueTable {items} {form} {progressMap} userId={data.user?.id ?? ''} />
+	<AdminQueueTable
+		items={rangeItems}
+		{form}
+		{progressMap}
+		userId={data.user?.id ?? ''}
+		bind:filterTab={statusFilter}
+		bind:typeFilter
+	/>
 </div>

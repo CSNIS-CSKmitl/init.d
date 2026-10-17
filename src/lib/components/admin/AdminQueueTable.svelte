@@ -106,12 +106,20 @@
     terminalType = "ssh";
   }
 
+  import {
+    matchesStatusFilter,
+    type AdminStatusFilter,
+    type AdminTypeFilter,
+  } from "$lib/admin-stats";
+
   type Props = {
     items: LeaseInstance[];
     form: { error?: string; id?: string; recordId?: string } | null;
     provisioning?: boolean;
     progressMap?: Record<string, { status: string; error?: string }>;
     userId: string;
+    filterTab?: AdminStatusFilter;
+    typeFilter?: AdminTypeFilter;
   };
 
   let {
@@ -120,6 +128,8 @@
     provisioning = false,
     progressMap = {},
     userId,
+    filterTab = $bindable<AdminStatusFilter>("all"),
+    typeFilter = $bindable<AdminTypeFilter>("all"),
   }: Props = $props();
 
   // ---------------------------------------------------------------------
@@ -139,7 +149,6 @@
   }
 
   // Search and status filters stay together so the queue is easy to scan.
-  let filterTab = $state<"all" | LeaseBadgeStatus>("all");
   let searchQuery = $state("");
   const normalizedSearch = $derived(searchQuery.trim().toLocaleLowerCase());
 
@@ -166,22 +175,27 @@
 
   const filteredItems = $derived(
     items.filter((i) => {
-      const matchesStatus =
-        filterTab === "all" || leaseBadgeStatus(i, progressMap[i.id]) === filterTab;
+      const matchesStatus = matchesStatusFilter(i, progressMap[i.id], filterTab);
+      const matchesType = typeFilter === "all" || i.type === typeFilter;
       const matchesSearch = !normalizedSearch || searchableText(i).includes(normalizedSearch);
-      return matchesStatus && matchesSearch;
+      return matchesStatus && matchesType && matchesSearch;
     }),
   );
   const filterCounts = $derived.by(() => {
-    const c: Record<"all" | LeaseBadgeStatus, number> = {
+    const c: Record<AdminStatusFilter, number> = {
       all: items.length,
+      "need-action": 0,
       pending: 0,
       provisioning: 0,
       failed: 0,
       completed: 0,
       deleted: 0,
     };
-    for (const i of items) c[leaseBadgeStatus(i, progressMap[i.id])]++;
+    for (const i of items) {
+      const status = leaseBadgeStatus(i, progressMap[i.id]);
+      c[status]++;
+      if (status === "pending" || status === "failed") c["need-action"]++;
+    }
     return c;
   });
 
@@ -224,7 +238,7 @@
           autocomplete="off"
         />
       </label>
-      {#if normalizedSearch}
+      {#if normalizedSearch || typeFilter !== "all" || filterTab !== "all"}
         <span class="font-mono text-[11px] text-muted-foreground">
           พบ {filteredItems.length} จาก {items.length} รายการ
         </span>
@@ -232,8 +246,11 @@
     </div>
 
     <Tabs.Root bind:value={filterTab} class="mb-3 gap-3">
-      <Tabs.List class="font-mono text-xs">
+      <Tabs.List class="flex-wrap font-mono text-xs">
         <Tabs.Trigger value="all">ทั้งหมด ({filterCounts.all})</Tabs.Trigger>
+        <Tabs.Trigger value="need-action"
+          >ต้องดำเนินการ ({filterCounts["need-action"]})</Tabs.Trigger
+        >
         <Tabs.Trigger value="pending"
           >รอดำเนินการ ({filterCounts.pending})</Tabs.Trigger
         >

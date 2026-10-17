@@ -64,12 +64,15 @@ test('retry clears failure and only reports completion after saving the result',
 	await startInstanceProvisioning(db.pb, initial, { vmid: 124, node: 4 }, async () => {}, () => job, status => progress.push(status), noop, noop);
 	assert.equal(db.saved.provision_state, 'provisioning');
 	assert.equal(db.saved.provision_error, '');
+	assert.ok(Number.isFinite(Date.parse(db.saved.provision_started_at)));
+	assert.equal(db.saved.provision_completed_at, null);
 	await assert.rejects(startInstanceProvisioning(db.pb, initial, { vmid: 125, node: 5 }, async () => {}, () => job, noop, noop, noop), /already in progress/);
 	await assert.rejects(deleteInstance(db.pb, initial, async () => {}), /current operation/);
 	finish({ ipAddress: '192.168.15.124' });
 	await flush();
 	assert.equal(db.saved.status, 'completed');
 	assert.equal(db.saved.IP, '192.168.15.124');
+	assert.ok(Number.isFinite(Date.parse(db.saved.provision_completed_at)));
 	assert.equal(progress.at(-1), 'Complete');
 	assert.equal(leaseBadgeStatus(db.saved, { status: 'Failed' }), 'completed');
 });

@@ -33,8 +33,12 @@ const snapshot = {
 };
 
 test('a completed migration with matching VM configuration produces a completion patch automatically', () => {
-	assert.deepEqual(recovery.verifiedMigrationPatch(lease, snapshot).patch, {
-		status: 'completed', provision_state: 'completed', provision_error: '', IP: '192.168.15.23', node: 5,
+	const { patch } = recovery.verifiedMigrationPatch(lease, snapshot);
+	assert.ok(patch);
+	assert.ok(Number.isFinite(Date.parse(patch.provision_completed_at)));
+	assert.deepEqual(patch, {
+		status: 'completed', provision_state: 'completed', provision_error: '',
+		provision_completed_at: patch.provision_completed_at, IP: '192.168.15.23', node: 5,
 	});
 });
 

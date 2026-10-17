@@ -32,7 +32,8 @@ export async function startInstanceProvisioning(
 	try {
 		await checkTarget();
 		await pb.collection('instances').update(record.id, {
-			status: 'pending', provision_state: 'provisioning', provision_error: '', ...target,
+			status: 'pending', provision_state: 'provisioning', provision_error: '',
+			provision_started_at: new Date().toISOString(), provision_completed_at: null, ...target,
 		});
 	} catch (cause) {
 		const message = (cause instanceof Error ? cause.message : String(cause)).slice(0, 4096);
@@ -54,6 +55,7 @@ export async function startInstanceProvisioning(
 			const result = await create();
 			const updated = await pb.collection('instances').update<LeaseInstance>(record.id, {
 				status: 'completed', provision_state: 'completed', provision_error: '',
+				provision_completed_at: new Date().toISOString(),
 				...target, ...(result.ipAddress ? { IP: result.ipAddress } : {}),
 			});
 			progress('Complete');

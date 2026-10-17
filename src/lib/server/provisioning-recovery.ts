@@ -52,6 +52,7 @@ export function verifiedMigrationPatch(item: LeaseInstance, snapshot: MigrationS
 	if (!ip) return { reason: 'Waiting for a valid IPv4 address from the VM network interface.' };
 	return { patch: {
 		status: 'completed' as const, provision_state: 'completed', provision_error: '',
+		provision_completed_at: new Date().toISOString(),
 		IP: ip, node: Number(target),
 	} };
 }

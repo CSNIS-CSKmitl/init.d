@@ -40,10 +40,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 			expand: 'passion_group,email,owners'
 		});
 
-		return { items: await addOwnerEmails(pbAdmin, list) };
+		return { items: await addOwnerEmails(pbAdmin, list), loadedAt: new Date().toISOString(), loadError: null };
 	} catch (e) {
 		console.error('admin load failed', e);
-		return { items: [] };
+		return { items: [], loadedAt: new Date().toISOString(), loadError: 'ไม่สามารถดึงข้อมูลจากฐานข้อมูลได้' };
 	}
 };
 
@@ -147,7 +147,8 @@ export const actions: Actions = {
 			}
 
 			const record = await pb.collection('instances').update<LeaseInstance>(id, {
-				status: 'completed', provision_state: 'completed', provision_error: ''
+				status: 'completed', provision_state: 'completed', provision_error: '',
+				provision_completed_at: new Date().toISOString()
 			}, { expand: 'email' });
 			provisioningProgress.delete(id);
 			await sendDiscordNotification('completed', record).catch((err) =>
