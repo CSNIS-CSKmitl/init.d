@@ -8,6 +8,7 @@ import { startNightlyIpRefresh } from '$lib/server/nightly-ip-refresh';
 import { createPb } from '$lib/pb/server';
 import type { UserRole } from '$lib/types';
 import { isAppAdmin } from '$lib/role.mjs';
+import { isDocumentRequest, writeServiceAccessLog } from '$lib/server/service-access-log';
 
 export const init: ServerInit = () => {
 	if (!building && !dev) startProvisioningRecovery();
@@ -75,6 +76,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.locals.user = null;
 	}
 
-	return resolve(event);
+	const response = await resolve(event);
+	if (isDocumentRequest(event)) void writeServiceAccessLog(event, response.status);
+	return response;
 };
 

@@ -1,6 +1,7 @@
 import PocketBase from 'pocketbase';
 import { consoleGrantInstanceId, verifyConsoleGrant } from './console-grant.mjs';
 import { isAppAdmin } from '../role.mjs';
+import { resolveClientIp } from './client-ip.mjs';
 
 /** @param {import('node:http').IncomingMessage} request @param {string | undefined} expectedOrigin */
 export function isAllowedOrigin(request, expectedOrigin) {
@@ -69,12 +70,11 @@ export async function writeSocketAuditLog(request, { userId, instanceId, action,
 		const pb = new PocketBase(process.env.POCKETBASE_URL);
 		pb.autoCancellation(false);
 		await pb.admins.authWithPassword(process.env.PB_ADMIN_EMAIL, process.env.PB_ADMIN_PASSWORD);
-		const trustedProxy = process.env.TRUST_PROXY === 'true';
-		const realIp = trustedProxy ? String(request.headers['x-real-ip'] || '').trim() : '';
-		const forwarded = trustedProxy
-			? String(request.headers['x-forwarded-for'] || '').split(',')[0].trim()
-			: '';
-		const sourceIp = realIp || forwarded || request.socket.remoteAddress || '';
+		const sourceIp = resolveClientIp({
+			headers: request.headers,
+			remoteAddress: request.socket.remoteAddress || '',
+			trustProxy: process.env.TRUST_PROXY === 'true'
+		});
 		await pb.collection('instance_access_logs').create({
 			user: userId,
 			instance: instanceId,

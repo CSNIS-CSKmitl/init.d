@@ -1,6 +1,7 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import { adminPb } from './instance-owners';
 import { env } from '$env/dynamic/private';
+import { resolveClientIp } from './client-ip.mjs';
 
 export type AuditAction = 'instance_view' | 'console' | 'power_start' | 'power_shutdown' | 'power_reboot' | 'power_stop' | 'power_reset' | 'power_suspend' | 'power_resume' | 'power_hibernate';
 
@@ -10,13 +11,17 @@ function clean(value: string | null | undefined, max: number): string | undefine
 }
 
 function sourceIp(event: RequestEvent): string {
-	if (env.TRUST_PROXY === 'true') {
-		const realIp = event.request.headers.get('x-real-ip')?.trim();
-		if (realIp) return realIp;
-		const forwardedIp = event.request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-		if (forwardedIp) return forwardedIp;
-	}
-	return event.getClientAddress();
+	return resolveClientIp({
+		headers: {
+			'cf-connecting-ip': event.request.headers.get('cf-connecting-ip') ?? '',
+			'true-client-ip': event.request.headers.get('true-client-ip') ?? '',
+			'x-forwarded-for': event.request.headers.get('x-forwarded-for') ?? '',
+			'x-real-ip': event.request.headers.get('x-real-ip') ?? '',
+			forwarded: event.request.headers.get('forwarded') ?? ''
+		},
+		remoteAddress: event.getClientAddress(),
+		trustProxy: env.TRUST_PROXY === 'true'
+	});
 }
 
 export async function writeAuditLog(event: RequestEvent, input: {

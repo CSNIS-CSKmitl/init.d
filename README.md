@@ -111,6 +111,14 @@ node --test scripts/test-instance-lifecycle.mjs scripts/test-admin-instances.mjs
 
 หน้า Login ใช้ PocketBase `oidc` โดยตรงและยังไม่ได้ขอ IAM scope เพิ่ม โค้ด PocketBase auth hook สำหรับตรวจสาขาอยู่ใน `pb_hooks/` แต่ยังไม่ยืนยันว่าติดตั้งบนเซิร์ฟเวอร์ PocketBase จึงยังถือว่าเงื่อนไข Computer Science ไม่ถูกบังคับที่ฐานข้อมูล รายละเอียดการตั้ง scope, การตรวจ claim และขั้นตอนเปิดใช้ hook อยู่ใน [คู่มือส่งต่อ](https://github.com/CSNIS-CSKmitl/Docs/blob/main/Projects/init-d/docs/HANDOVER_TH.md#oauth2-ของ-pocketbase-และ-iam-scopes)
 
+Production server จะ normalize OAuth callback ที่มี duplicate slash (`//#/auth/oauth2-redirect-success`) กลับเป็น root route ก่อนส่งให้ SvelteKit เพื่อไม่ให้ popup แสดง 404
+
+## Access logs และ IPv6
+
+หน้าเว็บแบบ document request จะบันทึกลง `service_access_logs` ส่วนการเปิด instance, console และ SSH จะบันทึกลง `instance_access_logs` โดย `source_ip` รองรับทั้ง IPv4 และ IPv6 พร้อม metadata `ip_version` สำหรับ page view และลบข้อมูลที่เก่ากว่า 90 วันตาม nightly cleanup
+
+เมื่ออยู่หลัง reverse proxy ให้ตั้ง `TRUST_PROXY=true` เฉพาะเมื่อ proxy ที่เชื่อถือได้เป็นผู้เขียน header ระบบจะเลือก IP ต้นทางตามลำดับ `CF-Connecting-IP`, `True-Client-IP`, `X-Forwarded-For`, `X-Real-IP`, `Forwarded` แล้วจึง fallback ไปยัง socket address ต้อง apply PocketBase migrations ให้มี `service_access_logs` และ `instance_access_logs` ก่อน deploy
+
 
 ## GitHub Actions deploy
 

@@ -8,6 +8,7 @@ import { isIP } from 'node:net';
 import { startNodeSync } from './scripts/sync-instance-nodes.mjs';
 import { authenticateSocket, authorizedInstance, authorizeConsoleSocket, isAllowedOrigin, writeSocketAuditLog } from './src/lib/server/ws-auth.mjs';
 import { createHostVerifier } from './src/lib/server/ssh-hostkeys.mjs';
+import { normalizeRequestTarget } from './src/lib/server/request-target.mjs';
 
 if (!process.env.ORIGIN) throw new Error('ORIGIN must be set to the public URL of this portal.');
 
@@ -18,6 +19,15 @@ const proxmoxWss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024
 
 const proxmoxHost = process.env.PROXMOX_HOST || 'localhost';
 const proxmoxPort = process.env.PROXMOX_PORT || '8006';
+
+// PocketBase OAuth popup callbacks can return to `//#/...`. Normalize the
+// duplicate leading slash before SvelteKit routing; browsers preserve the hash
+// across this redirect, allowing the OAuth realtime flow to finish normally.
+app.use((request, response, next) => {
+	const normalized = normalizeRequestTarget(request.originalUrl || request.url);
+	if (normalized !== (request.originalUrl || request.url)) return response.redirect(308, normalized);
+	next();
+});
 function rejectUpgrade(socket, status, message) {
 	if (!socket.destroyed) socket.end(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\n\r\n`);
 }
