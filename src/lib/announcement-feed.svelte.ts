@@ -44,9 +44,25 @@ export class AnnouncementFeed {
     else if (!this.initialized) this.onUnread(false);
     this.initialized = true;
   }
-  markRead() { for (const item of this.items) this.dismissed.add(this.key(item)); this.isOpen = false; }
+  private recordRead(item: PublicAnnouncement) {
+    void fetch('/api/announcements', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ announcement: item.id, revision: item.revision })
+    }).catch(() => undefined);
+  }
+  markRead() {
+    for (const item of this.items) {
+      this.dismissed.add(this.key(item));
+      this.recordRead(item);
+    }
+    this.isOpen = false;
+  }
   nextUnread() {
-    if (this.selected) this.dismissed.add(this.key(this.selected));
+    if (this.selected) {
+      this.dismissed.add(this.key(this.selected));
+      this.recordRead(this.selected);
+    }
     this.isOpen = false;
     const next = this.items.find(item => !this.dismissed.has(this.key(item)));
     if (next) { this.selected = next; this.isOpen = true; }
