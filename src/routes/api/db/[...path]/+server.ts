@@ -42,7 +42,7 @@ export const fallback: RequestHandler = async ({ request, fetch }) => {
 		if ([301, 302, 307, 308].includes(upstream.status)) {
 			const loc = upstream.headers.get('location');
 			if (loc === '/_/' || loc === '/_' || loc?.endsWith('/_/')) {
-				upstream = await fetch(`${pbUrl.replace(/\/+$/, '')}/_${url.search}`, {
+				upstream = await fetch(`${pbUrl.replace(/\/+$/, '')}/_/${url.search}`, {
 					method: 'GET',
 					headers
 				});
