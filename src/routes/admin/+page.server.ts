@@ -4,6 +4,7 @@
 //   3. Exposes a `resolve` action that flips status to "completed".
 
 import { error, fail, redirect } from '@sveltejs/kit';
+import { writeChangeAudit } from '$lib/server/audit-log';
 import type { Actions, PageServerLoad } from './$types';
 import type { LeaseInstance } from '$lib/types';
 import { startProvisioning, removeProxmoxInstance, provisioningProgress, assertTimedOutTaskStopped } from '$lib/proxmox';
@@ -150,6 +151,7 @@ export const actions: Actions = {
 				status: 'completed', provision_state: 'completed', provision_error: '',
 				provision_completed_at: new Date().toISOString()
 			}, { expand: 'email' });
+			await writeChangeAudit({ actorId: locals.user.id, collection: 'instances', recordId: id, action: 'status:completed', before: existing, after: record });
 			provisioningProgress.delete(id);
 			await sendDiscordNotification('completed', record).catch((err) =>
 				console.error('Failed to send discord notification:', err)
