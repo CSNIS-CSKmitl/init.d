@@ -96,6 +96,7 @@ function adminActions(extra = {}, notify = async () => ({ ok: true }), taskGuard
 			error: (status, message) => Object.assign(new Error(message), { status }),
 			fail: (status, data) => ({ status, data }), redirect() {},
 		},
+		'$lib/server/audit-log': { writeChangeAudit: async () => {} },
 		'$lib/proxmox': { provisioningProgress: new Map(), removeProxmoxInstance: async () => { removed = true; }, assertTimedOutTaskStopped: taskGuard },
 		'$lib/discord': { sendDiscordNotification: notify }, pocketbase: {}, '$env/dynamic/private': { env: {} },
 		'$lib/server/env': { requiredEnv: () => assert.fail('No production credentials in action tests') },
