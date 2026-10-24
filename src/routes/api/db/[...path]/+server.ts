@@ -1,20 +1,16 @@
 import { env } from '$env/dynamic/private';
 import { error, type RequestHandler } from '@sveltejs/kit';
 
-export const fallback: RequestHandler = async ({ request, params, fetch }) => {
+export const fallback: RequestHandler = async ({ request, fetch }) => {
 	const pbUrl = env.POCKETBASE_URL;
 	if (!pbUrl) {
 		throw error(500, 'POCKETBASE_URL is not set in environment variables');
 	}
 
-	const pathParam = params.path ?? '';
-	// Normalize pbUrl to prevent trailing slash issues
-	const pbUrlClean = pbUrl.endsWith('/') ? pbUrl.slice(0, -1) : pbUrl;
-	// Normalize pathParam to prevent leading slash issues
-	const pathClean = pathParam.startsWith('/') ? pathParam.slice(1) : pathParam;
-
-	// Construct the target URL on the PocketBase server
-	const targetUrl = `${pbUrlClean}/${pathClean}${new URL(request.url).search}`;
+	const url = new URL(request.url);
+	// Preserve full subpath after /api/db including trailing slashes (e.g. /_/ or /api/...)
+	const subPath = url.pathname.replace(/^\/api\/db/, '') || '/';
+	const targetUrl = `${pbUrl.replace(/\/+$/, '')}${subPath}${url.search}`;
 
 	// Let fetch negotiate the upstream transfer encoding. Forwarding the
 	// browser's Accept-Encoding can leave a compressed Content-Length on a
@@ -43,6 +39,18 @@ export const fallback: RequestHandler = async ({ request, params, fetch }) => {
 		for (const key of ['content-encoding', 'content-length', 'connection', 'transfer-encoding']) {
 			responseHeaders.delete(key);
 		}
+
+		// Rewrite Location header if PocketBase issues a redirect
+		const location = responseHeaders.get('location');
+		if (location) {
+			const cleanPb = pbUrl.replace(/\/+$/, '');
+			if (location.startsWith(cleanPb)) {
+				responseHeaders.set('location', location.replace(cleanPb, '/api/db'));
+			} else if (location.startsWith('/') && !location.startsWith('/api/db')) {
+				responseHeaders.set('location', `/api/db${location}`);
+			}
+		}
+
 		const isHtml = responseHeaders.get('content-type')?.includes('text/html') ?? false;
 		// Buffer small HTML pages so the OAuth success/failure screen is complete.
 		// Leave SSE and API responses streamed.
