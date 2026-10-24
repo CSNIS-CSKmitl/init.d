@@ -144,6 +144,11 @@ export const actions: Actions = {
 					memory: record.specs.ram,
 				};
 
+				await pb.collection('instances').update(id, {
+					updated_by: locals.user.id,
+					approved_by: locals.user.id,
+					approved_at: new Date().toISOString(),
+				});
 				await startProvisioning(pb, id, detail, network, storage, `pve${node}`, vmid, record.type);
 				return { ok: true, id, recordId: id, mode, started: true };
 			}
