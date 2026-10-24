@@ -125,6 +125,11 @@
 		timeZone: 'Asia/Bangkok', year: 'numeric', month: 'short', day: 'numeric',
 		hour: '2-digit', minute: '2-digit', second: '2-digit',
 	});
+	const actor = (field: string) => {
+		const value = (item as any)[field];
+		const expanded = (item as any).expand?.[field];
+		return expanded?.name || expanded?.email || value || '—';
+	};
 </script>
 
 <div class="flex flex-col gap-6 px-6 py-5">
@@ -171,6 +176,10 @@
 			<div>
 				<div class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">IP Address</div>
 				<div class="break-all font-mono text-xs text-foreground">{item.IP || '—'}</div>
+			</div>
+			<div class="sm:col-span-2">
+				<div class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Activity</div>
+				<div class="text-xs text-foreground">เพิ่มโดย {actor('created_by')} · แก้ไขโดย {actor('updated_by')} · อนุมัติโดย {actor('approved_by')}{(item as any).approved_at ? ` · ${deletedAt((item as any).approved_at)}` : ''}</div>
 			</div>
 		</div>
 

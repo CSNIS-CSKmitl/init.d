@@ -38,7 +38,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const list = await pbAdmin.collection('instances').getFullList<LeaseInstance>({
 			batch: 200,
 			sort: '-created',
-			expand: 'passion_group,email,owners'
+			expand: 'passion_group,email,owners,created_by,updated_by,approved_by'
 		});
 
 		return { items: await addOwnerEmails(pbAdmin, list), loadedAt: new Date().toISOString(), loadError: null };
