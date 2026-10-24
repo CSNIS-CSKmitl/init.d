@@ -87,6 +87,7 @@ export const actions: Actions = {
 				return fail(409, { error: 'Wait for the current operation to finish before editing.', recordId: id });
 			}
 			await pb.collection('instances').update(id, {
+				updated_by: locals.user.id,
 				specs: { cpu, ram, disk },
 				ports: portsRaw.length > 0 ? portsRaw : null,
 				vmid,
@@ -148,6 +149,9 @@ export const actions: Actions = {
 			}
 
 			const record = await pb.collection('instances').update<LeaseInstance>(id, {
+				updated_by: locals.user.id,
+				approved_by: locals.user.id,
+				approved_at: new Date().toISOString(),
 				status: 'completed', provision_state: 'completed', provision_error: '',
 				provision_completed_at: new Date().toISOString()
 			}, { expand: 'email' });
@@ -205,7 +209,7 @@ export const actions: Actions = {
 		if (!clear && reply.length > 4096) return fail(400, { error: 'Reply too long.' });
 
 		try {
-			await locals.pb.collection('instances').update(id, patch);
+			await locals.pb.collection('instances').update(id, { ...patch, updated_by: locals.user.id });
 			return { ok: true, id, cleared: clear };
 		} catch (e) {
 			console.error('reply failed', e);

@@ -206,6 +206,7 @@ export const actions: Actions = {
 				const pbAdmin = await adminPb();
 				
 				record = await pbAdmin.collection('instances').update<LeaseInstance>(editId, {
+					updated_by: locals.user.id,
 					passion_group,
 					type,
 					hostname,
@@ -229,6 +230,8 @@ export const actions: Actions = {
 		} else {
 			record = await (await adminPb()).collection('instances').create<LeaseInstance>({
 				email: locals.user.id,
+				created_by: locals.user.id,
+				updated_by: locals.user.id,
 				owners,
 				passion_group,
 				type,
