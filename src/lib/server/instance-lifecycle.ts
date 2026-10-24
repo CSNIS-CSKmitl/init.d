@@ -81,6 +81,7 @@ export async function deleteInstance(
 	pb: PocketBase,
 	record: LeaseInstance,
 	removeGuest: () => Promise<DeletedInstanceIdentity | void>,
+	actorId?: string,
 ): Promise<void> {
 	if (instanceIsDeleted(record)) return; // Preserve the original deletion timestamp on retries.
 	if (active.has(record.id) || ['provisioning', 'deleting'].includes(record.provision_state ?? '')) {
@@ -89,7 +90,7 @@ export async function deleteInstance(
 	active.add(record.id);
 	let deletedPatch: Record<string, unknown> | undefined;
 	try {
-		await pb.collection('instances').update(record.id, { status: 'failed', provision_state: 'deleting' });
+		await pb.collection('instances').update(record.id, { status: 'failed', provision_state: 'deleting', ...(actorId ? { updated_by: actorId } : {}) });
 		const identity = (await removeGuest()) ?? {
 			vmid: record.vmid ?? null,
 			node: record.node ?? null,
@@ -98,6 +99,7 @@ export async function deleteInstance(
 		// Keep the lease as history and revoke the guest binding in the same write.
 		deletedPatch = {
 			status: 'deleted', provision_state: 'deleted', provision_error: '',
+			...(actorId ? { updated_by: actorId } : {}),
 			vmid: null, node: null, datedelete: new Date().toISOString(),
 			deleted_vmid: identity.vmid ?? record.vmid ?? null,
 			deleted_node: identity.node ?? record.node ?? null,
@@ -110,7 +112,7 @@ export async function deleteInstance(
 		try {
 			await pb.collection('instances').update(record.id, deletedPatch
 				? deletedPatch
-				: { status: 'failed', provision_state: 'delete_failed', provision_error: message });
+				: { status: 'failed', provision_state: 'delete_failed', provision_error: message, ...(actorId ? { updated_by: actorId } : {}) });
 			if (deletedPatch) return; // The retry saved the successful deletion outcome.
 		} catch (saveError) {
 			console.error('Could not save deletion outcome:', saveError);

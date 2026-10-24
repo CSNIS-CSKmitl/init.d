@@ -9,7 +9,6 @@ function clean(value: string | null | undefined, max: number): string | undefine
 	const text = value?.trim();
 	return text ? text.slice(0, max) : undefined;
 }
-
 function sourceIp(event: RequestEvent): string {
 	return resolveClientIp({
 		headers: {
@@ -48,15 +47,3 @@ export async function writeAuditLog(event: RequestEvent, input: {
 	}
 }
 
-export async function writeChangeAudit(input: { actorId?: string | null; collection: string; recordId: string; action: string; before?: unknown; after?: unknown }) {
-	try {
-		const pb = await adminPb();
-		await pb.collection('audit_logs').create({
-			service: 'initd', collection: input.collection, record_id: input.recordId,
-			action: input.action, actor: input.actorId || undefined, actor_id: input.actorId || undefined,
-			before: input.before || undefined, after: input.after || undefined
-		});
-	} catch (logError) {
-		console.error('[Audit log] Could not write change log:', logError instanceof Error ? logError.message : logError);
-	}
-}

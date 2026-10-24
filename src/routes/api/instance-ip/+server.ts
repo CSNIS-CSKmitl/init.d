@@ -27,7 +27,7 @@ export const GET: RequestHandler = async (event) => {
 		const changed = !!observed && observed !== previous;
 		if (changed) {
 			const pb = await adminPb();
-			await pb.collection('instances').update(record.id, { IP: observed });
+			await pb.collection('instances').update(record.id, { IP: observed, updated_by: locals.user.id });
 		}
 		await writeAuditLog(event, {
 			userId: locals.user.id,

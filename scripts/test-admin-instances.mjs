@@ -96,7 +96,6 @@ function adminActions(extra = {}, notify = async () => ({ ok: true }), taskGuard
 			error: (status, message) => Object.assign(new Error(message), { status }),
 			fail: (status, data) => ({ status, data }), redirect() {},
 		},
-		'$lib/server/audit-log': { writeChangeAudit: async () => {} },
 		'$lib/proxmox': { provisioningProgress: new Map(), removeProxmoxInstance: async () => { removed = true; }, assertTimedOutTaskStopped: taskGuard },
 		'$lib/discord': { sendDiscordNotification: notify }, pocketbase: {}, '$env/dynamic/private': { env: {} },
 		'$lib/server/env': { requiredEnv: () => assert.fail('No production credentials in action tests') },
@@ -111,7 +110,7 @@ function adminActions(extra = {}, notify = async () => ({ ok: true }), taskGuard
 	const event = (fields, role = 'admin') => {
 		const fd = new FormData();
 		for (const [key, value] of Object.entries(fields)) fd.set(key, value);
-		return { locals: { user: role ? { role } : null }, request: { formData: async () => fd } };
+		return { locals: { user: role ? { id: role === 'admin' ? 'admin-user' : 'normal-user', role } : null }, request: { formData: async () => fd } };
 	};
 	return { actions, updates, event, removed: () => removed };
 }
@@ -157,7 +156,7 @@ test('manual completion waits for its Discord delivery attempt before returning'
 	let finish;
 	const delivery = new Promise(resolve => { finish = resolve; });
 	let notified = false;
-	const { actions, event } = adminActions({ status: 'pending' }, async type => {
+	const { actions, event, updates } = adminActions({ status: 'pending' }, async type => {
 		assert.equal(type, 'completed');
 		notified = true;
 		await delivery;
@@ -172,6 +171,9 @@ test('manual completion waits for its Discord delivery attempt before returning'
 	assert.equal(returned, false);
 	finish();
 	assert.equal((await response).ok, true);
+	assert.equal(updates[0].updated_by, 'admin-user');
+	assert.equal(updates[0].approved_by, 'admin-user');
+	assert.ok(updates[0].approved_at);
 });
 
 test('a timed-out task that is still running cannot be resolved, rebound or deleted', async () => {
