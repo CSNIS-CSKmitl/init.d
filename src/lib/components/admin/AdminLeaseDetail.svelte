@@ -27,6 +27,7 @@
 		Lock,
 		Rocket,
 		Trash2,
+		FileText,
 	} from "@lucide/svelte";
 
 	// This component is instantiated once per open row (the parent renders
@@ -211,6 +212,15 @@
 				{:else}
 					<span class="font-mono text-[11px] text-muted-foreground italic">None (default only)</span>
 				{/if}
+			</div>
+		</div>
+
+		<div>
+			<div class="flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+				<FileText class="h-3 w-3" /> Purpose / เหตุผลการขอ
+			</div>
+			<div class="mt-1 rounded-md border border-border bg-muted/40 p-2.5 text-xs leading-relaxed text-foreground whitespace-pre-wrap">
+				{item.purpose_notes || '—'}
 			</div>
 		</div>
 
