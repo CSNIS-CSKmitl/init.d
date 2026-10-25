@@ -2,6 +2,7 @@ import { adminPb } from './instance-owners';
 import { resolveProxmoxGuest } from './proxmox-guest';
 import { readProxmoxIp } from './proxmox-ip';
 import type { LeaseInstance } from '$lib/types';
+import { attachInfraToInstances, updateInstanceInfra } from './instance-infra';
 
 let started = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -19,13 +20,14 @@ async function refreshAll() {
 			// Older installations may not have the shared collection until migration runs.
 			console.warn('[Nightly IP refresh] Shared service log cleanup skipped:', error instanceof Error ? error.message : error);
 		}
-		const records = await pb.collection('instances').getFullList<LeaseInstance>({ filter: 'status = "completed" && vmid > 0' });
-		for (const record of records) {
+		const records = await pb.collection('instances').getFullList<LeaseInstance>({ filter: 'status = "completed"' });
+		await attachInfraToInstances(pb, records);
+		for (const record of records.filter((r) => (r.vmid ?? 0) > 0)) {
 			try {
 				const guest = await resolveProxmoxGuest(record);
 				const ip = await readProxmoxIp(record, guest);
 				if (ip && ip !== (record.IP || '').trim()) {
-					await pb.collection('instances').update(record.id, { IP: ip });
+					await updateInstanceInfra(pb, record.id, { ip });
 					console.log(`[Nightly IP refresh] Updated ${record.hostname} (${record.vmid}) to ${ip}.`);
 				}
 			} catch (error) {

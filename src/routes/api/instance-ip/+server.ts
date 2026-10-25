@@ -5,6 +5,7 @@ import type { LeaseInstance } from '$lib/types';
 import { resolveProxmoxGuest, ProxmoxGuestNotFoundError } from '$lib/server/proxmox-guest';
 import { readProxmoxIp } from '$lib/server/proxmox-ip';
 import { writeAuditLog } from '$lib/server/audit-log';
+import { getInstanceWithInfra, updateInstanceInfra } from '$lib/server/instance-infra';
 
 export const GET: RequestHandler = async (event) => {
 	const { url, locals } = event;
@@ -12,7 +13,7 @@ export const GET: RequestHandler = async (event) => {
 	const instanceId = url.searchParams.get('instanceId');
 	if (!instanceId) throw error(400, 'Missing instanceId');
 	try {
-		const record = await locals.pb.collection('instances').getOne<LeaseInstance>(instanceId);
+		const record = await getInstanceWithInfra(locals.pb, instanceId);
 		if (!canAccessInstance(record, locals.user.id, locals.user.role === 'admin')) throw error(403, 'Forbidden');
 		if (record.status !== 'completed') throw error(409, 'Instance is not ready yet');
 		const guest = await resolveProxmoxGuest(record);
@@ -27,7 +28,7 @@ export const GET: RequestHandler = async (event) => {
 		const changed = !!observed && observed !== previous;
 		if (changed) {
 			const pb = await adminPb();
-			await pb.collection('instances').update(record.id, { IP: observed, updated_by: locals.user.id });
+			await updateInstanceInfra(pb, record.id, { ip: observed });
 		}
 		await writeAuditLog(event, {
 			userId: locals.user.id,

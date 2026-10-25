@@ -7,6 +7,7 @@ import { canAccessInstance } from '$lib/server/instance-owners';
 import { resolveProxmoxGuest, ProxmoxGuestNotFoundError } from '$lib/server/proxmox-guest';
 import { createConsoleGrant } from '$lib/server/console-grant.mjs';
 import { writeAuditLog } from '$lib/server/audit-log';
+import { getInstanceWithInfra } from '$lib/server/instance-infra';
 
 export const POST: RequestHandler = async (event) => {
 	const { request, locals, cookies, url } = event;
@@ -30,7 +31,7 @@ export const POST: RequestHandler = async (event) => {
 
 	try {
 		// 3. Query the PocketBase instances collection to verify ownership
-		const record = await locals.pb.collection('instances').getOne<LeaseInstance>(instanceId);
+		const record = await getInstanceWithInfra(locals.pb, instanceId);
 		if (!record) {
 			return json({ error: 'Instance not found.' }, { status: 404 });
 		}

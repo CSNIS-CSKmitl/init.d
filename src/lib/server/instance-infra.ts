@@ -1,5 +1,6 @@
 import type PocketBase from 'pocketbase';
 import type { LeaseInstance } from '$lib/types';
+import { adminPb } from './instance-owners';
 
 export interface InstanceInfraRecord {
 	id?: string;
@@ -38,12 +39,44 @@ export async function getInstanceWithInfra(pb: PocketBase, id: string, queryPara
 	return mergeInfra(instance, infra);
 }
 
+/** Attaches infra data to a list of instances in one batch query. */
+export async function attachInfraToInstances(pb: PocketBase, instances: LeaseInstance[]): Promise<LeaseInstance[]> {
+	if (!instances || instances.length === 0) return instances;
+	const ids = instances.map((i) => i.id).filter(Boolean);
+	if (ids.length === 0) return instances;
+	try {
+		const targetPb = pb.authStore.isValid && (pb.authStore.isSuperuser || (pb.authStore as any).isAdmin) ? pb : await adminPb();
+		const filter = ids.map((id) => `instance = "${id}" || instance_ref = "${id}"`).join(' || ');
+		const infraList = await targetPb.collection('instance_infra').getFullList<InstanceInfraRecord>({
+			filter,
+			batch: 500
+		});
+		const infraByInstanceId = new Map<string, InstanceInfraRecord>();
+		for (const infra of infraList) {
+			if (infra.instance) infraByInstanceId.set(infra.instance, infra);
+			if (infra.instance_ref) infraByInstanceId.set(infra.instance_ref, infra);
+		}
+		for (const inst of instances) {
+			const infra = infraByInstanceId.get(inst.id);
+			if (infra) mergeInfra(inst, infra);
+		}
+	} catch (e) {
+		console.warn('[instance-infra] attachInfraToInstances failed:', e);
+	}
+	return instances;
+}
+
 /** Helper to get or create infra record by instance ID. */
 export async function getInfraRecord(pb: PocketBase, instanceId: string): Promise<InstanceInfraRecord | null> {
 	try {
 		return await pb.collection('instance_infra').getFirstListItem<InstanceInfraRecord>(`instance = "${instanceId}" || instance_ref = "${instanceId}"`);
 	} catch {
-		return null;
+		try {
+			const admin = await adminPb();
+			return await admin.collection('instance_infra').getFirstListItem<InstanceInfraRecord>(`instance = "${instanceId}" || instance_ref = "${instanceId}"`);
+		} catch {
+			return null;
+		}
 	}
 }
 
@@ -72,10 +105,19 @@ export async function updateInstanceInfra(
 
 	try {
 		const existing = await getInfraRecord(pb, instanceId);
+		let targetPb = pb;
+		try {
+			if (existing && existing.id) {
+				await pb.collection('instance_infra').update(existing.id, patch);
+				return;
+			}
+		} catch {
+			targetPb = await adminPb();
+		}
 		if (existing && existing.id) {
-			await pb.collection('instance_infra').update(existing.id, patch);
+			await targetPb.collection('instance_infra').update(existing.id, patch);
 		} else {
-			await pb.collection('instance_infra').create({
+			await targetPb.collection('instance_infra').create({
 				instance: instanceId,
 				instance_ref: instanceId,
 				...patch

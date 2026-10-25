@@ -4,6 +4,7 @@ import type { InstanceMetricPoint, InstanceMetrics, LeaseInstance } from '$lib/t
 import { proxmox } from '$lib/proxmox';
 import { canAccessInstance } from '$lib/server/instance-owners';
 import { resolveProxmoxGuest, ProxmoxGuestNotFoundError } from '$lib/server/proxmox-guest';
+import { getInstanceWithInfra } from '$lib/server/instance-infra';
 
 const timeframes = ['live', 'hour', 'day', 'week', 'month', 'year'] as const;
 
@@ -25,7 +26,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	if (!timeframes.includes(timeframe as (typeof timeframes)[number])) throw error(400, 'Invalid timeframe');
 
 	try {
-		const record = await locals.pb.collection('instances').getOne<LeaseInstance>(instanceId);
+		const record = await getInstanceWithInfra(locals.pb, instanceId);
 		if (!canAccessInstance(record, locals.user.id, locals.user.role === 'admin')) throw error(403, 'Forbidden');
 		if (record.status !== 'completed') throw error(409, 'Instance is not ready yet');
 

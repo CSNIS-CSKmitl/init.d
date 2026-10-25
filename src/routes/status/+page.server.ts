@@ -8,6 +8,7 @@ import { env } from '$env/dynamic/private';
 import { requiredEnv } from '$lib/server/env';
 import { addOwnerEmails, adminPb, canManageOwners, resolveOwnerIds } from '$lib/server/instance-owners';
 import { getTimedOutTaskProgress } from '$lib/proxmox';
+import { attachInfraToInstances, getInstanceWithInfra } from '$lib/server/instance-infra';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/login');
@@ -32,6 +33,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		]);
 		const unique = [...new Map([...requested, ...shared].map((item) => [item.id, item])).values()]
 			.sort((a, b) => b.created.localeCompare(a.created));
+		await attachInfraToInstances(locals.pb, unique);
 		const enriched = await addOwnerEmails(await adminPb(), unique);
 		const items = await Promise.all(enriched.map(async item => ({
 			...item, provision_progress: await getTimedOutTaskProgress(item) ?? undefined,
@@ -50,7 +52,7 @@ export const actions: Actions = {
 		const id = String(fd.get('id') ?? '').trim();
 		const ownerEmails = String(fd.get('owner_emails') ?? '');
 		if (!id) return fail(400, { id, ownerError: 'Missing request ID.' });
-		const record = await locals.pb.collection('instances').getOne<LeaseInstance>(id).catch(() => null);
+		const record = await getInstanceWithInfra(locals.pb, id).catch(() => null);
 		if (!record || !canManageOwners(record, locals.user.id, locals.user.role === 'admin')) {
 			return fail(403, { id, ownerError: 'Only the requester can manage co-owners.' });
 		}
@@ -72,7 +74,7 @@ export const actions: Actions = {
 
 		try {
 			// 1. Get the instance to verify ownership
-			const record = await locals.pb.collection('instances').getOne<LeaseInstance>(id);
+			const record = await getInstanceWithInfra(locals.pb, id);
 			if (record.email !== locals.user.id && locals.user.role !== 'admin') {
 				return fail(403, { error: 'You are not authorized to cancel this request.' });
 			}

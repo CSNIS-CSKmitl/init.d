@@ -6,6 +6,7 @@ import { canAccessInstance } from '$lib/server/instance-owners';
 import { resolveProxmoxGuest, ProxmoxGuestNotFoundError } from '$lib/server/proxmox-guest';
 import { rememberPowerTask } from '$lib/server/power-tasks';
 import { writeAuditLog, type AuditAction } from '$lib/server/audit-log';
+import { getInstanceWithInfra } from '$lib/server/instance-infra';
 
 const actions = ['start', 'shutdown', 'reboot', 'stop', 'reset', 'suspend', 'resume', 'hibernate'] as const;
 type PowerAction = (typeof actions)[number];
@@ -17,7 +18,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	if (!instanceId) throw error(400, 'Missing instanceId');
 
 	try {
-		const record = await locals.pb.collection('instances').getOne<LeaseInstance>(instanceId);
+		const record = await getInstanceWithInfra(locals.pb, instanceId);
 		if (!canAccessInstance(record, locals.user.id, locals.user.role === 'admin')) {
 			throw error(403, 'Forbidden');
 		}
@@ -51,7 +52,7 @@ export const POST: RequestHandler = async (event) => {
 	if (!actions.includes(action as PowerAction)) throw error(400, 'Invalid action');
 
 	try {
-		const record = await locals.pb.collection('instances').getOne<LeaseInstance>(instanceId);
+		const record = await getInstanceWithInfra(locals.pb, instanceId);
 		if (!canAccessInstance(record, locals.user.id, locals.user.role === 'admin')) {
 			throw error(403, 'Forbidden');
 		}

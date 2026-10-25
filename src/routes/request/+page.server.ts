@@ -13,6 +13,7 @@ import type {
 	PassionGroupRef
 } from '$lib/types';
 import { fetchPresets } from '$lib/presets';
+import { getInstanceWithInfra } from '$lib/server/instance-infra';
 import { adminPb, addOwnerEmails, resolveOwnerIds } from '$lib/server/instance-owners';
 import { sendDiscordNotification } from '$lib/discord';
 
@@ -35,7 +36,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	let editRecord: LeaseInstance | null = null;
 	if (editId) {
 		try {
-			editRecord = await locals.pb.collection('instances').getOne<LeaseInstance>(editId, { expand: 'email' });
+			editRecord = await getInstanceWithInfra(locals.pb, editId, { expand: 'email' });
 			if (editRecord.email !== locals.user.id && locals.user.role !== 'admin') {
 				throw error(403, 'Unauthorized');
 			}
@@ -192,7 +193,7 @@ export const actions: Actions = {
 		let record: LeaseInstance;
 		if (editId) {
 			try {
-				const existing = await locals.pb.collection('instances').getOne<LeaseInstance>(editId);
+				const existing = await getInstanceWithInfra(locals.pb, editId);
 				if (existing.email !== locals.user.id && locals.user.role !== 'admin') {
 					return fail(403, { errors: { global: 'Unauthorized' } });
 				}
