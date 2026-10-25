@@ -68,11 +68,22 @@ export async function startInstanceProvisioning(
 			provision_completed_at: null,
 			...target
 		});
+		await updateInfraSafely(pb, record.id, {
+			provision_state: 'provisioning',
+			provision_error: '',
+			provision_started_at: new Date().toISOString(),
+			provision_completed_at: null,
+			...target
+		});
 	} catch (cause) {
 		const message = (cause instanceof Error ? cause.message : String(cause)).slice(0, 4096);
 		try {
 			await pb.collection('instances').update(record.id, {
 				status: 'failed',
+				provision_state: 'failed',
+				provision_error: message
+			});
+			await updateInfraSafely(pb, record.id, {
 				provision_state: 'failed',
 				provision_error: message
 			});
@@ -97,6 +108,13 @@ export async function startInstanceProvisioning(
 				...target,
 				...(result.ipAddress ? { IP: result.ipAddress } : {})
 			});
+			await updateInfraSafely(pb, record.id, {
+				provision_state: 'completed',
+				provision_error: '',
+				provision_completed_at: new Date().toISOString(),
+				...target,
+				...(result.ipAddress ? { ip: result.ipAddress } : {})
+			});
 			progress('Complete');
 			onCompleted(updated);
 		} catch (cause) {
@@ -104,6 +122,10 @@ export async function startInstanceProvisioning(
 			try {
 				await pb.collection('instances').update(record.id, {
 					status: 'failed',
+					provision_state: 'failed',
+					provision_error: message
+				});
+				await updateInfraSafely(pb, record.id, {
 					provision_state: 'failed',
 					provision_error: message
 				});
