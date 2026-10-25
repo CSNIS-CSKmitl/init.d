@@ -1,5 +1,7 @@
 # init.d
 
+[แผนภาพเส้นทางการกดใช้งานและไฟล์ที่ถูกเรียก](CLICK_FLOW.md)
+
 เว็บรับคำขอ VM และ LXC container ของ CS KMITL ใช้ SvelteKit, PocketBase และ Proxmox VE ชื่อเดิมในบางไฟล์คือ LEASE
 
 **คู่มือส่งต่อฉบับเต็ม:** [Docs/Projects/init-d/docs/HANDOVER_TH.md](https://github.com/CSNIS-CSKmitl/Docs/blob/main/Projects/init-d/docs/HANDOVER_TH.md) — วิธีใช้สำหรับผู้ขอและแอดมิน, การติดตั้ง, ฐานข้อมูล/migration, Proxmox, node sync, การทดสอบ และการแก้ปัญหา
