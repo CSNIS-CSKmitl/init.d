@@ -115,6 +115,14 @@ node --test scripts/test-instance-lifecycle.mjs scripts/test-admin-instances.mjs
 
 Production server จะ normalize OAuth callback ที่มี duplicate slash (`//#/auth/oauth2-redirect-success`) กลับเป็น root route ก่อนส่งให้ SvelteKit เพื่อไม่ให้ popup แสดง 404
 
+## ฐานข้อมูลและการจัดเก็บข้อมูล (Database Architecture)
+
+โครงสร้างฐานข้อมูล PocketBase ของ `init.d` ถูกแยกส่วนเพื่อประสิทธิภาพและการขยายตัว:
+- `instances`: เก็บข้อมูลคำขอและสเปกเครื่อง (ลดจาก 36 เหลือ 20 ฟิลด์ คลีนและเบา)
+- `instance_infra`: ข้อมูลระดับ Proxmox/Hypervisor (`vmid`, `node`, `ip`, `provision_*`) ผูกแบบ 1-to-1
+- `instance_deletion_history`: เก็บประวัติของเครื่องที่ถูกลบออกจากการใช้งาน
+- `instance_admin_actions`: บันทึก Audit Log เมื่อแอดมิน Approve, Reject, หรือ Delete เครื่อง
+
 ## Access logs และ IPv6
 
 หน้าเว็บแบบ document request จะบันทึกลง `service_access_logs` ส่วนการเปิด instance, console และ SSH จะบันทึกลง `instance_access_logs` โดย `source_ip` รองรับทั้ง IPv4 และ IPv6 พร้อม metadata `ip_version` สำหรับ page view และลบข้อมูลที่เก่ากว่า 90 วันตาม nightly cleanup
