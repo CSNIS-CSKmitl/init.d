@@ -41,6 +41,10 @@ export interface LeaseInstance {
 		passion_group?: PassionGroupRef;
 		email?: PbUser;
 		owners?: PbUser[];
+		created_by?: PbUser;
+		updated_by?: PbUser;
+		approved_by?: PbUser;
+		[key: string]: any;
 	};
 	type: InstanceType;
 	vmid?: number;
@@ -64,11 +68,11 @@ export interface LeaseInstance {
 	// Read-only status resolved from Proxmox for legacy timeout records.
 	provision_progress?: { status: string; error?: string; taskState?: string };
 	datedelete?: string;
-	// Immutable identity snapshot captured before a guest is deleted.
 	deleted_vmid?: number;
 	deleted_node?: string | number;
 	deleted_ip?: string;
 	deleted_mac?: string;
+	deletion?: InstanceDeletionRecord | null;
 	// Optional admin reply shown back on /status. Populated by admins from
 	// the `/admin` dashboard; users never set these directly.
 	admin_reply?: string;
@@ -125,4 +129,19 @@ export interface SessionUser {
 	name?: string;
 	username?: string;
 	role: UserRole;
+}
+
+
+export interface InstanceDeletionRecord {
+	id?: string;
+	instance?: string;
+	instance_ref?: string;
+	hostname?: string;
+	deleted_vmid?: number;
+	deleted_node?: string | number;
+	deleted_ip?: string;
+	deleted_mac?: string;
+	deleted_at?: string;
+	deleted_by?: string;
+	created?: string;
 }

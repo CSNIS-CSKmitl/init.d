@@ -100,13 +100,26 @@ export async function deleteInstance(
 		deletedPatch = {
 			status: 'deleted', provision_state: 'deleted', provision_error: '',
 			...(actorId ? { updated_by: actorId } : {}),
-			vmid: null, node: null, datedelete: new Date().toISOString(),
-			deleted_vmid: identity.vmid ?? record.vmid ?? null,
-			deleted_node: identity.node ?? record.node ?? null,
-			deleted_ip: identity.ip ?? record.IP ?? null,
-			deleted_mac: identity.mac ?? null,
+			vmid: null, node: null
 		};
 		await pb.collection('instances').update(record.id, deletedPatch);
+
+		// Store deletion details in the dedicated history collection
+		try {
+			await pb.collection('instance_deletion_history').create({
+				instance: record.id,
+				instance_ref: record.id,
+				hostname: record.hostname,
+				deleted_vmid: identity.vmid ?? record.vmid ?? null,
+				deleted_node: identity.node != null ? String(identity.node) : (record.node != null ? String(record.node) : null),
+				deleted_ip: identity.ip ?? record.IP ?? null,
+				deleted_mac: identity.mac ?? null,
+				deleted_at: new Date().toISOString(),
+				deleted_by: actorId || null
+			});
+		} catch (historyErr) {
+			console.error('Could not create instance_deletion_history record:', historyErr);
+		}
 	} catch (cause) {
 		const message = (cause instanceof Error ? cause.message : String(cause)).slice(0, 4096);
 		try {

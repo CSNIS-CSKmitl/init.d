@@ -33,13 +33,61 @@ export const load: PageServerLoad = async ({ locals }) => {
 			await pbAdmin.admins.authWithPassword(requiredEnv('PB_ADMIN_EMAIL'), requiredEnv('PB_ADMIN_PASSWORD'));
 		}
 
-		// Load every page so older requests remain available to the admin queue.
-		// A single getList(1, 500) silently hid records after the first 500.
-		const list = await pbAdmin.collection('instances').getFullList<LeaseInstance>({
-			batch: 200,
-			sort: '-created',
-			expand: 'passion_group,email,owners,created_by,updated_by,approved_by'
-		});
+		// Load instances and related deletion / approval histories in parallel.
+		const [list, deletionRecords, adminActions] = await Promise.all([
+			pbAdmin.collection('instances').getFullList<LeaseInstance>({
+				batch: 200,
+				sort: '-created',
+				expand: 'passion_group,email,owners,created_by,updated_by'
+			}),
+			pbAdmin.collection('instance_deletion_history').getFullList<{
+				instance?: string;
+				instance_ref?: string;
+				deleted_vmid?: number;
+				deleted_node?: string | number;
+				deleted_ip?: string;
+				deleted_mac?: string;
+				deleted_at?: string;
+			}>({ batch: 500 }).catch(() => []),
+			pbAdmin.collection('instance_admin_actions').getFullList<{
+				instance?: string;
+				instance_ref?: string;
+				action?: string;
+				actor?: string;
+				created?: string;
+				expand?: Record<string, any>;
+			}>({ filter: 'action = "approve"', sort: '-created', expand: 'actor', batch: 500 }).catch(() => [])
+		]);
+
+		const deletionMap = new Map();
+		for (const d of deletionRecords) {
+			const key = d.instance || d.instance_ref;
+			if (key && !deletionMap.has(key)) deletionMap.set(key, d);
+		}
+
+		const approvalMap = new Map();
+		for (const a of adminActions) {
+			const key = a.instance || a.instance_ref;
+			if (key && !approvalMap.has(key)) approvalMap.set(key, a);
+		}
+
+		for (const item of list) {
+			const del = deletionMap.get(item.id);
+			if (del) {
+				item.deletion = del;
+				item.datedelete = del.deleted_at || item.datedelete;
+				item.deleted_vmid = del.deleted_vmid ?? item.deleted_vmid;
+				item.deleted_node = del.deleted_node ?? item.deleted_node;
+				item.deleted_ip = del.deleted_ip ?? item.deleted_ip;
+				item.deleted_mac = del.deleted_mac ?? item.deleted_mac;
+			}
+			const apprv = approvalMap.get(item.id);
+			if (apprv) {
+				if (!item.expand) item.expand = {};
+				item.expand.approved_by = apprv.expand?.actor || { id: apprv.actor, name: 'Admin' };
+				(item as any).approved_at = apprv.created;
+			}
+		}
 
 		return { items: await addOwnerEmails(pbAdmin, list), loadedAt: new Date().toISOString(), loadError: null };
 	} catch (e) {
@@ -187,7 +235,7 @@ export const actions: Actions = {
 			await deleteInstance(pb, record, () => removeProxmoxInstance(record), locals.user.id);
 			provisioningProgress.delete(id);
 			// Deleting a request that was never approved is a rejection.
-			const wasApproved = Boolean(record.approved_by) || record.status === 'completed';
+			const wasApproved = record.status === 'completed' || Boolean((record as any).approved_by);
 			await writeInstanceAdminAction({ actorId: locals.user.id, instanceId: id, hostname: record.hostname, action: wasApproved ? 'delete' : 'reject', metadata: { status_before: record.status } });
 			return { ok: true, id, recordId: id, deleted: true };
 		} catch (e) {
