@@ -23,6 +23,29 @@ function sourceIp(event: RequestEvent): string {
 	});
 }
 
+/** Records who approved / rejected / deleted an instance. Never blocks the operation. */
+export async function writeInstanceAdminAction(input: {
+	actorId: string;
+	instanceId: string;
+	hostname?: string;
+	action: 'approve' | 'reject' | 'delete';
+	metadata?: Record<string, unknown>;
+}) {
+	try {
+		const pb = await adminPb();
+		await pb.collection('instance_admin_actions').create({
+			instance: input.instanceId,
+			instance_ref: input.instanceId,
+			hostname: clean(input.hostname, 256),
+			actor: input.actorId,
+			action: input.action,
+			metadata: input.metadata ?? {}
+		});
+	} catch (logError) {
+		console.error('[Audit log] Could not write admin action:', logError instanceof Error ? logError.message : logError);
+	}
+}
+
 export async function writeAuditLog(event: RequestEvent, input: {
 	userId: string;
 	instanceId?: string;

@@ -13,6 +13,7 @@ import { env } from '$env/dynamic/private';
 import { requiredEnv } from '$lib/server/env';
 import { addOwnerEmails, adminPb } from '$lib/server/instance-owners';
 import { deleteInstance, instanceIsBusy, instanceIsDeleted } from '$lib/server/instance-lifecycle';
+import { writeInstanceAdminAction } from '$lib/server/audit-log';
 import { isIP } from 'node:net';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -148,6 +149,7 @@ export const actions: Actions = {
 					approved_by: locals.user.id,
 					approved_at: new Date().toISOString(),
 				});
+				await writeInstanceAdminAction({ actorId: locals.user.id, instanceId: id, hostname: record.hostname, action: 'approve', metadata: { mode, vmid, node, storage } });
 				await startProvisioning(pb, id, detail, network, storage, `pve${node}`, vmid, record.type);
 				return { ok: true, id, recordId: id, mode, started: true };
 			}
@@ -160,6 +162,7 @@ export const actions: Actions = {
 				provision_completed_at: new Date().toISOString()
 			}, { expand: 'email' });
 			provisioningProgress.delete(id);
+			await writeInstanceAdminAction({ actorId: locals.user.id, instanceId: id, hostname: record.hostname, action: 'approve', metadata: { mode } });
 			await sendDiscordNotification('completed', record).catch((err) =>
 				console.error('Failed to send discord notification:', err)
 			);
@@ -183,6 +186,9 @@ export const actions: Actions = {
 			}
 			await deleteInstance(pb, record, () => removeProxmoxInstance(record), locals.user.id);
 			provisioningProgress.delete(id);
+			// Deleting a request that was never approved is a rejection.
+			const wasApproved = Boolean(record.approved_by) || record.status === 'completed';
+			await writeInstanceAdminAction({ actorId: locals.user.id, instanceId: id, hostname: record.hostname, action: wasApproved ? 'delete' : 'reject', metadata: { status_before: record.status } });
 			return { ok: true, id, recordId: id, deleted: true };
 		} catch (e) {
 			console.error('admin delete failed', e);
