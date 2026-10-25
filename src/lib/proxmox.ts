@@ -1,3 +1,4 @@
+import { updateInstanceInfra } from '$lib/server/instance-infra';
 import proxmoxApi from 'proxmox-api';
 import { fetch as undiciFetch, Agent } from 'undici';
 import * as dotenv from 'dotenv';
@@ -217,7 +218,7 @@ export const createCT = async (
 
         if (ipAddress && pb && recordId) {
             try {
-                await pb.collection('instances').update(recordId, { IP: ipAddress });
+                await updateInstanceInfra(pb, recordId, { ip: ipAddress });
                 console.log(`Updated PocketBase record ${recordId} with IP: ${ipAddress}`);
             } catch (pbErr) {
                 console.error('Failed to update PocketBase with IP address:', pbErr);
@@ -361,7 +362,7 @@ export const createVM = async (
 
         if (ipAddress && pb && recordId) {
             try {
-                await pb.collection('instances').update(recordId, { IP: ipAddress });
+                await updateInstanceInfra(pb, recordId, { ip: ipAddress });
                 console.log(`Updated PocketBase record ${recordId} with IP: ${ipAddress}`);
             } catch (pbErr) {
                 console.error('Failed to update PocketBase with IP address:', pbErr);

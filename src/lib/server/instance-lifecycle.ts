@@ -1,3 +1,4 @@
+import { updateInstanceInfra } from './instance-infra';
 import type PocketBase from 'pocketbase';
 import type { LeaseInstance } from '../types';
 
@@ -90,7 +91,8 @@ export async function deleteInstance(
 	active.add(record.id);
 	let deletedPatch: Record<string, unknown> | undefined;
 	try {
-		await pb.collection('instances').update(record.id, { status: 'failed', provision_state: 'deleting', ...(actorId ? { updated_by: actorId } : {}) });
+		await pb.collection('instances').update(record.id, { status: 'failed', ...(actorId ? { updated_by: actorId } : {}) });
+		await updateInstanceInfra(pb, record.id, { provision_state: 'deleting' });
 		const identity = (await removeGuest()) ?? {
 			vmid: record.vmid ?? null,
 			node: record.node ?? null,
@@ -98,11 +100,11 @@ export async function deleteInstance(
 		};
 		// Keep the lease as history and revoke the guest binding in the same write.
 		deletedPatch = {
-			status: 'deleted', provision_state: 'deleted', provision_error: '',
-			...(actorId ? { updated_by: actorId } : {}),
-			vmid: null, node: null
+			status: 'deleted',
+			...(actorId ? { updated_by: actorId } : {})
 		};
 		await pb.collection('instances').update(record.id, deletedPatch);
+		await updateInstanceInfra(pb, record.id, { vmid: null, node: null, ip: null, provision_state: 'deleted', provision_error: '' });
 
 		// Store deletion details in the dedicated history collection
 		try {

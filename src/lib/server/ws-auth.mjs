@@ -53,6 +53,14 @@ export async function authorizedInstance(auth, instanceId) {
 	if (typeof instanceId !== 'string' || !instanceId) return null;
 	try {
 		const item = await auth.pb.collection('instances').getOne(instanceId);
+	try {
+		const infra = await auth.pb.collection('instance_infra').getFirstListItem(`instance = "${instanceId}" || instance_ref = "${instanceId}"`);
+		if (infra) {
+			item.vmid = infra.vmid || item.vmid;
+			item.node = infra.node || item.node;
+			item.IP = infra.ip || item.IP;
+		}
+	} catch (_) {}
 		if (['deleting', 'deleted', 'delete_failed'].includes(item.provision_state ?? '') ||
 			(!auth.isAdmin && ['provisioning', 'failed'].includes(item.provision_state ?? ''))) return null;
 		const owners = Array.isArray(item.owners) ? item.owners : [];

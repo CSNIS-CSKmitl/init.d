@@ -1,3 +1,4 @@
+import { updateInstanceInfra, getInstanceWithInfra } from '$lib/server/instance-infra';
 // Admin dashboard server logic:
 //   1. Guards non-admins.
 //   2. Loads the initial snapshot of lease requests.
@@ -33,13 +34,24 @@ export const load: PageServerLoad = async ({ locals }) => {
 			await pbAdmin.admins.authWithPassword(requiredEnv('PB_ADMIN_EMAIL'), requiredEnv('PB_ADMIN_PASSWORD'));
 		}
 
-		// Load instances and related deletion / approval histories in parallel.
-		const [list, deletionRecords, adminActions] = await Promise.all([
+		// Load instances, infra, deletion, and approval histories in parallel.
+		const [list, infraRecords, deletionRecords, adminActions] = await Promise.all([
 			pbAdmin.collection('instances').getFullList<LeaseInstance>({
 				batch: 200,
 				sort: '-created',
 				expand: 'passion_group,email,owners,created_by,updated_by'
 			}),
+			pbAdmin.collection('instance_infra').getFullList<{
+				instance?: string;
+				instance_ref?: string;
+				vmid?: number;
+				node?: string | number;
+				ip?: string;
+				provision_state?: string;
+				provision_error?: string;
+				provision_started_at?: string;
+				provision_completed_at?: string;
+			}>({ batch: 500 }).catch(() => []),
 			pbAdmin.collection('instance_deletion_history').getFullList<{
 				instance?: string;
 				instance_ref?: string;
@@ -59,6 +71,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 			}>({ filter: 'action = "approve"', sort: '-created', expand: 'actor', batch: 500 }).catch(() => [])
 		]);
 
+		const infraMap = new Map();
+		for (const inf of infraRecords) {
+			const key = inf.instance || inf.instance_ref;
+			if (key && !infraMap.has(key)) infraMap.set(key, inf);
+		}
+
 		const deletionMap = new Map();
 		for (const d of deletionRecords) {
 			const key = d.instance || d.instance_ref;
@@ -72,6 +90,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 		}
 
 		for (const item of list) {
+			const inf = infraMap.get(item.id);
+			if (inf) {
+				item.vmid = inf.vmid ?? item.vmid;
+				item.node = inf.node ?? item.node;
+				item.IP = inf.ip ?? item.IP;
+				item.provision_state = inf.provision_state ?? item.provision_state;
+				item.provision_error = inf.provision_error ?? item.provision_error;
+				item.provision_started_at = inf.provision_started_at ?? item.provision_started_at;
+				item.provision_completed_at = inf.provision_completed_at ?? item.provision_completed_at;
+			}
 			const del = deletionMap.get(item.id);
 			if (del) {
 				item.deletion = del;
@@ -128,7 +156,7 @@ export const actions: Actions = {
 
 		try {
 			const pb = await adminPb();
-			const record = await pb.collection('instances').getOne<LeaseInstance>(id);
+			const record = await getInstanceWithInfra(pb, id);
 			if (instanceIsDeleted(record)) return fail(409, { error: 'Deleted leases are retained as history and cannot be edited.', recordId: id });
 			await assertTimedOutTaskStopped(record);
 			if (instanceIsBusy(id) || ['provisioning', 'deleting'].includes(record.provision_state ?? '')) {
@@ -137,11 +165,9 @@ export const actions: Actions = {
 			await pb.collection('instances').update(id, {
 				updated_by: locals.user.id,
 				specs: { cpu, ram, disk },
-				ports: portsRaw.length > 0 ? portsRaw : null,
-				vmid,
-				node,
-				IP: ip
+				ports: portsRaw.length > 0 ? portsRaw : null
 			});
+			await updateInstanceInfra(pb, id, { vmid, node, ip });
 			return { ok: true, id, recordId: id };
 		} catch (e) {
 			console.error('admin update failed', e);
@@ -162,7 +188,7 @@ export const actions: Actions = {
 
 		try {
 			const pb = await adminPb();
-			const existing = await pb.collection('instances').getOne<LeaseInstance>(id, { expand: 'email' });
+			const existing = await getInstanceWithInfra(pb, id, { expand: 'email' });
 			await assertTimedOutTaskStopped(existing);
 			if (instanceIsDeleted(existing)) return fail(409, { error: 'Deleted leases cannot be resolved again. Create a new request.', recordId: id });
 			if (instanceIsBusy(id) || ['provisioning', 'deleting'].includes(existing.provision_state ?? '')) {
@@ -227,7 +253,7 @@ export const actions: Actions = {
 		if (!id) return fail(400, { error: 'Missing id.', recordId: id });
 		try {
 			const pb = await adminPb();
-			const record = await pb.collection('instances').getOne<LeaseInstance>(id);
+			const record = await getInstanceWithInfra(pb, id);
 			await assertTimedOutTaskStopped(record);
 			if (String(fd.get('confirm_hostname') ?? '').trim() !== record.hostname) {
 				return fail(400, { error: 'Type the hostname to confirm deletion.', recordId: id });
