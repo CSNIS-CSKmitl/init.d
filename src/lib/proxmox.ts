@@ -1,4 +1,18 @@
-import { updateInstanceInfra } from '$lib/server/instance-infra';
+async function updateInfraIpSafely(pb: any, recordId: string, ip: string) {
+    try {
+        if (!pb || typeof pb.collection !== 'function') return;
+        const coll = pb.collection('instance_infra');
+        if (!coll || typeof coll.getFirstListItem !== 'function') return;
+        const existing = await coll.getFirstListItem(`instance = "${recordId}" || instance_ref = "${recordId}"`).catch(() => null);
+        if (existing && (existing as any).id) {
+            await coll.update((existing as any).id, { ip });
+        } else if (typeof coll.create === 'function') {
+            await coll.create({ instance: recordId, instance_ref: recordId, ip });
+        }
+    } catch {
+        // fallback
+    }
+}
 import proxmoxApi from 'proxmox-api';
 import { fetch as undiciFetch, Agent } from 'undici';
 import * as dotenv from 'dotenv';
@@ -218,7 +232,7 @@ export const createCT = async (
 
         if (ipAddress && pb && recordId) {
             try {
-                await updateInstanceInfra(pb, recordId, { ip: ipAddress });
+                await updateInfraIpSafely(pb, recordId, ipAddress);
                 console.log(`Updated PocketBase record ${recordId} with IP: ${ipAddress}`);
             } catch (pbErr) {
                 console.error('Failed to update PocketBase with IP address:', pbErr);
@@ -362,7 +376,7 @@ export const createVM = async (
 
         if (ipAddress && pb && recordId) {
             try {
-                await updateInstanceInfra(pb, recordId, { ip: ipAddress });
+                await updateInfraIpSafely(pb, recordId, ipAddress);
                 console.log(`Updated PocketBase record ${recordId} with IP: ${ipAddress}`);
             } catch (pbErr) {
                 console.error('Failed to update PocketBase with IP address:', pbErr);

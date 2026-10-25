@@ -165,7 +165,10 @@ export const actions: Actions = {
 			await pb.collection('instances').update(id, {
 				updated_by: locals.user.id,
 				specs: { cpu, ram, disk },
-				ports: portsRaw.length > 0 ? portsRaw : null
+				ports: portsRaw.length > 0 ? portsRaw : null,
+				vmid,
+				node,
+				IP: ip
 			});
 			await updateInstanceInfra(pb, id, { vmid, node, ip });
 			return { ok: true, id, recordId: id };

@@ -106,6 +106,13 @@ function adminActions(extra = {}, notify = async () => ({ ok: true }), taskGuard
 			deleteInstance: async (_pb, _record, remove) => remove(),
 		},
 		'node:net': { isIP },
+		'$lib/server/instance-infra': {
+			getInstanceWithInfra: async (_pb, id) => ({ ...lease, status: 'completed', ...extra, id }),
+			updateInstanceInfra: async () => {},
+		},
+		'$lib/server/audit-log': {
+			writeInstanceAdminAction: async () => {},
+		},
 	}).actions;
 	const event = (fields, role = 'admin') => {
 		const fd = new FormData();
