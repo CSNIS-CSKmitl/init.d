@@ -302,6 +302,51 @@ export const createVM = async (
             ipconfig0: 'ip=dhcp',
         });
 
+        if (onProgress) await onProgress('Regenerating cloud-init image...');
+        console.log('Regenerating cloud-init image for VM', id);
+        const regenResponse = (await proxmox.nodes.$(baseNode).qemu.$(id).cloudinit.$put()) as any;
+        if (typeof regenResponse === 'string' && regenResponse.startsWith('UPID:')) {
+            await waitForTask(baseNode, regenResponse);
+        }
+
+        if (onProgress) await onProgress('Removing cloud-init drive...');
+        console.log('Removing cloud-init drive for VM', id);
+        const currentConfig = (await proxmox.nodes.$(baseNode).qemu.$(id).config.$get()) as Record<string, any>;
+        const cloudInitDriveKeys = Object.keys(currentConfig).filter(key => {
+            const val = String(currentConfig[key] || '');
+            return /^(ide|scsi|sata|virtio)\d+$/.test(key) && val.includes('cloudinit');
+        });
+
+        if (cloudInitDriveKeys.length === 0 && currentConfig.ide2) {
+            cloudInitDriveKeys.push('ide2');
+        }
+
+        if (cloudInitDriveKeys.length > 0) {
+            console.log(`Deleting cloud-init drive(s): ${cloudInitDriveKeys.join(', ')} on VM ${id}`);
+            const deleteResponse = (await proxmox.nodes.$(baseNode).qemu.$(id).config.$put({
+                delete: cloudInitDriveKeys.join(',')
+            } as any)) as any;
+            if (typeof deleteResponse === 'string' && deleteResponse.startsWith('UPID:')) {
+                await waitForTask(baseNode, deleteResponse);
+            }
+
+            try {
+                const afterConfig = (await proxmox.nodes.$(baseNode).qemu.$(id).config.$get()) as Record<string, any>;
+                const unusedKeys = Object.keys(afterConfig).filter(key => /^unused\d+$/.test(key) && String(afterConfig[key] || '').includes('cloudinit'));
+                if (unusedKeys.length > 0) {
+                    console.log(`Cleaning up unused cloud-init disk(s): ${unusedKeys.join(', ')} on VM ${id}`);
+                    const deleteUnusedResponse = (await proxmox.nodes.$(baseNode).qemu.$(id).config.$put({
+                        delete: unusedKeys.join(',')
+                    } as any)) as any;
+                    if (typeof deleteUnusedResponse === 'string' && deleteUnusedResponse.startsWith('UPID:')) {
+                        await waitForTask(baseNode, deleteUnusedResponse);
+                    }
+                }
+            } catch (unusedErr) {
+                console.warn('Failed to clean up unused cloud-init disks:', unusedErr);
+            }
+        }
+
         let ipAddress = '';
         if (needsMigration) {
             if (onProgress) await onProgress('Starting VM for online migration...');
