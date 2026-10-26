@@ -28,7 +28,9 @@
 		Rocket,
 		Trash2,
 		FileText,
+		Loader2,
 	} from "@lucide/svelte";
+	import { TypeableDropdown } from "$lib/components/ui/combobox";
 
 	// This component is instantiated once per open row (the parent renders
 	// one of these per id in its `openIds` set), so every field below is a
@@ -71,7 +73,168 @@
 	let resolveMode = $state<"manual" | "auto">(untrack(() => isFailed ? "auto" : "manual"));
 	let resolveVmid = $state(untrack(() => item.vmid ? String(item.vmid) : ""));
 	let resolveNode = $state(untrack(() => item.node ? String(item.node) : ""));
+	let resolveStorageType = $state("lvmthin");
 	let resolveStorage = $state("local-lvm");
+	let loadingNodes = $state(false);
+	let loadingStorage = $state(false);
+	let storageError = $state<string | null>(null);
+	let clusterNodes = $state<Array<{ node: string; nodeNumber: string; status: string }>>([]);
+	let nodeStorageData = $state<{
+		node: string;
+		nodeNumber: string;
+		types: string[];
+		storages: Array<{ storage: string; type: string; availFormatted: string }>;
+	} | null>(null);
+
+	async function fetchClusterNodes() {
+		if (loadingNodes) return;
+		loadingNodes = true;
+		try {
+			const res = await fetch('/api/proxmox-storage?action=nodes');
+			if (res.ok) {
+				const data = await res.json();
+				if (Array.isArray(data.nodes)) {
+					clusterNodes = data.nodes;
+				}
+			}
+		} catch (err) {
+			console.error('Failed to load Proxmox cluster nodes', err);
+		} finally {
+			loadingNodes = false;
+		}
+	}
+
+	let lastFetchedNode = '';
+	async function fetchNodeStorage(nodeVal: string) {
+		const clean = nodeVal.trim().replace(/^pve/i, '');
+		if (!clean) {
+			nodeStorageData = null;
+			storageError = null;
+			lastFetchedNode = '';
+			return;
+		}
+		if (loadingStorage && lastFetchedNode === clean) return;
+		loadingStorage = true;
+		storageError = null;
+		lastFetchedNode = clean;
+
+		try {
+			const res = await fetch(`/api/proxmox-storage?node=${clean}`);
+			if (!res.ok) {
+				const errData = await res.json().catch(() => ({}));
+				storageError = errData.error || `ไม่สามารถดึงข้อมูล storage สำหรับ Node ${clean} ได้`;
+				return;
+			}
+			const data = await res.json();
+			nodeStorageData = data;
+
+			const types: string[] = data.types || [];
+			if (types.length > 0) {
+				const found = data.storages.find(
+					(s: any) => s.storage.toLowerCase() === resolveStorage.trim().toLowerCase()
+				);
+				if (found && types.includes(found.type)) {
+					resolveStorageType = found.type;
+				} else if (!types.includes(resolveStorageType)) {
+					if (types.includes('lvmthin')) {
+						resolveStorageType = 'lvmthin';
+					} else {
+						resolveStorageType = types[0];
+					}
+				}
+
+				const matching = data.storages.filter(
+					(s: any) => s.type.toLowerCase() === resolveStorageType.toLowerCase()
+				);
+				if (matching.length > 0 && !matching.some((s: any) => s.storage === resolveStorage)) {
+					resolveStorage = matching[0].storage;
+				}
+			}
+		} catch (err) {
+			console.error(`Failed to fetch storage for node ${clean}`, err);
+			storageError = `ไม่สามารถเชื่อมต่อเพื่อดึง storage สำหรับ Node ${clean} ได้`;
+		} finally {
+			loadingStorage = false;
+		}
+	}
+
+	function handleNodeChange(nodeVal: string) {
+		resolveNode = nodeVal;
+		const clean = nodeVal.trim().replace(/^pve/i, '');
+		if (clean) {
+			fetchNodeStorage(clean);
+		}
+	}
+
+	function handleStorageTypeChange(typeVal: string) {
+		resolveStorageType = typeVal;
+		if (nodeStorageData?.storages) {
+			const matching = nodeStorageData.storages.filter(
+				(s) => s.type.toLowerCase() === typeVal.trim().toLowerCase()
+			);
+			if (matching.length > 0 && !matching.some((s) => s.storage === resolveStorage)) {
+				resolveStorage = matching[0].storage;
+			}
+		}
+	}
+
+	const nodeOptions = $derived(
+		clusterNodes.length > 0
+			? clusterNodes.map((n) => ({
+					value: n.nodeNumber,
+					label: `${n.nodeNumber} (${n.node})`,
+					badge: n.status
+				}))
+			: [1, 2, 3, 4, 5, 6, 7, 8].map((num) => ({
+					value: String(num),
+					label: `${num} (pve${num})`,
+					badge: 'online'
+				}))
+	);
+
+	const storageTypeOptions = $derived(
+		nodeStorageData?.types
+			? nodeStorageData.types.map((t) => {
+					const count =
+						nodeStorageData?.storages.filter(
+							(s) => s.type.toLowerCase() === t.toLowerCase()
+						).length ?? 0;
+					return {
+						value: t,
+						label: t,
+						badge: `${count} storage`
+					};
+				})
+			: ['lvmthin', 'dir', 'zfspool', 'lvm'].map((t) => ({ value: t, label: t }))
+	);
+
+	const storageNameOptions = $derived(
+		nodeStorageData?.storages
+			? nodeStorageData.storages
+					.filter(
+						(s) =>
+							!resolveStorageType.trim() ||
+							s.type.toLowerCase() === resolveStorageType.trim().toLowerCase()
+					)
+					.map((s) => ({
+						value: s.storage,
+						label: s.storage,
+						badge: `${s.type} · ${s.availFormatted}`
+					}))
+			: [{ value: 'local-lvm', label: 'local-lvm', badge: 'default' }]
+	);
+
+	$effect(() => {
+		if (resolveMode === 'auto') {
+			if (clusterNodes.length === 0 && !loadingNodes) {
+				fetchClusterNodes();
+			}
+			const clean = resolveNode.trim().replace(/^pve/i, '');
+			if (clean && (!nodeStorageData || nodeStorageData.nodeNumber !== clean)) {
+				fetchNodeStorage(clean);
+			}
+		}
+	});
 	let editCpu = $state(untrack(() => String(item.specs.cpu)));
 	let editRam = $state(untrack(() => String(item.specs.ram)));
 	let editDisk = $state(untrack(() => String(item.specs.disk)));
@@ -348,20 +511,106 @@
 				</ToggleGroup.Root>
 
 				{#if resolveMode === "auto"}
-					<Field.FieldGroup class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-						<Field.Field>
-							<Field.FieldLabel for={`resolve-vmid-${item.id}`} class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">vmid</Field.FieldLabel>
-							<Input id={`resolve-vmid-${item.id}`} name="vmid" type="number" min="1" bind:value={resolveVmid} required class="font-mono text-xs" placeholder="101" />
-						</Field.Field>
-						<Field.Field>
-							<Field.FieldLabel for={`resolve-node-${item.id}`} class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">node</Field.FieldLabel>
-							<Input id={`resolve-node-${item.id}`} name="node" type="number" min="1" bind:value={resolveNode} required class="font-mono text-xs" placeholder="3" />
-						</Field.Field>
-						<Field.Field>
-							<Field.FieldLabel for={`resolve-storage-${item.id}`} class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">storage</Field.FieldLabel>
-							<Input id={`resolve-storage-${item.id}`} name="storage" bind:value={resolveStorage} required class="font-mono text-xs" placeholder="local-lvm" />
-						</Field.Field>
-					</Field.FieldGroup>
+					<div class="flex flex-col gap-3">
+						<Field.FieldGroup class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+							<Field.Field>
+								<Field.FieldLabel for={`resolve-vmid-${item.id}`} class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+									vmid
+								</Field.FieldLabel>
+								<Input
+									id={`resolve-vmid-${item.id}`}
+									name="vmid"
+									type="number"
+									min="1"
+									bind:value={resolveVmid}
+									required
+									class="font-mono text-xs"
+									placeholder="101"
+								/>
+							</Field.Field>
+
+							<Field.Field>
+								<Field.FieldLabel
+									for={`resolve-node-${item.id}`}
+									class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase flex items-center justify-between"
+								>
+									<span>node (เลข node)</span>
+									{#if loadingNodes}
+										<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
+									{/if}
+								</Field.FieldLabel>
+								<TypeableDropdown
+									id={`resolve-node-${item.id}`}
+									name="node"
+									bind:value={resolveNode}
+									options={nodeOptions}
+									loading={loadingNodes}
+									placeholder="e.g. 3"
+									required
+									onselect={(val) => handleNodeChange(val)}
+									onchange={(val) => handleNodeChange(val)}
+								/>
+							</Field.Field>
+
+							<Field.Field>
+								<Field.FieldLabel
+									for={`resolve-storage-type-${item.id}`}
+									class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase flex items-center justify-between"
+								>
+									<span>storage type</span>
+									{#if loadingStorage}
+										<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
+									{/if}
+								</Field.FieldLabel>
+								<TypeableDropdown
+									id={`resolve-storage-type-${item.id}`}
+									bind:value={resolveStorageType}
+									options={storageTypeOptions}
+									loading={loadingStorage}
+									disabled={!resolveNode.trim()}
+									placeholder={resolveNode.trim() ? "เลือก/พิมพ์ Type..." : "ใส่เลข Node ก่อน"}
+									onselect={(val) => handleStorageTypeChange(val)}
+									onchange={(val) => handleStorageTypeChange(val)}
+								/>
+							</Field.Field>
+
+							<Field.Field>
+								<Field.FieldLabel
+									for={`resolve-storage-${item.id}`}
+									class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase flex items-center justify-between"
+								>
+									<span>storage name</span>
+									{#if loadingStorage}
+										<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
+									{/if}
+								</Field.FieldLabel>
+								<TypeableDropdown
+									id={`resolve-storage-${item.id}`}
+									name="storage"
+									bind:value={resolveStorage}
+									options={storageNameOptions}
+									loading={loadingStorage}
+									disabled={!resolveNode.trim()}
+									placeholder={resolveNode.trim() ? "เลือก/พิมพ์ Storage..." : "ใส่เลข Node ก่อน"}
+									required
+								/>
+							</Field.Field>
+						</Field.FieldGroup>
+
+						{#if storageError}
+							<p class="font-mono text-[11px] text-destructive">
+								{storageError}
+							</p>
+						{:else if nodeStorageData && resolveNode}
+							<div class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-muted-foreground">
+								<span class="rounded bg-muted px-1.5 py-0.5 text-foreground font-medium">Node {resolveNode.replace(/^pve/i, '')}</span>
+								<span>·</span>
+								<span>{nodeStorageData.types.length} Storage Type(s)</span>
+								<span>·</span>
+								<span>{storageNameOptions.length} Storage(s) available for {resolveStorageType || 'all'}</span>
+							</div>
+						{/if}
+					</div>
 				{/if}
 
 				<div class="flex justify-end">

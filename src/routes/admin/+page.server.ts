@@ -204,7 +204,8 @@ export const actions: Actions = {
 				if (!storage) return fail(400, { error: 'Missing storage.', recordId: id });
 
 				const vmid = Number(vmidRaw);
-				const node = Number(nodeRaw);
+				const cleanNodeStr = nodeRaw.replace(/^pve/i, '').trim();
+				const node = Number(cleanNodeStr);
 				if (!Number.isInteger(vmid) || vmid < 1) {
 					return fail(400, { error: 'VMID must be a valid number.', recordId: id });
 				}

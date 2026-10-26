@@ -91,12 +91,20 @@ function adminActions(extra = {}, notify = async () => ({ ok: true }), taskGuard
 		getOne: async () => ({ ...lease, status: 'completed', ...extra }),
 		update: async (_id, patch) => { updates.push(patch); return patch; },
 	}) };
+	const provisioned = [];
 	const actions = loadModule('../src/routes/admin/+page.server.ts', {
 		'@sveltejs/kit': {
 			error: (status, message) => Object.assign(new Error(message), { status }),
 			fail: (status, data) => ({ status, data }), redirect() {},
 		},
-		'$lib/proxmox': { provisioningProgress: new Map(), removeProxmoxInstance: async () => { removed = true; }, assertTimedOutTaskStopped: taskGuard },
+		'$lib/proxmox': {
+			provisioningProgress: new Map(),
+			removeProxmoxInstance: async () => { removed = true; },
+			assertTimedOutTaskStopped: taskGuard,
+			startProvisioning: async (_pb, id, detail, network, storage, targetNode, vmid) => {
+				provisioned.push({ id, detail, network, storage, targetNode, vmid });
+			}
+		},
 		'$lib/discord': { sendDiscordNotification: notify }, pocketbase: {}, '$env/dynamic/private': { env: {} },
 		'$lib/server/env': { requiredEnv: () => assert.fail('No production credentials in action tests') },
 		'$lib/server/instance-owners': { adminPb: async () => pb },
@@ -119,7 +127,7 @@ function adminActions(extra = {}, notify = async () => ({ ok: true }), taskGuard
 		for (const [key, value] of Object.entries(fields)) fd.set(key, value);
 		return { locals: { user: role ? { id: role === 'admin' ? 'admin-user' : 'normal-user', role } : null }, request: { formData: async () => fd } };
 	};
-	return { actions, updates, event, removed: () => removed };
+	return { actions, updates, event, removed: () => removed, provisioned };
 }
 
 test('admin actions deny normal users and anonymous requests', async () => {
@@ -196,3 +204,17 @@ test('a timed-out task that is still running cannot be resolved, rebound or dele
 	assert.deepEqual(updates, []);
 	assert.equal(removed(), false);
 });
+
+test('auto resolve accepts node as plain number or with pve prefix', async () => {
+	const { actions, event, provisioned } = adminActions({ status: 'pending', specs: { cpu: 2, ram: 4, disk: 20 } });
+	const res1 = await actions.resolve(event({ id: 'lease1', mode: 'auto', vmid: '101', node: '3', storage: 'local-lvm' }));
+	assert.equal(res1.ok, true);
+	assert.equal(provisioned[0].targetNode, 'pve3');
+	assert.equal(provisioned[0].storage, 'local-lvm');
+
+	const res2 = await actions.resolve(event({ id: 'lease2', mode: 'auto', vmid: '102', node: 'pve4', storage: 'local-lvm-1' }));
+	assert.equal(res2.ok, true);
+	assert.equal(provisioned[1].targetNode, 'pve4');
+	assert.equal(provisioned[1].storage, 'local-lvm-1');
+});
+

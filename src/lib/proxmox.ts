@@ -739,3 +739,124 @@ export const getProxmoxTermTicket = (params: ProxmoxVncTicketParams) =>
 // Uses /vncproxy — returns RFB/VNC binary stream, compatible with noVNC.
 export const getProxmoxVncTicket = (params: ProxmoxVncTicketParams) =>
     postProxmoxProxy(params, 'vncproxy');
+
+export interface ProxmoxClusterNode {
+    node: string;
+    nodeNumber: string;
+    status: string;
+    cpu?: number;
+    mem?: number;
+    maxmem?: number;
+}
+
+export interface ProxmoxStorageItem {
+    storage: string;
+    type: string;
+    content: string;
+    active: boolean;
+    enabled: boolean;
+    avail: number;
+    total: number;
+    used: number;
+    availFormatted: string;
+    supportsDisks: boolean;
+}
+
+export interface ProxmoxNodeStorageResult {
+    node: string;
+    nodeNumber: string;
+    types: string[];
+    storages: ProxmoxStorageItem[];
+    allStorages?: ProxmoxStorageItem[];
+}
+
+export function formatProxmoxBytes(bytes: number | undefined | null): string {
+    if (!bytes || isNaN(bytes) || bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    let i = 0;
+    let size = bytes;
+    while (size >= 1024 && i < units.length - 1) {
+        size /= 1024;
+        i++;
+    }
+    return `${size.toFixed(size >= 10 || i === 0 ? 1 : 2)} ${units[i]}`;
+}
+
+export async function getProxmoxClusterNodes(): Promise<ProxmoxClusterNode[]> {
+    try {
+        const raw = (await proxmox.nodes.$get()) as any[];
+        const list = Array.isArray(raw) ? raw : (raw as any)?.data || [];
+        return list
+            .map((n: any) => ({
+                node: String(n.node || ''),
+                nodeNumber: String(n.node || '').replace(/^pve/i, ''),
+                status: String(n.status || 'unknown'),
+                cpu: n.cpu,
+                mem: n.mem,
+                maxmem: n.maxmem
+            }))
+            .sort((a: ProxmoxClusterNode, b: ProxmoxClusterNode) => {
+                const numA = Number(a.nodeNumber);
+                const numB = Number(b.nodeNumber);
+                if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                return a.node.localeCompare(b.node);
+            });
+    } catch (err) {
+        console.error('Failed to get Proxmox cluster nodes:', err);
+        throw err;
+    }
+}
+
+export async function getProxmoxNodeStorage(rawNode: string | number): Promise<ProxmoxNodeStorageResult> {
+    const nodeStr = String(rawNode ?? '').trim();
+    if (!nodeStr) {
+        throw new Error('Node identifier is required.');
+    }
+    const nodeName = /^\d+$/.test(nodeStr) ? `pve${nodeStr}` : nodeStr.toLowerCase();
+    const nodeNumber = nodeName.replace(/^pve/i, '');
+
+    try {
+        const raw = (await proxmox.nodes.$(nodeName).storage.$get()) as any[];
+        const list = Array.isArray(raw) ? raw : (raw as any)?.data || [];
+
+        const allMapped: ProxmoxStorageItem[] = list.map((s: any) => {
+            const active = Boolean(s.active === 1 || s.active === true || s.active === undefined);
+            const enabled = Boolean(s.enabled === 1 || s.enabled === true || s.enabled === undefined);
+            const supportsDisks = Boolean(!s.content || s.content.includes('images') || s.content.includes('rootdir'));
+            const avail = Number(s.avail || 0);
+            return {
+                storage: String(s.storage || ''),
+                type: String(s.type || ''),
+                content: String(s.content || ''),
+                active,
+                enabled,
+                supportsDisks,
+                avail,
+                total: Number(s.total || 0),
+                used: Number(s.used || 0),
+                availFormatted: formatProxmoxBytes(avail)
+            };
+        });
+
+        // Usable storages on this node for provisioning VM/CT:
+        // Must be active, enabled, and support VM/CT images or rootdir
+        const usable = allMapped.filter((s) => s.active && s.enabled && s.supportsDisks && s.storage);
+        // Fallback if none matched disk content: return all active & enabled
+        const storages = usable.length > 0 ? usable : allMapped.filter((s) => s.active && s.enabled && s.storage);
+
+        // Unique storage types from usable storages
+        const types = Array.from(new Set(storages.map((s) => s.type).filter(Boolean)));
+
+        return {
+            node: nodeName,
+            nodeNumber,
+            types,
+            storages,
+            allStorages: allMapped
+        };
+    } catch (err) {
+        console.error(`Failed to get Proxmox storage for node ${nodeName}:`, err);
+        throw err;
+    }
+}
+
