@@ -143,44 +143,29 @@ export const createCT = async (
     pb?: any,
     recordId?: string
 ) => {
-    console.log('Finding CT template ID for OS:', detail.os_template);
-    const baseCTId = CT_ID.get(detail.os_template.toLowerCase());
-    if (baseCTId == undefined) {
+    console.log('Finding CT template for OS:', detail.os_template);
+    const template = CT_ID.get(detail.os_template.toLowerCase());
+    if (template == undefined) {
         return Promise.reject(new Error(`Template for ${detail.os_template} not found.`));
     }
     try {
-        if (onProgress) await onProgress('Cloning container from template...');
-        console.log('Cloning container');
-        const baseNode = process.env.TEMPLATE_NODE || 'pve6';
-        const needsMigration = node !== baseNode;
+        if (onProgress) await onProgress(`Restoring container from backup on ${node}...`);
+        console.log(`Restoring container ${id} on target node ${node} from backup: ${template}`);
 
-        const cloneParams: any = {
-            newid: id,
-            hostname: detail.hostname,
-            full: true // Must be a full clone to allow migration across nodes without shared storage
+        const restoreParams: any = {
+            vmid: id,
+            ostemplate: template,
+            storage: disk,
+            restore: 1,
+            unique: 1,
+            hostname: detail.hostname
         };
 
-        if (!needsMigration) {
-            cloneParams.target = node;
-            cloneParams.storage = disk;
-        }
+        const restoreRespond = await proxmox.nodes.$(node).lxc.$post(restoreParams);
+        console.log('Restore response:', restoreRespond);
 
-        const cloneRespond = await proxmox.nodes.$(baseNode).lxc.$(baseCTId).clone.$post(cloneParams);
-        console.log('Clone response:', cloneRespond);
-
-        // Wait for clone task to finish
-        await waitForTask(baseNode, cloneRespond);
-
-        if (needsMigration) {
-            if (onProgress) await onProgress(`Migrating container to target node ${node}...`);
-            console.log(`Migrating container ${id} from ${baseNode} to ${node}`);
-            const migrateRespond = await proxmox.nodes.$(baseNode).lxc.$(id).migrate.$post({
-                target: node,
-                "target-storage": disk,
-            });
-            console.log('Migration response:', migrateRespond);
-            await waitForTask(baseNode, migrateRespond);
-        }
+        // Wait for restore task to finish on target node
+        await waitForTask(node, restoreRespond);
 
         if (onProgress) await onProgress('Configuring container...');
         console.log('Configuring container with details:', { detail, network, disk, node, id });
@@ -485,9 +470,11 @@ export function startProvisioningRecovery() {
                     const decision = verifiedMigrationPatch(item, snapshot);
                     if (!decision.patch) {
                         if (recoveryChecks.size >= 256) recoveryChecks.delete(recoveryChecks.keys().next().value!);
-                        recoveryChecks.set(item.id, { expires: Date.now() + 35000, progress: {
-                            status: decision.reason, taskState: 'needs-review',
-                        } });
+                        recoveryChecks.set(item.id, {
+                            expires: Date.now() + 35000, progress: {
+                                status: decision.reason, taskState: 'needs-review',
+                            }
+                        });
                         continue;
                     }
                     const result = await commitVerifiedRecovery(pb, item, decision.patch);
