@@ -73,8 +73,8 @@
 	let resolveMode = $state<"manual" | "auto">(untrack(() => isFailed ? "auto" : "manual"));
 	let resolveVmid = $state(untrack(() => item.vmid ? String(item.vmid) : ""));
 	let resolveNode = $state(untrack(() => item.node ? String(item.node) : ""));
-	let resolveStorageType = $state("lvmthin");
-	let resolveStorage = $state("local-lvm");
+	let resolveStorageType = $state("");
+	let resolveStorage = $state("");
 	let loadingNodes = $state(false);
 	let loadingStorage = $state(false);
 	let storageError = $state<string | null>(null);
@@ -129,26 +129,21 @@
 			nodeStorageData = data;
 
 			const types: string[] = data.types || [];
-			if (types.length > 0) {
-				const found = data.storages.find(
+			// Only validate if resolveStorage is currently set; DO NOT auto-fill if empty
+			if (resolveStorage) {
+				const found = (data.storages || []).find(
 					(s: any) => s.storage.toLowerCase() === resolveStorage.trim().toLowerCase()
 				);
-				if (found && types.includes(found.type)) {
-					resolveStorageType = found.type;
-				} else if (!types.includes(resolveStorageType)) {
-					if (types.includes('lvmthin')) {
-						resolveStorageType = 'lvmthin';
-					} else {
-						resolveStorageType = types[0];
+				if (found) {
+					if (!resolveStorageType || !types.includes(resolveStorageType)) {
+						resolveStorageType = found.type;
 					}
+				} else {
+					resolveStorage = '';
 				}
-
-				const matching = data.storages.filter(
-					(s: any) => s.type.toLowerCase() === resolveStorageType.toLowerCase()
-				);
-				if (matching.length > 0 && !matching.some((s: any) => s.storage === resolveStorage)) {
-					resolveStorage = matching[0].storage;
-				}
+			}
+			if (resolveStorageType && !types.includes(resolveStorageType)) {
+				resolveStorageType = '';
 			}
 		} catch (err) {
 			console.error(`Failed to fetch storage for node ${clean}`, err);
@@ -159,21 +154,44 @@
 	}
 
 	function handleNodeChange(nodeVal: string) {
-		resolveNode = nodeVal;
 		const clean = nodeVal.trim().replace(/^pve/i, '');
+		const prevClean = resolveNode.trim().replace(/^pve/i, '');
+		if (clean !== prevClean) {
+			resolveStorageType = '';
+			resolveStorage = '';
+		}
+		resolveNode = nodeVal;
 		if (clean) {
 			fetchNodeStorage(clean);
+		} else {
+			nodeStorageData = null;
+			storageError = null;
+			lastFetchedNode = '';
+			resolveStorageType = '';
+			resolveStorage = '';
 		}
 	}
 
 	function handleStorageTypeChange(typeVal: string) {
 		resolveStorageType = typeVal;
-		if (nodeStorageData?.storages) {
+		if (nodeStorageData?.storages && resolveStorage) {
 			const matching = nodeStorageData.storages.filter(
-				(s) => s.type.toLowerCase() === typeVal.trim().toLowerCase()
+				(s) => !typeVal.trim() || s.type.toLowerCase() === typeVal.trim().toLowerCase()
 			);
-			if (matching.length > 0 && !matching.some((s) => s.storage === resolveStorage)) {
-				resolveStorage = matching[0].storage;
+			if (!matching.some((s) => s.storage.toLowerCase() === resolveStorage.trim().toLowerCase())) {
+				resolveStorage = '';
+			}
+		}
+	}
+
+	function handleStorageChange(storageVal: string) {
+		resolveStorage = storageVal;
+		if (nodeStorageData?.storages && storageVal.trim()) {
+			const found = nodeStorageData.storages.find(
+				(s) => s.storage.toLowerCase() === storageVal.trim().toLowerCase()
+			);
+			if (found && (!resolveStorageType || resolveStorageType !== found.type)) {
+				resolveStorageType = found.type;
 			}
 		}
 	}
@@ -205,7 +223,7 @@
 						badge: `${count} storage`
 					};
 				})
-			: ['lvmthin', 'dir', 'zfspool', 'lvm'].map((t) => ({ value: t, label: t }))
+			: []
 	);
 
 	const storageNameOptions = $derived(
@@ -221,7 +239,7 @@
 						label: s.storage,
 						badge: `${s.type} · ${s.availFormatted}`
 					}))
-			: [{ value: 'local-lvm', label: 'local-lvm', badge: 'default' }]
+			: []
 	);
 
 	$effect(() => {
@@ -252,9 +270,28 @@
 	// this lease's actual record — e.g. after Resolve→Auto provisions and
 	// writes back a vmid/node, both fields should reflect it immediately
 	// instead of showing what was there when this panel was first opened.
+	let prevItemId = $state(untrack(() => item.id));
+	let prevItemNode = $state(untrack(() => item.node ? String(item.node) : ""));
 	$effect(() => {
+		if (item.id !== prevItemId) {
+			prevItemId = item.id;
+			prevItemNode = item.node ? String(item.node) : "";
+			resolveStorageType = "";
+			resolveStorage = "";
+			nodeStorageData = null;
+			lastFetchedNode = "";
+			storageError = null;
+			resolveNode = prevItemNode;
+		} else {
+			const itemNodeStr = item.node ? String(item.node) : "";
+			if (itemNodeStr !== prevItemNode) {
+				prevItemNode = itemNodeStr;
+				resolveNode = itemNodeStr;
+				resolveStorageType = "";
+				resolveStorage = "";
+			}
+		}
 		resolveVmid = item.vmid ? String(item.vmid) : "";
-		resolveNode = item.node ? String(item.node) : "";
 		editVmid = item.vmid ? String(item.vmid) : "";
 		editNode = item.node ? String(item.node) : "";
 	});
@@ -593,6 +630,8 @@
 									disabled={!resolveNode.trim()}
 									placeholder={resolveNode.trim() ? "เลือก/พิมพ์ Storage..." : "ใส่เลข Node ก่อน"}
 									required
+									onselect={(val) => handleStorageChange(val)}
+									onchange={(val) => handleStorageChange(val)}
 								/>
 							</Field.Field>
 						</Field.FieldGroup>
