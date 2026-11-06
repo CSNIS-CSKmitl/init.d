@@ -7,40 +7,19 @@ import { startProvisioningRecovery } from '$lib/proxmox';
 import { startNightlyIpRefresh } from '$lib/server/nightly-ip-refresh';
 import { createPb } from '$lib/pb/server';
 import type { UserRole } from '$lib/types';
-import { isAppAdmin } from '$lib/role.mjs';
 import { isDocumentRequest, writeServiceAccessLog } from '$lib/server/service-access-log';
+import { getUserRoles, isInitDAdmin } from '$lib/roles';
 
 export const init: ServerInit = () => {
 	if (!building && !dev) startProvisioningRecovery();
 	if (!building && !dev) startNightlyIpRefresh();
 };
 
-interface UserTypeRef {
-	type?: string;
+function resolveRole(record: any): UserRole {
+	return isInitDAdmin(record) ? 'admin' : 'user';
 }
 
-interface UserRecord {
-	id: string;
-	email: string;
-	name?: string;
-	username?: string;
-	user_type?: string | null;
-	expand?: { user_type?: UserTypeRef };
-}
-
-function resolveRole(record: UserRecord): UserRole {
-	// PB returns expanded relations under `expand.<field>`, NOT inline on
-	// the field itself. `user_type` stays as the relation ID, the actual
-	// record lives at `record.expand.user_type`.
-	const expanded = record.expand?.user_type;
-	const typeName = expanded?.type ?? null;
-	if (isAppAdmin(typeName)) {
-		return 'admin';
-	}
-	return 'user';
-}
-
-function resolveEmail(record: UserRecord): string {
+function resolveEmail(record: any): string {
 	if (record.email) return record.email;
 	if (record.username) return `${record.username}@cskmitl.internal`;
 	return 'unknown@cskmitl.internal';
@@ -60,13 +39,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 			if (!userId) throw new Error('no user id in auth store');
 			const full = (await pb.collection('users').getOne(userId, {
 				expand: 'user_type'
-			})) as unknown as UserRecord;
+			})) as unknown as any;
 			event.locals.user = {
 				id: full.id,
 				email: resolveEmail(full),
 				name: full.name ?? full.username,
 				username: full.username,
-				role: resolveRole(full)
+				role: resolveRole(full),
+				roles: getUserRoles(full)
 			};
 		} catch {
 			pb.authStore.clear();
@@ -80,4 +60,3 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (isDocumentRequest(event)) void writeServiceAccessLog(event, response.status);
 	return response;
 };
-

@@ -129,6 +129,7 @@ export interface SessionUser {
 	name?: string;
 	username?: string;
 	role: UserRole;
+	roles?: string[];
 }
 
 
