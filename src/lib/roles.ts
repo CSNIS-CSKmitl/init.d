@@ -1,3 +1,6 @@
+import type { UserRole, DisplayRole } from './types/role';
+export type { UserRole, DisplayRole };
+
 export function getUserRoles(record: any): string[] {
 	if (!record) return [];
 	const roles = new Set<string>();
@@ -61,7 +64,7 @@ function addIdRole(id: string, set: Set<string>) {
 /**
  * แปลง Role ทางเทคนิคให้เป็นชื่อบทบาทที่อ่านง่ายสำหรับแสดงในอีเมลและหน้าจอ
  */
-export function formatDisplayRole(userOrRoles: any): string {
+export function formatDisplayRole(userOrRoles: any): DisplayRole {
 	const roleList = Array.isArray(userOrRoles) ? userOrRoles : getUserRoles(userOrRoles);
 	const cleanRoles = roleList.filter((r) => !isRawRoleId(r));
 	if (cleanRoles.some((r) => ['super_admin', 'superadmin', 'admin', 'staff', 'stuff'].includes(r))) return 'เจ้าหน้าที่ (Staff)';
