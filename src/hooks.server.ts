@@ -40,13 +40,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const full = (await pb.collection('users').getOne(userId, {
 				expand: 'user_type'
 			})) as unknown as any;
+			const isAdm = resolveRole(full) === 'admin';
 			event.locals.user = {
 				id: full.id,
 				email: resolveEmail(full),
 				name: full.name ?? full.username,
 				username: full.username,
 				role: resolveRole(full),
-				roles: getUserRoles(full)
+				roles: getUserRoles(full),
+				isAdmin: isAdm
 			};
 		} catch {
 			pb.authStore.clear();

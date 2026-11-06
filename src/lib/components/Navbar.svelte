@@ -17,7 +17,7 @@
 	let { onAnnouncement }: { onAnnouncement: () => void } = $props();
 
 	let user = $derived(page.data.user);
-	const isAdmin = $derived(Boolean(user?.isAdmin || user?.role === "admin" || user?.role === "super_admin" || user?.role === "head" || (user?.roles && (user.roles.includes("admin") || user.roles.includes("super_admin") || user.roles.includes("head")))));
+	const isAdmin = $derived(user?.role === "admin" || Boolean(user?.roles?.some((r) => ["admin", "head", "super_admin"].includes(r))));
 
 	const links = $derived([
 		...(user
