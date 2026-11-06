@@ -13,6 +13,7 @@ declare global {
 				name?: string;
 				username?: string;
 				role: 'admin' | 'user';
+				roles?: string[];
 			} | null;
 		}
 		interface PageData {
