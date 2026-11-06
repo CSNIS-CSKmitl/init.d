@@ -36,6 +36,13 @@ routerAdd('POST', '/api/cskmitl/push/unregister', (e) => {
 	return e.json(200, { ok: true });
 }, $apis.requireAuth('users'));
 
+const SERVICE_RELATION_MAP = {
+	instances: 'r2e4nkzzi6mae93',      // init.d
+	bookings: 'utmqt5k92gmsodh',       // Booking
+	loan_requests: '3kzy4o7ckfcrsm9',  // Borrow Item
+	print_jobs: 'ytan4m3hbzj53zt'      // Printer Server
+};
+
 onRecordAfterUpdateSuccess((e) => {
 	const before = e.record.original().getString('status');
 	const after = e.record.getString('status');
@@ -43,9 +50,8 @@ onRecordAfterUpdateSuccess((e) => {
 	if (!before || !after || before === after) return;
 	try {
 		const source = e.record.collection().name;
-		const services = { instances: 'INSTANCES', bookings: 'BOOKINGS', loan_requests: 'BORROW', print_jobs: 'PRINT' };
-		const service = services[source];
-		if (!service) return;
+		const serviceId = SERVICE_RELATION_MAP[source];
+		if (!serviceId) return;
 		let owners = [];
 		let title = '';
 		if (source === 'instances') {
@@ -67,7 +73,7 @@ onRecordAfterUpdateSuccess((e) => {
 			try {
 				const notice = new Record(collection);
 				notice.set('user', userId);
-				notice.set('service', service);
+				notice.set('service', serviceId);
 				notice.set('record_id', e.record.id);
 				notice.set('title', title.slice(0, 120));
 				notice.set('previous_status', before.slice(0, 60));
@@ -88,7 +94,7 @@ onRecordAfterUpdateSuccess((e) => {
 
 cronAdd('retry-status-push', '* * * * *', () => {
 	const helpers = require(`${__hooks}/push_helpers.js`);
-	const pending = $app.findRecordsByFilter('push_notices', 'delivered = false && attempts < 100', 'created', 50, 0);
+	const pending = $app.findRecordsByFilter('push_notices', 'service != "ow2zg8jqdqai2t9" && service != "ANNOUNCEMENTS" && delivered = false && attempts < 100', 'created', 50, 0);
 	for (const notice of pending) {
 		try {
 			const sent = helpers.sendNotice($app, notice);

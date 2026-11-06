@@ -1,11 +1,22 @@
+const SERVICE_CODE_MAP = {
+	'r2e4nkzzi6mae93': 'INSTANCES',
+	'utmqt5k92gmsodh': 'BOOKINGS',
+	'3kzy4o7ckfcrsm9': 'BORROW',
+	'ytan4m3hbzj53zt': 'PRINT',
+	'ow2zg8jqdqai2t9': 'ANNOUNCEMENTS',
+};
+
 function sendNotice(app, notice) {
 	const secret = String($os.getenv('PUSH_RELAY_SECRET') || '');
 	if (!secret) return false;
 	const devices = app.findRecordsByFilter('push_devices', 'user = {:user}', '', 100, 0, {
 		user: notice.getString('user'),
 	});
-	if (devices.length === 0) return true;
+	if (devices.length === 0) return false;
 	let allSent = true;
+	const rawService = notice.getString('service');
+	const serviceCode = SERVICE_CODE_MAP[rawService] || rawService;
+
 	for (const device of devices) {
 		try {
 			const response = $http.send({
@@ -16,10 +27,11 @@ function sendNotice(app, notice) {
 					'x-push-relay-secret': secret,
 				},
 				body: JSON.stringify({
-				token: device.getString('fcm_target_id'),
+					token: device.getString('fcm_target_id'),
 					eventId: notice.id,
 					userId: notice.getString('user'),
-					service: notice.getString('service'),
+					service: serviceCode,
+					serviceId: rawService,
 					recordId: notice.getString('record_id'),
 					title: notice.getString('title'),
 					previousStatus: notice.getString('previous_status'),
@@ -28,7 +40,10 @@ function sendNotice(app, notice) {
 				}),
 				timeout: 8,
 			});
-			if (response.statusCode !== 200) allSent = false;
+			if (response.statusCode !== 200) {
+				allSent = false;
+				app.logger().warn('Push relay rejected request', 'status', response.statusCode, 'noticeId', notice.id);
+			}
 		} catch (err) {
 			allSent = false;
 			app.logger().error('Push relay failed', 'noticeId', notice.id, 'error', err);
