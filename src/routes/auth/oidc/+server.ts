@@ -27,7 +27,8 @@ export const POST: RequestHandler = async ({ request, cookies, url }) => {
 			return json({ error: 'PocketBase account does not match.' }, { status: 401 });
 		}
 
-		if (!record.user_type) {
+		const hasNoRole = !record.user_type || (Array.isArray(record.user_type) && record.user_type.length === 0);
+		if (hasNoRole) {
 			const service = new PocketBase(env.POCKETBASE_URL);
 			service.autoCancellation(false);
 			await service.admins.authWithPassword(requiredEnv('PB_ADMIN_EMAIL'), requiredEnv('PB_ADMIN_PASSWORD'));

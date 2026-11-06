@@ -46,7 +46,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	// The `user_type` relation is empty on a fresh PB-created record
 	// and must be filled in via the admin client (the user themselves
 	// usually can't write to a relation field).
-	if (!record.user_type && env.PB_ADMIN_EMAIL && env.PB_ADMIN_PASSWORD) {
+	const hasNoRole = !record.user_type || (Array.isArray(record.user_type) && record.user_type.length === 0);
+	if (hasNoRole && env.PB_ADMIN_EMAIL && env.PB_ADMIN_PASSWORD) {
 		try {
 			const pbAdmin = new PocketBase(env.POCKETBASE_URL);
 			pbAdmin.autoCancellation(false);

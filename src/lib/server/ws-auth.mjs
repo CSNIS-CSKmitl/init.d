@@ -41,7 +41,7 @@ export async function authenticateSocket(request, pocketbaseUrl) {
 			pb,
 			userId: user.id,
 			// Only this application's admin role grants admin access.
-			isAdmin: isAppAdmin(user.expand?.user_type?.type)
+			isAdmin: isAppAdmin(user)
 		};
 	} catch {
 		return null;
