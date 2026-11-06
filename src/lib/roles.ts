@@ -64,8 +64,7 @@ function addIdRole(id: string, set: Set<string>) {
 export function formatDisplayRole(userOrRoles: any): string {
 	const roleList = Array.isArray(userOrRoles) ? userOrRoles : getUserRoles(userOrRoles);
 	const cleanRoles = roleList.filter((r) => !isRawRoleId(r));
-	if (cleanRoles.some((r) => ['super_admin', 'superadmin'].includes(r))) return 'Super Admin';
-	if (cleanRoles.includes('admin')) return 'ผู้ดูแลระบบ (Admin)';
+	if (cleanRoles.some((r) => ['super_admin', 'superadmin', 'admin', 'staff', 'stuff'].includes(r))) return 'เจ้าหน้าที่ (Staff)';
 	if (cleanRoles.includes('head')) return 'หัวหน้าภาควิชา (Head)';
 	if (cleanRoles.some((r) => ['teacher', 'teachers'].includes(r))) return 'อาจารย์ (Teacher)';
 	if (cleanRoles.some((r) => ['staff', 'stuff'].includes(r))) return 'เจ้าหน้าที่ (Staff)';
