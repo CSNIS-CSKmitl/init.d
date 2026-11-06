@@ -11,7 +11,7 @@
 	import * as Card from "$lib/components/ui/card";
 
 	const user = $derived(page.data.user);
-	const isAdmin = $derived(user?.role === "admin");
+	const isAdmin = $derived(Boolean(user?.isAdmin || user?.role === "admin" || user?.role === "super_admin" || user?.role === "head" || (user?.roles && (user.roles.includes("admin") || user.roles.includes("super_admin") || user.roles.includes("head")))));
 
 	const features = $derived([
 		{
