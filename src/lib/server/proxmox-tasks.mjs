@@ -5,28 +5,44 @@
  * @param {{ sleep?: () => Promise<void>, onUnavailable?: () => void }} [options]
  */
 export async function waitForProxmoxTask(readStatus, options = {}) {
-	const sleep = options.sleep || (() => new Promise(resolve => setTimeout(resolve, 2000)));
-	for (;;) {
-		let result;
-		try { result = await readStatus(); }
-		catch { options.onUnavailable?.(); await sleep(); continue; }
-		if (result?.status === 'stopped' && result.exitstatus) {
-			if (result.exitstatus !== 'OK') throw new Error(`Proxmox task failed: ${result.exitstatus}`);
-			return;
-		}
-		await sleep();
-	}
+  const sleep =
+    options.sleep ||
+    (() => new Promise((resolve) => setTimeout(resolve, 2000)));
+  for (;;) {
+    let result;
+    try {
+      result = await readStatus();
+    } catch {
+      options.onUnavailable?.();
+      await sleep();
+      continue;
+    }
+    if (result?.status === "stopped" && result.exitstatus) {
+      if (result.exitstatus !== "OK")
+        throw new Error(`Proxmox task failed: ${result.exitstatus}`);
+      return;
+    }
+    await sleep();
+  }
 }
 
 /** @param {{vmid?: number, status: string, provision_error?: string}} record */
 export function timedOutTask(record) {
-	if (record.status !== 'failed' || !record.vmid) return null;
-	const match = /^Timed out waiting for task (UPID:[^\s]+)\. Check Proxmox before retrying\.$/.exec(record.provision_error || '');
-	if (!match) return null;
-	const parts = match[1].split(':');
-	// Bind the embedded task to this lease's VMID before querying Proxmox.
-	if (parts.length < 9 || !/^[A-Za-z0-9_-]+$/.test(parts[1]) || Number(parts[6]) !== record.vmid) return null;
-	return { node: parts[1], upid: match[1], type: parts[5] };
+  if (record.status !== "failed" || !record.vmid) return null;
+  const match =
+    /^Timed out waiting for task (UPID:[^\s]+)\. Check Proxmox before retrying\.$/.exec(
+      record.provision_error || "",
+    );
+  if (!match) return null;
+  const parts = match[1].split(":");
+  // Bind the embedded task to this lease's VMID before querying Proxmox.
+  if (
+    parts.length < 9 ||
+    !/^[A-Za-z0-9_-]+$/.test(parts[1]) ||
+    Number(parts[6]) !== record.vmid
+  )
+    return null;
+  return { node: parts[1], upid: match[1], type: parts[5] };
 }
 
 /**
@@ -34,14 +50,34 @@ export function timedOutTask(record) {
  * @param {{status?: string, exitstatus?: string} | null} result
  */
 export function recoveredTaskProgress(result) {
-	if (result?.status === 'stopped' && result.exitstatus && result.exitstatus !== 'OK') {
-		return { status: 'Failed', error: `Proxmox task failed: ${result.exitstatus}`, taskState: 'failed' };
-	}
-	if (result?.status === 'stopped' && result.exitstatus === 'OK') {
-		return { status: 'Migration completed. Automatically checking the existing VM configuration and IP address.', taskState: 'stopped-ok' };
-	}
-	if (result?.status === 'running') {
-		return { status: 'Proxmox task is still running. Waiting for completion; do not start another provisioning attempt.', taskState: 'running' };
-	}
-	return { status: 'Unable to confirm the Proxmox task result. Waiting for verification; do not retry or delete the VM/CT.', taskState: 'unknown' };
+  if (
+    result?.status === "stopped" &&
+    result.exitstatus &&
+    result.exitstatus !== "OK"
+  ) {
+    return {
+      status: "Failed",
+      error: `Proxmox task failed: ${result.exitstatus}`,
+      taskState: "failed",
+    };
+  }
+  if (result?.status === "stopped" && result.exitstatus === "OK") {
+    return {
+      status:
+        "Migration completed. Automatically checking the existing VM configuration and IP address.",
+      taskState: "stopped-ok",
+    };
+  }
+  if (result?.status === "running") {
+    return {
+      status:
+        "Proxmox task is still running. Waiting for completion; do not start another provisioning attempt.",
+      taskState: "running",
+    };
+  }
+  return {
+    status:
+      "Unable to confirm the Proxmox task result. Waiting for verification; do not retry or delete the VM/CT.",
+    taskState: "unknown",
+  };
 }

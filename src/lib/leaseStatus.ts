@@ -3,32 +3,45 @@
 // AdminStats and AdminQueueTable both consume this so the numbers in the
 // stats bar always agree with the badges rendered in the table.
 
-export type LeaseBadgeStatus = "failed" | "provisioning" | "pending" | "completed" | "deleted";
+export type LeaseBadgeStatus =
+  "failed" | "provisioning" | "pending" | "completed" | "deleted";
 
-export type LeaseProgress = { status: string; error?: string; taskState?: string } | undefined;
+export type LeaseProgress =
+  { status: string; error?: string; taskState?: string } | undefined;
 
 export function leaseBadgeStatus(
-	item: { status: string; provision_state?: string },
-	progress: LeaseProgress,
+  item: { status: string; provision_state?: string },
+  progress: LeaseProgress,
 ): LeaseBadgeStatus {
-	if (item.status === "deleted" || item.provision_state === "deleted") return "deleted";
-	if (item.provision_state === "deleting") return "provisioning";
-	if (item.status === "completed") return "completed";
-	if (progress?.taskState === 'running' || progress?.taskState === 'unknown') return 'provisioning';
-	if (progress?.taskState === 'stopped-ok') return 'provisioning';
-	if (progress?.taskState === 'needs-review') return 'pending';
-	if (item.provision_state === "failed" || item.status === "failed") return "failed";
-	if (item.provision_state === "provisioning") return "provisioning";
-	if (progress?.status === "Failed") return "failed";
-	if (progress && progress.status !== "Complete") return "provisioning";
-	if (item.status === "pending") return "pending";
-	return "completed";
+  if (item.status === "deleted" || item.provision_state === "deleted")
+    return "deleted";
+  if (item.provision_state === "deleting") return "provisioning";
+  if (item.status === "completed") return "completed";
+  if (progress?.taskState === "running" || progress?.taskState === "unknown")
+    return "provisioning";
+  if (progress?.taskState === "stopped-ok") return "provisioning";
+  if (progress?.taskState === "needs-review") return "pending";
+  if (item.provision_state === "failed" || item.status === "failed")
+    return "failed";
+  if (item.provision_state === "provisioning") return "provisioning";
+  if (progress?.status === "Failed") return "failed";
+  if (progress && progress.status !== "Complete") return "provisioning";
+  if (item.status === "pending") return "pending";
+  return "completed";
 }
 
 // True when the row still needs the admin to resolve/retry it — i.e. it's
 // either freshly pending or a previous provisioning attempt failed.
-export function leaseNeedsResolve(item: { status: string; provision_state?: string }, progress: LeaseProgress): boolean {
-	if (['deleting', 'deleted', 'delete_failed'].includes(item.provision_state ?? '')) return false;
-	const badge = leaseBadgeStatus(item, progress);
-	return badge === "pending" || badge === "failed";
+export function leaseNeedsResolve(
+  item: { status: string; provision_state?: string },
+  progress: LeaseProgress,
+): boolean {
+  if (
+    ["deleting", "deleted", "delete_failed"].includes(
+      item.provision_state ?? "",
+    )
+  )
+    return false;
+  const badge = leaseBadgeStatus(item, progress);
+  return badge === "pending" || badge === "failed";
 }
