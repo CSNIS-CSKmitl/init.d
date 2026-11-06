@@ -46,7 +46,7 @@ export async function writeServiceAccessLog(
     });
     const pb = await adminPb();
     await pb.collection("service_access_logs").create({
-      service: "init.d",
+      service: "r2e4nkzzi6mae93", // init.d relation in services
       user: event.locals.user?.id || undefined,
       source_ip: clean(sourceIp, 64),
       method: event.request.method,

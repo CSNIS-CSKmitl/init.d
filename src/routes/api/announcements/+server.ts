@@ -57,7 +57,7 @@ export const POST: RequestHandler = async (event) => {
     await pb.collection("announcement_reads").create({
       announcement,
       revision,
-      site: "initd",
+      site: "r2e4nkzzi6mae93", // init.d relation in services
       ...(user ? { user } : {}),
       viewer_hash,
     });
