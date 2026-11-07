@@ -59,17 +59,6 @@
 	<!-- Operational Header -->
 	<header class="mb-10 flex flex-col justify-between gap-6 border-b border-border/80 pb-8 sm:flex-row sm:items-end">
 		<div class="space-y-2">
-			<div class="flex items-center gap-2">
-				<span class="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-					<Terminal class="size-3" strokeWidth={1.5} />
-					<span>sys:init.d · proxmox cluster</span>
-				</span>
-				<span class="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 font-mono text-[11px] text-emerald-700 dark:text-emerald-400">
-					<span class="size-1.5 rounded-full bg-emerald-500"></span>
-					<span>Nodes online</span>
-				</span>
-			</div>
-
 			<h1 class="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
 				Infrastructure Provisioning
 			</h1>
