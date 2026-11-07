@@ -4,93 +4,123 @@
 		Activity,
 		ShieldCheck,
 		Server,
-		ArrowRight,
+		ArrowUpRight,
+		Terminal,
+		Cpu,
+		HardDrive
 	} from "@lucide/svelte";
 	import { page } from "$app/state";
 	import { Button } from "$lib/components/ui/button";
 	import * as Card from "$lib/components/ui/card";
 
 	const user = $derived(page.data.user);
-	const isAdmin = $derived(user?.role === "admin" || Boolean(user?.roles?.some((r) => ["admin", "head", "super_admin"].includes(r))));
+	const isAdmin = $derived(
+		user?.role === "admin" ||
+		Boolean(user?.roles?.some((r) => ["admin", "head", "super_admin"].includes(r)))
+	);
 
 	const features = $derived([
 		{
 			href: "/request",
 			icon: FilePlus2,
-			title: "Request Provisioning",
-			body: "Submit requests for new virtual machines or container instances with custom compute, storage, and networking configurations.",
+			title: "Request provisioning",
+			badge: "Compute & storage",
+			body: "Submit requests for new virtual machines or container instances with custom CPU cores, memory limits, and networking leases.",
+			action: "Open request form"
 		},
 		{
 			href: "/status",
 			icon: Activity,
-			title: "Instance Status",
-			body: "Track active provisioning status, lease queue placement, and retrieve access credentials for your active instances.",
+			title: "Instance status",
+			badge: "Telemetry & queue",
+			body: "Monitor provisioning state, track lease queue positions, and retrieve web console or SSH credentials for active instances.",
+			action: "View instances"
 		},
 		...(isAdmin
 			? [
 					{
 						href: "/admin",
 						icon: ShieldCheck,
-						title: "Admin Dashboard",
-						body: "Manage pending leases, review system resource allocations, issue replies, and oversee active system queue.",
+						title: "Cluster administration",
+						badge: "Hypervisor control",
+						body: "Manage pending leases, review hypervisor resource quotas, approve container templates, and oversee node health.",
+						action: "Open admin panel"
 					},
 				]
 			: []),
 	]);
 </script>
 
-<section class="mx-auto max-w-2xl py-12 text-center sm:py-20">
-	<h1
-		class="mt-4 bg-linear-to-r from-foreground to-primary/60 bg-clip-text pb-1 text-4xl leading-tight font-bold tracking-tight text-transparent sm:text-5xl"
-	>
-		Infrastructure Provisioning
-	</h1>
+<svelte:head>
+	<title>Infrastructure Provisioning · CS KMITL init.d</title>
+</svelte:head>
 
-	{#if !user}
-		<Button href="/login" size="lg" class="mt-8">
-			<Server data-icon="inline-start" />
-			Sign in to start
-			<ArrowRight data-icon="inline-end" />
-		</Button>
-	{/if}
-</section>
+<div class="mx-auto max-w-5xl py-8">
+	<!-- Operational Header -->
+	<header class="mb-10 flex flex-col justify-between gap-6 border-b border-border/80 pb-8 sm:flex-row sm:items-end">
+		<div class="space-y-2">
+			<div class="flex items-center gap-2">
+				<span class="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+					<Terminal class="size-3" strokeWidth={1.5} />
+					<span>sys:init.d · proxmox cluster</span>
+				</span>
+				<span class="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 font-mono text-[11px] text-emerald-700 dark:text-emerald-400">
+					<span class="size-1.5 rounded-full bg-emerald-500"></span>
+					<span>Nodes online</span>
+				</span>
+			</div>
 
-<!-- Features Grid -->
-<section
-	class="mt-4 grid grid-cols-1 gap-6 {features.length === 3
-		? 'md:grid-cols-3'
-		: 'md:grid-cols-2'}"
->
-	{#each features as feature (feature.href)}
-		{@const Icon = feature.icon}
-		<a href={feature.href} class="group block">
-			<Card.Root
-				class="h-full justify-between transition-all duration-300 hover:-translate-y-1 hover:ring-primary/40"
-			>
-				<Card.Header>
-					<div
-						class="inline-flex size-12 items-center justify-center rounded-lg bg-primary/10 text-primary transition-all duration-300 group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground"
-					>
-						<Icon class="size-6" />
+			<h1 class="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+				Infrastructure Provisioning
+			</h1>
+			<p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+				Automated virtual machine and LXC container lifecycle management for CS KMITL academic labs, student research, and service deployments.
+			</p>
+		</div>
+
+		{#if !user}
+			<div class="flex sm:shrink-0">
+				<Button href="/login" class="h-10 px-4 text-xs font-medium">
+					<Server class="size-4" strokeWidth={1.5} />
+					<span>Sign in to manage instances</span>
+				</Button>
+			</div>
+		{/if}
+	</header>
+
+	<!-- Features & Resource Grid -->
+	<section class="grid grid-cols-1 gap-5 {features.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'}" aria-label="System actions">
+		{#each features as feature (feature.href)}
+			{@const Icon = feature.icon}
+			<a href={feature.href} class="group block h-full focus:outline-none">
+				<div class="flex h-full flex-col justify-between rounded-xl border border-border bg-card p-6 transition-colors duration-150 hover:border-foreground/30">
+					<div>
+						<div class="mb-5 flex items-center justify-between">
+							<div class="grid size-10 place-items-center rounded-lg border border-border bg-muted/40 text-foreground">
+								<Icon class="size-5" strokeWidth={1.5} />
+							</div>
+							<span class="font-mono text-[11px] text-muted-foreground">
+								{feature.badge}
+							</span>
+						</div>
+
+						<h2 class="text-base font-semibold text-foreground">
+							{feature.title}
+						</h2>
+
+						<p class="mt-2 text-xs leading-relaxed text-muted-foreground">
+							{feature.body}
+						</p>
 					</div>
-					<Card.Title
-						class="mt-4 font-mono text-xs font-semibold uppercase tracking-wider transition-colors duration-300 group-hover:text-primary"
-					>
-						{feature.title}
-					</Card.Title>
-					<Card.Description class="leading-relaxed">
-						{feature.body}
-					</Card.Description>
-				</Card.Header>
-				<Card.Footer>
-					<div
-						class="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-primary opacity-80 transition-all duration-300 group-hover:translate-x-1 group-hover:opacity-100"
-					>
-						<span>Access Dashboard</span>
-						<ArrowRight class="size-3.5" />
+
+					<div class="mt-6 flex items-center justify-between border-t border-border/60 pt-4 text-xs">
+						<span class="font-medium text-foreground transition-colors group-hover:text-primary">
+							{feature.action}
+						</span>
+						<ArrowUpRight class="size-4 text-muted-foreground transition-colors group-hover:text-primary" strokeWidth={1.5} />
 					</div>
-				</Card.Footer>
-			</Card.Root>
-		</a>
-	{/each}
-</section>
+				</div>
+			</a>
+		{/each}
+	</section>
+</div>
