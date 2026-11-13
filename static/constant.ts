@@ -5,4 +5,5 @@ export const VM_ID = new Map<string, number>([
 
 export const CT_ID = new Map<string, string>([
   ["ubuntu-24.04", "PBS:backup/ct/20000/2026-10-27T06:53:53Z"],
+  ["ubuntu-latest", "PBS:backup/ct/20000/2026-10-27T06:53:53Z"],
 ]);
