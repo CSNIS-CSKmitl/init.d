@@ -194,7 +194,10 @@ export default defineConfig(({ mode }) => {
                         username,
                         password: password || undefined,
                         privateKey: privateKey || undefined,
-                        hostVerifier: createHostVerifier(instanceId),
+                        hostVerifier:
+                          process.env.SSH_PIN_HOST_KEYS === "true"
+                            ? createHostVerifier(instanceId)
+                            : () => true,
                         tryKeyboard: true,
                         readyTimeout: 20000,
                       });
