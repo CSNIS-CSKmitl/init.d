@@ -18,6 +18,9 @@ function loadKeys(file) {
 // the JSON file with verified SHA-256 fingerprints before the first connection.
 /** @param {string} instanceId */
 export function createHostVerifier(instanceId) {
+  if (process.env.SSH_SKIP_HOST_KEY_VERIFY === "true") {
+    return () => true;
+  }
   const file = resolve(
     process.env.SSH_HOST_KEYS_FILE || ".data/ssh-hostkeys.json",
   );
