@@ -4,7 +4,7 @@
 //   2. default action — validates the form payload and INSERTs a row
 //      into PocketBase with status = "pending". No hypervisor calls.
 
-import { error, fail, redirect } from "@sveltejs/kit";
+import { error, fail, isHttpError, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import type {
   InstanceType,
@@ -57,6 +57,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       }
       [editRecord] = await addOwnerEmails(await adminPb(), [editRecord]);
     } catch (e) {
+      if (isHttpError(e)) throw e;
       console.error("Failed to load record for edit:", e);
       throw error(404, "Lease request not found.");
     }
