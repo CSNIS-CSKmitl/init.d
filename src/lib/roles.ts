@@ -82,7 +82,7 @@ function addIdRole(id: string, set: Set<string>) {
 }
 
 /**
- * In init.d: admin access is granted to admin, super_admin, head (or PB admin email)
+ * In init.d: admin access is granted to admin, head (or PB admin email)
  */
 
 /**
@@ -117,8 +117,6 @@ export function isInitDAdmin(user: any): boolean {
   const roles = getUserRoles(user);
   return (
     roles.includes("admin") ||
-    roles.includes("superadmin") ||
-    roles.includes("super_admin") ||
     roles.includes("head")
   );
 }
