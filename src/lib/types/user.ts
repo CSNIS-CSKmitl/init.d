@@ -11,7 +11,6 @@ export type SystemRole =
   | "teacher"
   | "teachers"
   | "staff"
-  | "stuff"
   | "student"
   | "students"
   | "guest"
