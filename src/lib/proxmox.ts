@@ -1236,20 +1236,36 @@ export function applyBridgeAndVlanToNet0(
   return nextParts.join(",");
 }
 
+export interface ProxmoxNodeBridge {
+  iface: string;
+  comment: string;
+  cidr?: string;
+}
+
 export async function getProxmoxNodeBridges(
   rawNode: string | number,
-): Promise<string[]> {
+): Promise<ProxmoxNodeBridge[]> {
   const nodeName = normalizeProxmoxNodeName(rawNode);
-  const raw = (await proxmox.nodes
-    .$(nodeName)
-    .network.$get({ type: "bridge" } as any)) as any[];
+  const raw = (await proxmox.nodes.$(nodeName).network.$get()) as any[];
   const list = Array.isArray(raw) ? raw : (raw as any)?.data || [];
-  const bridges: string[] = list
-    .filter((item: any) => !item.type || item.type === "bridge")
-    .map((item: any) => String(item.iface || "").trim())
-    .filter(Boolean);
-  return Array.from(new Set<string>(bridges)).sort((a, b) =>
-    a.localeCompare(b, undefined, { numeric: true }),
+  const byIface = new Map<string, ProxmoxNodeBridge>();
+
+  for (const item of list) {
+    const type = String(item?.type || "").trim();
+    const iface = String(item?.iface || "").trim();
+    if (!iface) continue;
+    if (type && type !== "bridge" && type !== "OVSBridge") continue;
+    if (!byIface.has(iface)) {
+      byIface.set(iface, {
+        iface,
+        comment: String(item?.comments ?? item?.comment ?? "").trim(),
+        cidr: String(item?.cidr || "").trim() || undefined,
+      });
+    }
+  }
+
+  return Array.from(byIface.values()).sort((a, b) =>
+    a.iface.localeCompare(b.iface, undefined, { numeric: true }),
   );
 }
 

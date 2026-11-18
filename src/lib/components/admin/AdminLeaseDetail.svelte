@@ -95,7 +95,7 @@
 		types: string[];
 		storages: Array<{ storage: string; type: string; availFormatted: string }>;
 	} | null>(null);
-	let nodeBridges = $state<string[]>([]);
+	let nodeBridges = $state<Array<{ iface: string; comment: string; cidr?: string }>>([]);
 	let loadingNetwork = $state(false);
 	let networkError = $state<string | null>(null);
 	let networkSuccess = $state<string | null>(null);
@@ -291,7 +291,15 @@
 			}
 			const data = await res.json();
 			if (Array.isArray(data.bridges) && data.bridges.length > 0) {
-				nodeBridges = data.bridges;
+				nodeBridges = data.bridges.map((b: any) =>
+					typeof b === 'string'
+						? { iface: b, comment: '' }
+						: {
+								iface: String(b.iface || ''),
+								comment: String(b.comment || ''),
+								cidr: b.cidr ? String(b.cidr) : undefined
+							}
+				).filter((b: { iface: string }) => Boolean(b.iface));
 			}
 			if (data.current) {
 				editNet0Current = data.current.net0 || '';
@@ -307,10 +315,16 @@
 	}
 
 	const bridgeOptions = $derived(
-		(nodeBridges.length > 0 ? nodeBridges : ['vmbr0', 'vmbr1']).map((b) => ({
-			value: b,
-			label: b,
-			badge: 'bridge'
+		(nodeBridges.length > 0
+			? nodeBridges
+			: [
+					{ iface: 'vmbr0', comment: '' },
+					{ iface: 'vmbr1', comment: '' }
+				]
+		).map((b) => ({
+			value: b.iface,
+			label: b.iface,
+			badge: b.comment || b.cidr || 'bridge'
 		}))
 	);
 
