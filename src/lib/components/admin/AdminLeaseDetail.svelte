@@ -262,7 +262,11 @@
 			: []
 	);
 
-	async function fetchNodeNetwork(nodeVal: string, vmidVal?: number | null, guestType?: InstanceType) {
+	async function fetchNodeNetwork(
+		nodeVal: string,
+		vmidVal: number | null = null,
+		guestType: InstanceType | undefined = undefined
+	) {
 		const clean = nodeVal.trim().replace(/^pve/i, '');
 		if (!clean) return;
 		const key = vmidVal ? `${clean}:${vmidVal}:${guestType ?? ''}` : clean;
