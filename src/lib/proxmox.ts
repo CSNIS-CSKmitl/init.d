@@ -95,14 +95,24 @@ export const proxmox = new Proxy({} as ReturnType<typeof proxmoxApi>, {
 
 function buildLxcNet0(network: string): string {
   const value = network.trim();
-  return value.includes("=")
-    ? value
-    : `name=eth0,bridge=${value},ip=dhcp,tag=15`;
+  if (!value.includes("=")) {
+    return `name=eth0,bridge=${value},ip=dhcp,tag=15`;
+  }
+  if (/(?:^|,)name=/.test(value)) {
+    return value;
+  }
+  return `name=eth0,${value},ip=dhcp`;
 }
 
 function buildVmNet0(network: string): string {
   const value = network.trim();
-  return value.includes("=") ? value : `virtio,bridge=${value},tag=15`;
+  if (!value.includes("=")) {
+    return `virtio,bridge=${value},tag=15`;
+  }
+  if (/^(?:virtio|e1000|e1000e|rtl8139|vmxnet3)(?:=|,|$)/.test(value)) {
+    return value;
+  }
+  return `virtio,${value}`;
 }
 
 /**
@@ -1136,4 +1146,155 @@ export async function getProxmoxNodeStorage(
     console.error(`Failed to get Proxmox storage for node ${nodeName}:`, err);
     throw err;
   }
+}
+
+export function normalizeProxmoxNodeName(rawNode: string | number): string {
+  const nodeStr = String(rawNode ?? "").trim();
+  if (!nodeStr) {
+    throw new Error("Node identifier is required.");
+  }
+  return /^\d+$/.test(nodeStr) ? `pve${nodeStr}` : nodeStr.toLowerCase();
+}
+
+export function validateBridgeName(rawBridge: string): string {
+  const bridge = String(rawBridge ?? "").trim();
+  if (!bridge || !/^[a-zA-Z0-9._-]+$/.test(bridge)) {
+    throw new Error("Bridge name must be a valid interface name (e.g. vmbr1).");
+  }
+  return bridge;
+}
+
+export function validateVlanTag(
+  rawTag: string | number | null | undefined,
+): string {
+  const trimmed = String(rawTag ?? "").trim();
+  if (!trimmed) return "";
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error("VLAN tag must be an integer between 1 and 4094.");
+  }
+  const num = Number(trimmed);
+  if (!Number.isInteger(num) || num < 1 || num > 4094) {
+    throw new Error("VLAN tag must be between 1 and 4094.");
+  }
+  return String(num);
+}
+
+export function parseProxmoxNet0(net0: string): {
+  bridge: string;
+  vlanTag: string;
+} {
+  const raw = String(net0 || "");
+  const bridgeMatch = /(?:^|,)bridge=([^,]+)/.exec(raw);
+  const tagMatch = /(?:^|,)tag=(\d+)/.exec(raw);
+  return {
+    bridge: bridgeMatch ? bridgeMatch[1].trim() : "",
+    vlanTag: tagMatch ? tagMatch[1].trim() : "",
+  };
+}
+
+export function applyBridgeAndVlanToNet0(
+  currentNet0: string,
+  type: "vm" | "ct" | "container",
+  rawBridge: string,
+  rawVlanTag?: string | number | null,
+): string {
+  const bridge = validateBridgeName(rawBridge);
+  const vlanTag = validateVlanTag(rawVlanTag);
+  const trimmed = String(currentNet0 || "").trim();
+
+  if (!trimmed) {
+    const spec = vlanTag ? `bridge=${bridge},tag=${vlanTag}` : `bridge=${bridge}`;
+    return type === "vm" ? buildVmNet0(spec) : buildLxcNet0(spec);
+  }
+
+  const parts = trimmed
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  let replacedBridge = false;
+  const nextParts: string[] = [];
+  for (const part of parts) {
+    if (part.startsWith("bridge=")) {
+      nextParts.push(`bridge=${bridge}`);
+      replacedBridge = true;
+    } else if (part.startsWith("tag=")) {
+      // Remove existing tag; re-add below only if vlanTag is non-empty.
+      continue;
+    } else {
+      nextParts.push(part);
+    }
+  }
+
+  if (!replacedBridge) {
+    nextParts.push(`bridge=${bridge}`);
+  }
+  if (vlanTag) {
+    nextParts.push(`tag=${vlanTag}`);
+  }
+
+  return nextParts.join(",");
+}
+
+export async function getProxmoxNodeBridges(
+  rawNode: string | number,
+): Promise<string[]> {
+  const nodeName = normalizeProxmoxNodeName(rawNode);
+  const raw = (await proxmox.nodes
+    .$(nodeName)
+    .network.$get({ type: "bridge" } as any)) as any[];
+  const list = Array.isArray(raw) ? raw : (raw as any)?.data || [];
+  const bridges: string[] = list
+    .filter((item: any) => !item.type || item.type === "bridge")
+    .map((item: any) => String(item.iface || "").trim())
+    .filter(Boolean);
+  return Array.from(new Set<string>(bridges)).sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true }),
+  );
+}
+
+export async function getProxmoxGuestNetwork(
+  rawNode: string | number,
+  vmid: number,
+  type: "vm" | "ct" | "container",
+): Promise<{ net0: string; bridge: string; vlanTag: string }> {
+  const nodeName = normalizeProxmoxNodeName(rawNode);
+  const proxmoxType = type === "vm" ? "qemu" : "lxc";
+  const config = (await (proxmox.nodes.$(nodeName) as any)[proxmoxType]
+    .$(vmid)
+    .config.$get()) as Record<string, any>;
+  const net0 = String(config?.net0 || "").trim();
+  const parsed = parseProxmoxNet0(net0);
+  return {
+    net0,
+    bridge: parsed.bridge,
+    vlanTag: parsed.vlanTag,
+  };
+}
+
+export async function updateProxmoxGuestNetwork(
+  rawNode: string | number,
+  vmid: number,
+  type: "vm" | "ct" | "container",
+  rawBridge: string,
+  rawVlanTag?: string | number | null,
+): Promise<{ net0: string; bridge: string; vlanTag: string }> {
+  const nodeName = normalizeProxmoxNodeName(rawNode);
+  const proxmoxType = type === "vm" ? "qemu" : "lxc";
+  const guest = (proxmox.nodes.$(nodeName) as any)[proxmoxType].$(vmid);
+  const config = (await guest.config.$get()) as Record<string, any>;
+  const currentNet0 = String(config?.net0 || "").trim();
+  const nextNet0 = applyBridgeAndVlanToNet0(
+    currentNet0,
+    type,
+    rawBridge,
+    rawVlanTag,
+  );
+  await guest.config.$put({ net0: nextNet0 });
+  const parsed = parseProxmoxNet0(nextNet0);
+  return {
+    net0: nextNet0,
+    bridge: parsed.bridge,
+    vlanTag: parsed.vlanTag,
+  };
 }

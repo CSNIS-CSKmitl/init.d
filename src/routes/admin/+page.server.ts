@@ -15,7 +15,28 @@ import {
   removeProxmoxInstance,
   provisioningProgress,
   assertTimedOutTaskStopped,
+  updateProxmoxGuestNetwork,
 } from "$lib/proxmox";
+
+function parseAdminNetworkInput(rawBridge: string, rawTag: string): {
+  bridge: string;
+  vlanTag: string;
+} {
+  const bridge = rawBridge.trim();
+  if (!bridge || !/^[a-zA-Z0-9._-]+$/.test(bridge)) {
+    throw new Error("Bridge name must be a valid interface name (e.g. vmbr1).");
+  }
+  const tag = rawTag.trim();
+  if (!tag) return { bridge, vlanTag: "" };
+  if (!/^\d+$/.test(tag)) {
+    throw new Error("VLAN tag must be an integer between 1 and 4094.");
+  }
+  const num = Number(tag);
+  if (!Number.isInteger(num) || num < 1 || num > 4094) {
+    throw new Error("VLAN tag must be between 1 and 4094.");
+  }
+  return { bridge, vlanTag: String(num) };
+}
 import { sendDiscordNotification } from "$lib/discord";
 import PocketBase from "pocketbase";
 import { env } from "$env/dynamic/private";
@@ -302,8 +323,28 @@ export const actions: Actions = {
           });
         }
 
+        let bridge: string;
+        let vlanTag: string;
+        try {
+          const rawBridge =
+            String(fd.get("bridge") ?? fd.get("network") ?? "vmbr1").trim() ||
+            "vmbr1";
+          const rawTag = fd.has("vlanTag")
+            ? String(fd.get("vlanTag") ?? "")
+            : "15";
+          ({ bridge, vlanTag } = parseAdminNetworkInput(rawBridge, rawTag));
+        } catch (err) {
+          return fail(400, {
+            error:
+              err instanceof Error ? err.message : "Invalid network settings.",
+            recordId: id,
+          });
+        }
+
         const record = existing;
-        const network = "vmbr1";
+        const network = vlanTag
+          ? `bridge=${bridge},tag=${vlanTag}`
+          : `bridge=${bridge}`;
         const detail = {
           ...record,
           vmid,
@@ -321,7 +362,7 @@ export const actions: Actions = {
           instanceId: id,
           hostname: record.hostname,
           action: "approve",
-          metadata: { mode, vmid, node, storage },
+          metadata: { mode, vmid, node, storage, bridge, vlanTag },
         });
         await startProvisioning(
           pb,
@@ -443,6 +484,88 @@ export const actions: Actions = {
     } catch (e) {
       console.error("reply failed", e);
       return fail(500, { error: "Could not save reply." });
+    }
+  },
+  updateNetwork: async ({ request, locals }) => {
+    if (!locals.user || locals.user.role !== "admin")
+      throw error(403, "Admin only.");
+
+    const fd = await request.formData();
+    const id = String(fd.get("id") ?? "").trim();
+    if (!id) return fail(400, { error: "Missing id.", recordId: id });
+
+    let bridge: string;
+    let vlanTag: string;
+    try {
+      ({ bridge, vlanTag } = parseAdminNetworkInput(
+        String(fd.get("bridge") ?? ""),
+        String(fd.get("vlanTag") ?? ""),
+      ));
+    } catch (err) {
+      return fail(400, {
+        error: err instanceof Error ? err.message : "Invalid network settings.",
+        recordId: id,
+      });
+    }
+
+    try {
+      const pb = await adminPb();
+      const record = await getInstanceWithInfra(pb, id);
+      if (instanceIsDeleted(record)) {
+        return fail(409, {
+          error: "Deleted leases are retained as history and cannot be edited.",
+          recordId: id,
+        });
+      }
+      await assertTimedOutTaskStopped(record);
+      if (
+        instanceIsBusy(id) ||
+        ["provisioning", "deleting"].includes(record.provision_state ?? "")
+      ) {
+        return fail(409, {
+          error: "Wait for the current operation to finish before editing.",
+          recordId: id,
+        });
+      }
+      const vmid = Number(record.vmid);
+      const node = record.node ? String(record.node).trim() : "";
+      if (!Number.isInteger(vmid) || vmid < 1 || !node) {
+        return fail(400, {
+          error: "Instance must have a valid Proxmox VMID and Node first.",
+          recordId: id,
+        });
+      }
+
+      const updated = await updateProxmoxGuestNetwork(
+        node,
+        vmid,
+        record.type,
+        bridge,
+        vlanTag,
+      );
+
+      await pb.collection("instances").update(id, {
+        updated_by: locals.user.id,
+      });
+
+      return {
+        ok: true,
+        id,
+        recordId: id,
+        networkUpdated: true,
+        bridge: updated.bridge,
+        vlanTag: updated.vlanTag,
+        net0: updated.net0,
+      };
+    } catch (e) {
+      console.error("admin updateNetwork failed", e);
+      return fail(500, {
+        error:
+          e instanceof Error
+            ? e.message
+            : "Could not update Proxmox network configuration.",
+        recordId: id,
+      });
     }
   },
 };

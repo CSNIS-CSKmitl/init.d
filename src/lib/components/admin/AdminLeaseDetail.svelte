@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { LeaseInstance } from "$lib/types";
+	import type { LeaseInstance, InstanceType } from "$lib/types";
 	import { untrack } from 'svelte';
 	import { passionGroupName, creatorEmail, creatorName } from "$lib/types";
 	import { enhance } from "$app/forms";
@@ -46,7 +46,15 @@
 		onOpenDashboard,
 	}: {
 		item: LeaseInstance;
-		form: { error?: string; id?: string; recordId?: string } | null;
+		form: {
+			error?: string;
+			id?: string;
+			recordId?: string;
+			networkUpdated?: boolean;
+			bridge?: string;
+			vlanTag?: string;
+			net0?: string;
+		} | null;
 		provisioning?: boolean;
 		progressMap?: Record<string, { status: string; error?: string }>;
 		onOpenConsole: (item: LeaseInstance) => void;
@@ -75,6 +83,8 @@
 	let resolveNode = $state(untrack(() => item.node ? String(item.node) : ""));
 	let resolveStorageType = $state("");
 	let resolveStorage = $state("");
+	let resolveBridge = $state("vmbr1");
+	let resolveVlanTag = $state("15");
 	let loadingNodes = $state(false);
 	let loadingStorage = $state(false);
 	let storageError = $state<string | null>(null);
@@ -85,6 +95,16 @@
 		types: string[];
 		storages: Array<{ storage: string; type: string; availFormatted: string }>;
 	} | null>(null);
+	let nodeBridges = $state<string[]>([]);
+	let loadingNetwork = $state(false);
+	let networkError = $state<string | null>(null);
+	let networkSuccess = $state<string | null>(null);
+	let updatingNetwork = $state(false);
+	let editBridge = $state("vmbr1");
+	let editVlanTag = $state("");
+	let editNet0Current = $state("");
+	let lastFetchedBridgeNode = "";
+	let lastFetchedGuestKey = "";
 
 	async function fetchClusterNodes() {
 		if (loadingNodes) return;
@@ -242,6 +262,54 @@
 			: []
 	);
 
+	async function fetchNodeNetwork(nodeVal: string, vmidVal?: number | null, guestType?: InstanceType) {
+		const clean = nodeVal.trim().replace(/^pve/i, '');
+		if (!clean) return;
+		const key = vmidVal ? `${clean}:${vmidVal}:${guestType ?? ''}` : clean;
+		if (loadingNetwork && (vmidVal ? lastFetchedGuestKey === key : lastFetchedBridgeNode === clean)) return;
+
+		loadingNetwork = true;
+		networkError = null;
+		if (vmidVal) lastFetchedGuestKey = key;
+		lastFetchedBridgeNode = clean;
+
+		try {
+			const params = new URLSearchParams({ node: clean });
+			if (vmidVal && guestType) {
+				params.set('vmid', String(vmidVal));
+				params.set('type', guestType);
+			}
+			const res = await fetch(`/api/proxmox-network?${params.toString()}`);
+			if (!res.ok) {
+				const errData = await res.json().catch(() => ({}));
+				networkError = errData.error || `ไม่สามารถดึงข้อมูล network สำหรับ Node ${clean} ได้`;
+				return;
+			}
+			const data = await res.json();
+			if (Array.isArray(data.bridges) && data.bridges.length > 0) {
+				nodeBridges = data.bridges;
+			}
+			if (data.current) {
+				editNet0Current = data.current.net0 || '';
+				if (data.current.bridge) editBridge = data.current.bridge;
+				editVlanTag = data.current.vlanTag ?? '';
+			}
+		} catch (err) {
+			console.error(`Failed to fetch network for node ${clean}`, err);
+			networkError = `ไม่สามารถเชื่อมต่อเพื่อดึง network สำหรับ Node ${clean} ได้`;
+		} finally {
+			loadingNetwork = false;
+		}
+	}
+
+	const bridgeOptions = $derived(
+		(nodeBridges.length > 0 ? nodeBridges : ['vmbr0', 'vmbr1']).map((b) => ({
+			value: b,
+			label: b,
+			badge: 'bridge'
+		}))
+	);
+
 	$effect(() => {
 		if (resolveMode === 'auto') {
 			if (clusterNodes.length === 0 && !loadingNodes) {
@@ -251,6 +319,31 @@
 			if (clean && (!nodeStorageData || nodeStorageData.nodeNumber !== clean)) {
 				fetchNodeStorage(clean);
 			}
+			if (clean && lastFetchedBridgeNode !== clean) {
+				fetchNodeNetwork(clean);
+			}
+		}
+	});
+
+	$effect(() => {
+		if (!isDeleted && item.vmid && item.node) {
+			const clean = String(item.node).trim().replace(/^pve/i, '');
+			const key = `${clean}:${item.vmid}:${item.type}`;
+			if (clean && lastFetchedGuestKey !== key) {
+				fetchNodeNetwork(clean, Number(item.vmid), item.type);
+			}
+		}
+	});
+
+	$effect(() => {
+		if (form?.id === item.id && form?.networkUpdated) {
+			if (form.bridge) editBridge = form.bridge;
+			editVlanTag = form.vlanTag ?? '';
+			if (form.net0) editNet0Current = form.net0;
+			networkError = null;
+			networkSuccess = `อัปเดต Proxmox สำเร็จ: ${form.net0}`;
+		} else if (form?.recordId === item.id && form?.error) {
+			networkSuccess = null;
 		}
 	});
 	let editCpu = $state(untrack(() => String(item.specs.cpu)));
@@ -634,6 +727,46 @@
 									onchange={(val) => handleStorageChange(val)}
 								/>
 							</Field.Field>
+
+							<Field.Field>
+								<Field.FieldLabel
+									for={`resolve-bridge-${item.id}`}
+									class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase flex items-center justify-between"
+								>
+									<span>bridge (vmbr)</span>
+									{#if loadingNetwork}
+										<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
+									{/if}
+								</Field.FieldLabel>
+								<TypeableDropdown
+									id={`resolve-bridge-${item.id}`}
+									name="bridge"
+									bind:value={resolveBridge}
+									options={bridgeOptions}
+									loading={loadingNetwork}
+									placeholder="vmbr1"
+									required
+								/>
+							</Field.Field>
+
+							<Field.Field>
+								<Field.FieldLabel
+									for={`resolve-vlantag-${item.id}`}
+									class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+								>
+									vlan tag
+								</Field.FieldLabel>
+								<Input
+									id={`resolve-vlantag-${item.id}`}
+									name="vlanTag"
+									type="number"
+									min="1"
+									max="4094"
+									bind:value={resolveVlanTag}
+									class="font-mono text-xs"
+									placeholder="15 (ว่าง = ไม่มี tag)"
+								/>
+							</Field.Field>
 						</Field.FieldGroup>
 
 						{#if storageError}
@@ -748,6 +881,105 @@
 			</div>
 		</form>
 	</section>
+
+	{#if item.vmid && item.node}
+		<Separator class="my-4" />
+		<section class="flex flex-col gap-2">
+			<div class="flex items-center justify-between gap-2">
+				<h3 class="flex items-center gap-1.5 font-mono text-xs font-bold text-foreground uppercase">
+					<Network class="h-3.5 w-3.5" /> Proxmox Network (net0)
+				</h3>
+				{#if loadingNetwork}
+					<span class="flex items-center gap-1 font-mono text-[10px] text-muted-foreground">
+						<Loader2 class="h-3 w-3 animate-spin" /> กำลังดึงค่าจาก Proxmox...
+					</span>
+				{/if}
+			</div>
+			<p class="text-xs text-muted-foreground">
+				เปลี่ยน Bridge (vmbr) และ VLAN Tag ของเครื่องนี้แล้วส่งไปอัปเดตที่ Proxmox ทันที (คง MAC เดิมไว้)
+			</p>
+			<form
+				method="POST"
+				action="?/updateNetwork"
+				use:enhance={() => {
+					updatingNetwork = true;
+					networkSuccess = null;
+					networkError = null;
+					return async ({ update }) => {
+						try {
+							await update();
+						} finally {
+							updatingNetwork = false;
+						}
+					};
+				}}
+				class="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4"
+			>
+				<input type="hidden" name="id" value={item.id} />
+				<Field.FieldGroup class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					<Field.Field>
+						<Field.FieldLabel for={`edit-bridge-${item.id}`} class="font-mono text-[10px] tracking-wider text-foreground/70 uppercase">
+							Bridge (vmbr)
+						</Field.FieldLabel>
+						<TypeableDropdown
+							id={`edit-bridge-${item.id}`}
+							name="bridge"
+							bind:value={editBridge}
+							options={bridgeOptions}
+							loading={loadingNetwork}
+							disabled={busy || updatingNetwork}
+							placeholder="vmbr1"
+							required
+						/>
+					</Field.Field>
+					<Field.Field>
+						<Field.FieldLabel for={`edit-vlantag-${item.id}`} class="font-mono text-[10px] tracking-wider text-foreground/70 uppercase">
+							VLAN Tag (1–4094)
+						</Field.FieldLabel>
+						<Input
+							id={`edit-vlantag-${item.id}`}
+							name="vlanTag"
+							type="number"
+							min="1"
+							max="4094"
+							bind:value={editVlanTag}
+							disabled={busy || updatingNetwork}
+							class="font-mono text-xs"
+							placeholder="ว่าง = ไม่ใส่ tag"
+						/>
+					</Field.Field>
+				</Field.FieldGroup>
+
+				{#if editNet0Current}
+					<div class="rounded bg-muted px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground break-all">
+						Current net0: <span class="text-foreground">{editNet0Current}</span>
+					</div>
+				{/if}
+
+				{#if networkError}
+					<p class="font-mono text-[11px] text-destructive">{networkError}</p>
+				{:else if networkSuccess}
+					<p class="font-mono text-[11px] text-emerald-600 dark:text-emerald-400">{networkSuccess}</p>
+				{/if}
+
+				<div class="flex justify-end gap-2">
+					<Button
+						type="button"
+						size="sm"
+						variant="outline"
+						class="font-mono"
+						disabled={loadingNetwork || updatingNetwork}
+						onclick={() => fetchNodeNetwork(String(item.node), Number(item.vmid), item.type)}
+					>
+						<RotateCcw data-icon="inline-start" /> Refresh
+					</Button>
+					<Button type="submit" size="sm" class="w-fit font-mono" disabled={busy || updatingNetwork}>
+						{updatingNetwork ? 'Applying…' : 'Apply to Proxmox'}
+					</Button>
+				</div>
+			</form>
+		</section>
+	{/if}
 
 	<Separator />
 	<section class="flex flex-col gap-2">
