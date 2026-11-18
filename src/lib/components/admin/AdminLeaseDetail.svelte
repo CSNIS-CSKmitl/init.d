@@ -314,6 +314,12 @@
 		}
 	}
 
+	const NETWORK_PRESETS = [
+		{ bridge: 'vmbr1', vlanTag: '15', label: 'สำหรับคนขอใช้ VM/CT' },
+		{ bridge: 'vmbr0', vlanTag: '1107', label: '10.107.0.0/20 (ของอาคาร)' },
+		{ bridge: 'vmbr0', vlanTag: '1407', label: '10.107.16.0/24 (ภาควิชา ComSci)' }
+	] as const;
+
 	const bridgeOptions = $derived(
 		(nodeBridges.length > 0
 			? nodeBridges
@@ -787,6 +793,30 @@
 							</Field.Field>
 						</Field.FieldGroup>
 
+						<div class="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
+							<span class="text-muted-foreground">Presets:</span>
+							{#each NETWORK_PRESETS as preset}
+								{@const active =
+									resolveBridge.trim().toLowerCase() === preset.bridge &&
+									String(resolveVlanTag).trim() === preset.vlanTag}
+								<button
+									type="button"
+									onclick={() => {
+										resolveBridge = preset.bridge;
+										resolveVlanTag = preset.vlanTag;
+									}}
+									class={cn(
+										"rounded-md border px-2 py-0.5 text-left transition-colors cursor-pointer",
+										active
+											? "border-primary bg-primary/15 text-foreground font-medium"
+											: "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+									)}
+								>
+									<span class="text-foreground">{preset.bridge}</span> · VLAN {preset.vlanTag} — {preset.label}
+								</button>
+							{/each}
+						</div>
+
 						{#if storageError}
 							<p class="font-mono text-[11px] text-destructive">
 								{storageError}
@@ -967,6 +997,31 @@
 						/>
 					</Field.Field>
 				</Field.FieldGroup>
+
+				<div class="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
+					<span class="text-muted-foreground">Presets:</span>
+					{#each NETWORK_PRESETS as preset}
+						{@const active =
+							editBridge.trim().toLowerCase() === preset.bridge &&
+							String(editVlanTag).trim() === preset.vlanTag}
+						<button
+							type="button"
+							disabled={busy || updatingNetwork}
+							onclick={() => {
+								editBridge = preset.bridge;
+								editVlanTag = preset.vlanTag;
+							}}
+							class={cn(
+								"rounded-md border px-2 py-0.5 text-left transition-colors cursor-pointer disabled:pointer-events-none disabled:opacity-50",
+								active
+									? "border-primary bg-primary/15 text-foreground font-medium"
+									: "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+							)}
+						>
+							<span class="text-foreground">{preset.bridge}</span> · VLAN {preset.vlanTag} — {preset.label}
+						</button>
+					{/each}
+				</div>
 
 				{#if editNet0Current}
 					<div class="rounded bg-muted px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground break-all">
