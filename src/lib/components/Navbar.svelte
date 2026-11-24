@@ -54,7 +54,7 @@
 				href="/"
 				class="flex items-center gap-2 font-mono text-sm tracking-tight text-foreground"
 			>
-				<Server class="text-primary" />
+				<img src="/logocs.png" alt="CS KMITL Logo" class="h-7 w-7 shrink-0 object-contain" />
 				<span class="font-semibold">init.d</span>
 			</a>
 			<p class="text-[10px] leading-tight text-muted-foreground sm:text-xs">
