@@ -52,7 +52,12 @@ server.on("upgrade", async (request, socket, head) => {
     if (!isSsh && !isProxmox) return rejectUpgrade(socket, 404, "Not Found");
     if (!isAllowedOrigin(request, process.env.ORIGIN))
       return rejectUpgrade(socket, 403, "Forbidden");
-    const auth = await authenticateSocket(request, process.env.POCKETBASE_URL);
+    const auth = await authenticateSocket(
+      request,
+      process.env.MICROBASE_URL ||
+        process.env.POCKETBASE_URL ||
+        "http://localhost:3000",
+    );
     if (!auth) return rejectUpgrade(socket, 401, "Unauthorized");
     if (isProxmox) {
       const target = await authorizeConsoleSocket(

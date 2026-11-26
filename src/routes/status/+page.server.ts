@@ -3,7 +3,7 @@
 import { redirect, error, fail } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import type { LeaseInstance } from "$lib/types";
-import PocketBase from "pocketbase";
+import { createAdminClient } from "$lib/pb/server";
 import { env } from "$env/dynamic/private";
 import { requiredEnv } from "$lib/server/env";
 import {
@@ -116,12 +116,7 @@ export const actions: Actions = {
       }
 
       // 2. Authenticate as admin to delete (regular users can't delete)
-      const pbAdmin = new PocketBase(env.POCKETBASE_URL);
-      pbAdmin.autoCancellation(false);
-      await pbAdmin.admins.authWithPassword(
-        requiredEnv("PB_ADMIN_EMAIL"),
-        requiredEnv("PB_ADMIN_PASSWORD"),
-      );
+      const pbAdmin = await createAdminClient();
 
       await pbAdmin.collection("instances").delete(id);
       return { success: true };

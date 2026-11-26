@@ -1,49 +1,49 @@
 import { json, redirect } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import PocketBase from "pocketbase";
-import { env } from "$env/dynamic/private";
-import { requiredEnv } from "$lib/server/env";
+import Microbase from "@techasit5415/microbase-sdk";
+import { createAdminClient, getMicrobaseUrl } from "$lib/pb/server";
 import { AUTH_COOKIE } from "$lib/constants";
 
-// PocketBase handles the complete OAuth2 flow. This endpoint only persists the
-// PocketBase session as an HttpOnly cookie for server-rendered pages.
+// Microbase handles the OAuth2/OIDC flow and redirects back with ?code=...
+// (or a client POSTs { token, record }). This endpoint persists the session
+// as an HttpOnly cookie for server-rendered pages.
 const DEFAULT_STUDENT_TYPE_ID = "000000000000001";
+
+async function ensureDefaultRole(record: any) {
+  const hasNoRole =
+    !record?.user_type ||
+    (Array.isArray(record.user_type) && record.user_type.length === 0);
+  if (hasNoRole && record?.id) {
+    const service = await createAdminClient();
+    return service
+      .collection("users")
+      .update(record.id, { user_type: DEFAULT_STUDENT_TYPE_ID });
+  }
+  return record;
+}
 
 export const POST: RequestHandler = async ({ request, cookies, url }) => {
   const payload = await request.json().catch(() => null);
   const token = payload?.token;
   const claimedId = payload?.record?.id;
   if (typeof token !== "string" || typeof claimedId !== "string") {
-    return json({ error: "Missing PocketBase credentials." }, { status: 400 });
+    return json({ error: "Missing Microbase credentials." }, { status: 400 });
   }
 
   try {
-    const pb = new PocketBase(env.POCKETBASE_URL);
-    pb.autoCancellation(false);
-    pb.authStore.save(token, null);
-    const refreshed = await pb.collection("users").authRefresh();
+    const mb = new Microbase(getMicrobaseUrl());
+    mb.autoCancellation(false);
+    mb.authStore.save(token, null);
+    const refreshed = await mb.collection("users").authRefresh();
     let record = refreshed.record;
     if (!record?.id || record.id !== claimedId) {
       return json(
-        { error: "PocketBase account does not match." },
+        { error: "Microbase account does not match." },
         { status: 401 },
       );
     }
 
-    const hasNoRole =
-      !record.user_type ||
-      (Array.isArray(record.user_type) && record.user_type.length === 0);
-    if (hasNoRole) {
-      const service = new PocketBase(env.POCKETBASE_URL);
-      service.autoCancellation(false);
-      await service.admins.authWithPassword(
-        requiredEnv("PB_ADMIN_EMAIL"),
-        requiredEnv("PB_ADMIN_PASSWORD"),
-      );
-      record = await service
-        .collection("users")
-        .update(record.id, { user_type: DEFAULT_STUDENT_TYPE_ID });
-    }
+    record = await ensureDefaultRole(record);
 
     cookies.set(
       AUTH_COOKIE,
@@ -59,16 +59,44 @@ export const POST: RequestHandler = async ({ request, cookies, url }) => {
     return json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (cause) {
     console.error(
-      "[auth/oidc] PocketBase sign-in failed:",
+      "[auth/oidc] Microbase sign-in failed:",
       cause instanceof Error ? cause.message : cause,
     );
     return json(
-      { error: "Could not complete PocketBase sign-in." },
+      { error: "Could not complete Microbase sign-in." },
       { status: 503 },
     );
   }
 };
 
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ url, cookies }) => {
+  const code = url.searchParams.get("code");
+  if (!code) {
+    throw redirect(303, "/");
+  }
+
+  try {
+    const mb = new Microbase(getMicrobaseUrl());
+    mb.autoCancellation(false);
+    const auth = await mb.exchangeOAuth2Code(code);
+    if (!auth.token || !auth.record?.id) {
+      throw redirect(303, "/login?error=oidc_failed");
+    }
+    const record = await ensureDefaultRole(auth.record);
+    cookies.set(AUTH_COOKIE, JSON.stringify({ token: auth.token, record }), {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: url.protocol === "https:",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+  } catch (cause) {
+    console.error(
+      "[auth/oidc] OAuth code exchange failed:",
+      cause instanceof Error ? cause.message : cause,
+    );
+    throw redirect(303, "/login?error=oidc_failed");
+  }
+
   throw redirect(303, "/");
 };

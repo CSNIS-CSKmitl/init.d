@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import type PocketBase from "pocketbase";
+import type Microbase from "@techasit5415/microbase-sdk";
 import type { LeaseInstance } from "../types";
 import { timedOutTask } from "./proxmox-tasks.mjs";
 
@@ -109,7 +109,7 @@ export function verifiedMigrationPatch(
 
 /** Only reconcile lease metadata. Never create, restart, migrate or stop a guest. */
 export async function commitVerifiedRecovery(
-  pb: PocketBase,
+  pb: Microbase,
   item: LeaseInstance,
   patch: NonNullable<ReturnType<typeof verifiedMigrationPatch>["patch"]>,
 ): Promise<{ completed: boolean; changed: boolean; record?: LeaseInstance }> {

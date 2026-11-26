@@ -187,7 +187,7 @@ function adminActions(
       },
     },
     "$lib/discord": { sendDiscordNotification: notify },
-    pocketbase: {},
+    "$lib/pb/server": { createAdminClient: async () => pb },
     "$env/dynamic/private": { env: {} },
     "$lib/server/env": {
       requiredEnv: () =>

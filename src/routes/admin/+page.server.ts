@@ -38,9 +38,7 @@ function parseAdminNetworkInput(rawBridge: string, rawTag: string): {
   return { bridge, vlanTag: String(num) };
 }
 import { sendDiscordNotification } from "$lib/discord";
-import PocketBase from "pocketbase";
-import { env } from "$env/dynamic/private";
-import { requiredEnv } from "$lib/server/env";
+import { createAdminClient } from "$lib/pb/server";
 import { addOwnerEmails, adminPb } from "$lib/server/instance-owners";
 import {
   deleteInstance,
@@ -55,25 +53,9 @@ export const load: PageServerLoad = async ({ locals }) => {
   if (locals.user.role !== "admin") throw error(403, "Admin access required.");
 
   try {
-    // Use PocketBase superuser client because regular clients cannot see
+    // Use Microbase superuser client because regular clients cannot see
     // the email field of other users when emailVisibility is set to false.
-    const pbAdmin = new PocketBase(env.POCKETBASE_URL);
-    pbAdmin.autoCancellation(false);
-    let loggedIn = false;
-    try {
-      await pbAdmin
-        .collection("_superusers")
-        .authWithPassword(
-          requiredEnv("PB_ADMIN_EMAIL"),
-          requiredEnv("PB_ADMIN_PASSWORD"),
-        );
-      loggedIn = true;
-    } catch (e) {
-      await pbAdmin.admins.authWithPassword(
-        requiredEnv("PB_ADMIN_EMAIL"),
-        requiredEnv("PB_ADMIN_PASSWORD"),
-      );
-    }
+    const pbAdmin = await createAdminClient();
 
     // Load instances, infra, deletion, and approval histories in parallel.
     const [list, infraRecords, deletionRecords, adminActions] =

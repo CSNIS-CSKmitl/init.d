@@ -1,4 +1,4 @@
-import type PocketBase from "pocketbase";
+import type Microbase from "@techasit5415/microbase-sdk";
 import type { LeaseInstance } from "../types";
 
 // Lock before the first await so double submissions cannot start two operations.
@@ -17,7 +17,7 @@ export type DeletedInstanceIdentity = {
 };
 
 async function updateInfraSafely(
-  pb: PocketBase,
+  pb: Microbase,
   instanceId: string,
   patch: Record<string, unknown>,
 ): Promise<void> {
@@ -45,7 +45,7 @@ async function updateInfraSafely(
 }
 
 export async function startInstanceProvisioning(
-  pb: PocketBase,
+  pb: Microbase,
   record: LeaseInstance,
   target: Record<string, unknown>,
   checkTarget: () => Promise<void>,
@@ -159,7 +159,7 @@ export async function startInstanceProvisioning(
 }
 
 export async function deleteInstance(
-  pb: PocketBase,
+  pb: Microbase,
   record: LeaseInstance,
   removeGuest: () => Promise<DeletedInstanceIdentity | void>,
   actorId?: string,

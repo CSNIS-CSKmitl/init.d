@@ -1,13 +1,10 @@
-import { env } from "$env/dynamic/private";
 import { error, type RequestHandler } from "@sveltejs/kit";
+import { getMicrobaseUrl } from "$lib/pb/server";
 
 export const trailingSlash = "ignore";
 
 export const fallback: RequestHandler = async ({ request, fetch }) => {
-  const pbUrl = env.POCKETBASE_URL;
-  if (!pbUrl) {
-    throw error(500, "POCKETBASE_URL is not set in environment variables");
-  }
+  const pbUrl = getMicrobaseUrl();
 
   const url = new URL(request.url);
   // Match the subpath after /api/db

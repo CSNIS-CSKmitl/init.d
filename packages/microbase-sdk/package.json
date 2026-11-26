@@ -1,0 +1,14 @@
+{
+  "name": "@techasit5415/microbase-sdk",
+  "version": "0.10.67",
+  "description": "Zero-dependency TypeScript/JavaScript SDK for Microbase (PostgreSQL + pgvector BaaS)",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  }
+}

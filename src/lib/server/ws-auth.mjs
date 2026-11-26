@@ -1,4 +1,4 @@
-import PocketBase from "pocketbase";
+import Microbase from "@techasit5415/microbase-sdk";
 import {
   consoleGrantInstanceId,
   verifyConsoleGrant,
@@ -44,11 +44,11 @@ export async function authenticateSocket(request, pocketbaseUrl) {
       typeof stored?.record?.id !== "string"
     )
       return null;
-    const pb = new PocketBase(pocketbaseUrl);
+    const pb = new Microbase(pocketbaseUrl);
     pb.autoCancellation(false);
     pb.authStore.save(stored.token, null);
     const refreshed = await pb.collection("users").authRefresh();
-    if (refreshed.record?.id !== stored.record.id) return null;
+    if (!refreshed.record?.id || refreshed.record.id !== stored.record.id) return null;
     const user = await pb
       .collection("users")
       .getOne(refreshed.record.id, { expand: "user_type" });
@@ -106,18 +106,18 @@ export async function writeSocketAuditLog(
   { userId, instanceId, action, metadata = {} },
 ) {
   try {
-    if (
-      !process.env.POCKETBASE_URL ||
-      !process.env.PB_ADMIN_EMAIL ||
-      !process.env.PB_ADMIN_PASSWORD
-    )
-      return;
-    const pb = new PocketBase(process.env.POCKETBASE_URL);
+    const baseUrl =
+      process.env.MICROBASE_URL ||
+      process.env.POCKETBASE_URL ||
+      "http://localhost:3000";
+    const adminEmail =
+      process.env.MICROBASE_ADMIN_EMAIL || process.env.PB_ADMIN_EMAIL;
+    const adminPassword =
+      process.env.MICROBASE_ADMIN_PASSWORD || process.env.PB_ADMIN_PASSWORD;
+    if (!baseUrl || !adminEmail || !adminPassword) return;
+    const pb = new Microbase(baseUrl);
     pb.autoCancellation(false);
-    await pb.admins.authWithPassword(
-      process.env.PB_ADMIN_EMAIL,
-      process.env.PB_ADMIN_PASSWORD,
-    );
+    await pb.collection("_superusers").authWithPassword(adminEmail, adminPassword);
     const sourceIp = resolveClientIp({
       headers: request.headers,
       remoteAddress: request.socket.remoteAddress || "",

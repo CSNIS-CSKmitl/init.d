@@ -13,7 +13,7 @@
 //     from GitHub on every request.
 //   * Admins can disable bad/retired presets without touching code.
 
-import type PocketBase from "pocketbase";
+import type Microbase from "@techasit5415/microbase-sdk";
 
 export interface Preset {
   slug: string;
@@ -91,7 +91,7 @@ function transform(record: RawTemplateRecord): Preset | null {
  * form just won't show any preset options, which is the right behaviour
  * before the seed script has been run.
  */
-export async function fetchPresets(pb: PocketBase): Promise<Preset[]> {
+export async function fetchPresets(pb: Microbase): Promise<Preset[]> {
   try {
     // 1000 covers the full community-scripts catalog with room to grow
     // before we have to think about pagination. PB returns totalItems

@@ -6,11 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="text-scale" content="scale" />
     <meta name="color-scheme" content="light dark" />
-    <!-- PocketBase client — loaded as a UMD bundle from the local static
-		     directory. We avoid the npm ESM build on the client because Vite's
-		     HMR transform mangles a class method literally named `import(...)`
-		     in the minified bundle. -->
-    <script src="/pocketbase.umd.js"></script>
     %sveltekit.head%
   </head>
   <body

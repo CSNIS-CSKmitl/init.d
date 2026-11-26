@@ -1,6 +1,5 @@
-import PocketBase from "pocketbase";
-import { env } from "$env/dynamic/private";
-import { requiredEnv } from "./env";
+import type Microbase from "@techasit5415/microbase-sdk";
+import { createAdminClient } from "$lib/pb/server";
 import type { LeaseInstance } from "$lib/types";
 
 export function canAccessInstance(
@@ -21,18 +20,12 @@ export function canManageOwners(
   return isAdmin || record.email === userId;
 }
 
-export async function adminPb(): Promise<PocketBase> {
-  const pb = new PocketBase(env.POCKETBASE_URL);
-  pb.autoCancellation(false);
-  await pb.admins.authWithPassword(
-    requiredEnv("PB_ADMIN_EMAIL"),
-    requiredEnv("PB_ADMIN_PASSWORD"),
-  );
-  return pb;
+export async function adminPb(): Promise<Microbase> {
+  return createAdminClient();
 }
 
 export async function resolveOwnerIds(
-  pb: PocketBase,
+  pb: Microbase,
   raw: string,
   requesterId: string,
 ): Promise<string[]> {
@@ -63,7 +56,7 @@ export async function resolveOwnerIds(
 }
 
 export async function addOwnerEmails(
-  pb: PocketBase,
+  pb: Microbase,
   items: LeaseInstance[],
 ): Promise<LeaseInstance[]> {
   const ids = [

@@ -1,12 +1,12 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
-import type PocketBase from "pocketbase";
+import type Microbase from "@techasit5415/microbase-sdk";
 
 declare global {
   namespace App {
     // interface Error {}
     interface Locals {
-      pb: PocketBase;
+      pb: Microbase;
       user: {
         id: string;
         email: string;

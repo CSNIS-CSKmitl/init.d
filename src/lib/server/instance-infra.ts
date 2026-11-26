@@ -1,4 +1,4 @@
-import type PocketBase from "pocketbase";
+import type Microbase from "@techasit5415/microbase-sdk";
 import type { LeaseInstance } from "$lib/types";
 import { adminPb } from "./instance-owners";
 
@@ -37,7 +37,7 @@ export function mergeInfra(
 
 /** Fetches one instance merged with its infra data. */
 export async function getInstanceWithInfra(
-  pb: PocketBase,
+  pb: Microbase,
   id: string,
   queryParams: Record<string, any> = {},
 ): Promise<LeaseInstance> {
@@ -50,7 +50,7 @@ export async function getInstanceWithInfra(
 
 /** Attaches infra data to a list of instances in one batch query. */
 export async function attachInfraToInstances(
-  pb: PocketBase,
+  pb: Microbase,
   instances: LeaseInstance[],
 ): Promise<LeaseInstance[]> {
   if (!instances || instances.length === 0) return instances;
@@ -88,7 +88,7 @@ export async function attachInfraToInstances(
 
 /** Helper to get or create infra record by instance ID. */
 export async function getInfraRecord(
-  pb: PocketBase,
+  pb: Microbase,
   instanceId: string,
 ): Promise<InstanceInfraRecord | null> {
   try {
@@ -113,7 +113,7 @@ export async function getInfraRecord(
 
 /** Updates or inserts infra fields for an instance. */
 export async function updateInstanceInfra(
-  pb: PocketBase,
+  pb: Microbase,
   instanceId: string,
   data: Partial<{
     vmid: number | null;

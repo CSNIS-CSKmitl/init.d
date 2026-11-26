@@ -1,7 +1,7 @@
-import type PocketBase from "pocketbase";
+import type Microbase from "@techasit5415/microbase-sdk";
 import type { PublicAnnouncement } from "$lib/announcements";
 export async function loadAnnouncements(
-  pb: PocketBase,
+  pb: Microbase,
   site: "initd" | "printer",
 ) {
   return pb.collection("announcements").getFullList<PublicAnnouncement>({

@@ -4,7 +4,7 @@
 import "dotenv/config";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import PocketBase from "pocketbase";
+import Microbase from "@techasit5415/microbase-sdk";
 import { fetch, Agent } from "undici";
 
 /** @typedef {{ id: string, type: string, vmid: number, node: number | string }} Instance */
@@ -110,7 +110,9 @@ export async function syncInstanceNodes(config = process.env, options = {}) {
     connect: { rejectUnauthorized: config.PROXMOX_SKIP_TLS_VERIFY !== "true" },
   });
   try {
-    const pb = new PocketBase(config.POCKETBASE_URL);
+    const pb = new Microbase(
+      config.MICROBASE_URL || config.POCKETBASE_URL || "http://localhost:3000",
+    );
     pb.autoCancellation(false);
     const response = await fetch(
       `https://${config.PROXMOX_HOST}:${config.PROXMOX_PORT || 8006}/api2/json/cluster/resources?type=vm`,
@@ -126,10 +128,12 @@ export async function syncInstanceNodes(config = process.env, options = {}) {
     const body = /** @type {{ data?: Guest[] }} */ (await response.json());
     if (!Array.isArray(body.data))
       throw new Error("Proxmox inventory response is invalid.");
-    await pb.admins.authWithPassword(
-      config.PB_ADMIN_EMAIL ?? "",
-      config.PB_ADMIN_PASSWORD ?? "",
-    );
+    await pb
+      .collection("_superusers")
+      .authWithPassword(
+        config.MICROBASE_ADMIN_EMAIL ?? config.PB_ADMIN_EMAIL ?? "",
+        config.MICROBASE_ADMIN_PASSWORD ?? config.PB_ADMIN_PASSWORD ?? "",
+      );
     const records = /** @type {Instance[]} */ (
       await pb.collection("instances").getFullList({
         filter: "vmid > 0",

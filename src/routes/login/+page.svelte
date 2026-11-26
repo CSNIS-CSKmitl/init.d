@@ -26,41 +26,15 @@
 	async function signInWithOidc() {
 		oauthLoading = true;
 		oauthError = null;
-		let pb: ReturnType<typeof pbBrowser> | null = null;
 		try {
-			pb = pbBrowser();
-			// Triggers the full client-side OAuth dance: opens the
-			// provider, completes the round-trip, and returns the
-			// freshly-authenticated record. PB auto-creates the user
-			// record on first login.
-			const result = await pb
-				.collection("users")
-				.authWithOAuth2({ provider: "oidc" });
-
-			const res = await fetch("/auth/oidc", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					token: result.token,
-					record: result.record,
-				}),
-			});
-			if (!res.ok) {
-				const result = await res.json().catch(() => null);
-				throw new Error(result?.error || "KMITL IAM sign-in failed.");
-			}
-			toast.success("เข้าสู่ระบบสำเร็จ");
-			// Hard reload so every layout/page load re-runs on the
-			// server with the freshly-set `pb_auth` cookie — `goto()` keeps the client
-			// router state and can miss the new auth.
-			window.location.assign("/");
+			const mb = pbBrowser();
+			const callbackUrl = `${window.location.origin}/auth/oidc`;
+			window.location.assign(mb.getOAuth2Url("oidc", callbackUrl));
 		} catch (e: unknown) {
-			pb?.authStore.clear();
 			oauthError =
 				(e as { message?: string })?.message ??
 				"KMITL IAM sign-in failed. Please try again.";
 			toast.error(oauthError);
-		} finally {
 			oauthLoading = false;
 		}
 	}

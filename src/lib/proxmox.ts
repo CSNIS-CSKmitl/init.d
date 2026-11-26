@@ -22,7 +22,7 @@ import { fetch as undiciFetch, Agent } from "undici";
 import * as dotenv from "dotenv";
 import { CT_ID, VM_ID } from "$static/constant";
 import { sendDiscordNotification } from "./discord";
-import type PocketBase from "pocketbase";
+import type Microbase from "@techasit5415/microbase-sdk";
 import type { LeaseInstance } from "./types";
 import {
   startInstanceProvisioning,
@@ -709,7 +709,7 @@ export function startProvisioningRecovery() {
 }
 
 export const startProvisioning = async (
-  pb: PocketBase,
+  pb: Microbase,
   recordId: string,
   detail: LeaseInstance & { cores: number; memory: number },
   network: string,
