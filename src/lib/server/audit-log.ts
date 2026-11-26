@@ -22,6 +22,14 @@ function clean(
   const text = value?.trim();
   return text ? text.slice(0, max) : undefined;
 }
+function safeClientAddress(event: RequestEvent): string {
+  try {
+    return event.getClientAddress();
+  } catch {
+    return "";
+  }
+}
+
 function sourceIp(event: RequestEvent): string {
   return resolveClientIp({
     headers: {
@@ -31,7 +39,7 @@ function sourceIp(event: RequestEvent): string {
       "x-real-ip": event.request.headers.get("x-real-ip") ?? "",
       forwarded: event.request.headers.get("forwarded") ?? "",
     },
-    remoteAddress: event.getClientAddress(),
+    remoteAddress: safeClientAddress(event),
     trustProxy: env.TRUST_PROXY === "true",
   });
 }

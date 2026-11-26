@@ -34,6 +34,14 @@ export function isDocumentRequest(event: RequestEvent): boolean {
   );
 }
 
+function safeClientAddress(event: RequestEvent): string {
+  try {
+    return event.getClientAddress();
+  } catch {
+    return "";
+  }
+}
+
 export async function writeServiceAccessLog(
   event: RequestEvent,
   statusCode: number,
@@ -41,7 +49,7 @@ export async function writeServiceAccessLog(
   try {
     const sourceIp = resolveClientIp({
       headers: headers(event),
-      remoteAddress: event.getClientAddress(),
+      remoteAddress: safeClientAddress(event),
       trustProxy: env.TRUST_PROXY === "true",
     });
     const pb = await adminPb();

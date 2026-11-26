@@ -28,7 +28,7 @@ async function ensureDefaultRole(record: any) {
     const service = await createAdminClient();
     return service
       .collection("users")
-      .update(record.id, { user_type: resolveDefaultUserTypeId(record) });
+      .update(record.id, { user_type: [resolveDefaultUserTypeId(record)] });
   }
   return record;
 }
