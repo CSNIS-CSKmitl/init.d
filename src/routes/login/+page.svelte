@@ -29,7 +29,7 @@
 		try {
 			const mb = pbBrowser();
 			const callbackUrl = `${window.location.origin}/auth/oidc`;
-			window.location.assign(mb.getOAuth2Url("oidc", callbackUrl));
+			window.location.assign(mb.getOAuth2Url("scikmitl", callbackUrl));
 		} catch (e: unknown) {
 			oauthError =
 				(e as { message?: string })?.message ??

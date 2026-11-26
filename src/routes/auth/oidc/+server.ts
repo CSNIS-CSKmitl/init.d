@@ -7,7 +7,18 @@ import { AUTH_COOKIE } from "$lib/constants";
 // Microbase handles the OAuth2/OIDC flow and redirects back with ?code=...
 // (or a client POSTs { token, record }). This endpoint persists the session
 // as an HttpOnly cookie for server-rendered pages.
-const DEFAULT_STUDENT_TYPE_ID = "000000000000001";
+const ROLE_TYPE_IDS = {
+  student: "000000000000001",
+  staff: "000000000000002",
+  guest: "000000000000003",
+} as const;
+
+function resolveDefaultUserTypeId(record: any): string {
+  const iamRole = String(record?.iam_role ?? "").trim().toLowerCase();
+  if (iamRole === "staff") return ROLE_TYPE_IDS.staff;
+  if (iamRole === "guest") return ROLE_TYPE_IDS.guest;
+  return ROLE_TYPE_IDS.student;
+}
 
 async function ensureDefaultRole(record: any) {
   const hasNoRole =
@@ -17,7 +28,7 @@ async function ensureDefaultRole(record: any) {
     const service = await createAdminClient();
     return service
       .collection("users")
-      .update(record.id, { user_type: DEFAULT_STUDENT_TYPE_ID });
+      .update(record.id, { user_type: resolveDefaultUserTypeId(record) });
   }
   return record;
 }
