@@ -33,11 +33,73 @@ export function getAdminCredentials(): { email: string; password: string } {
   return { email, password };
 }
 
+interface CachedAdminAuth {
+  url: string;
+  email: string;
+  token: string;
+  record: RecordModel | null;
+  expiresAt: number;
+}
+
+let cachedAdmin: CachedAdminAuth | null = null;
+let pendingAdminLogin: Promise<CachedAdminAuth> | null = null;
+
+function decodeJwtExpMs(token: string): number {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return Date.now() + 10 * 60 * 1000;
+    const payload = JSON.parse(
+      Buffer.from(parts[1], "base64url").toString("utf8"),
+    );
+    if (typeof payload?.exp === "number") {
+      return payload.exp * 1000 - 60_000; // refresh 60s before expiry
+    }
+  } catch {
+    // ignore decode errors
+  }
+  return Date.now() + 10 * 60 * 1000;
+}
+
 export async function createAdminClient(): Promise<Microbase> {
-  const mb = new Microbase(getMicrobaseUrl());
-  mb.autoCancellation(false);
+  const url = getMicrobaseUrl();
   const { email, password } = getAdminCredentials();
-  await mb.collection("_superusers").authWithPassword(email, password);
+
+  const now = Date.now();
+  if (
+    cachedAdmin &&
+    cachedAdmin.url === url &&
+    cachedAdmin.email === email &&
+    cachedAdmin.expiresAt > now
+  ) {
+    const mb = new Microbase(url);
+    mb.autoCancellation(false);
+    mb.authStore.save(cachedAdmin.token, cachedAdmin.record);
+    return mb;
+  }
+
+  if (!pendingAdminLogin) {
+    pendingAdminLogin = (async () => {
+      const mb = new Microbase(url);
+      mb.autoCancellation(false);
+      await mb.collection("_superusers").authWithPassword(email, password);
+      const next: CachedAdminAuth = {
+        url,
+        email,
+        token: mb.authStore.token,
+        record: mb.authStore.record,
+        expiresAt: decodeJwtExpMs(mb.authStore.token),
+      };
+      cachedAdmin = next;
+      return next;
+    })().finally(() => {
+      pendingAdminLogin = null;
+    });
+  }
+
+  const auth = await pendingAdminLogin;
+  const mb = new Microbase(url);
+  mb.autoCancellation(false);
+  mb.authStore.save(auth.token, auth.record);
   return mb;
 }
 
