@@ -72,8 +72,9 @@
       consoleType = data.consoleType;
       consolePassword = data.vncPassword ?? null;
     } catch (err: any) {
-      consoleError = err.message || "An unexpected error occurred.";
-      toast.error(consoleError);
+      const msg = err.message || "An unexpected error occurred.";
+      consoleError = msg;
+      toast.error(msg);
     } finally {
       consoleLoading = false;
     }
