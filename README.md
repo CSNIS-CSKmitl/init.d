@@ -31,14 +31,14 @@ npm run start
 
 ตั้งค่าใน GitHub → Settings → Environments → `env` (ตรงกับ `environment: env` ใน workflow):
 
-| ประเภท | ชื่อ | ค่า |
-| --- | --- | --- |
-| Secret | `SSH_HOST` | IP หรือ hostname ของ server |
-| Secret | `SSH_USER` | user SSH ที่เป็นเจ้าของ process PM2 และเขียนไฟล์ปลายทางได้ |
-| Secret | `ENV_FILE` | เนื้อหา production `.env` ทั้งไฟล์ตาม `.env.example`; workflow ส่งไปวางบน server ให้อัตโนมัติ |
-| Variable | `DEPLOY_PATH` | absolute path ของแอป เช่น `/var/www/initd` (ไม่ใช้ช่องว่างหรือ `..`) |
+| ประเภท              | ชื่อ                  | ค่า                                                                                                 |
+| ------------------- | --------------------- | --------------------------------------------------------------------------------------------------- |
+| Secret              | `SSH_HOST`            | IP หรือ hostname ของ server                                                                         |
+| Secret              | `SSH_USER`            | user SSH ที่เป็นเจ้าของ process PM2 และเขียนไฟล์ปลายทางได้                                          |
+| Secret              | `ENV_FILE`            | เนื้อหา production `.env` ทั้งไฟล์ตาม `.env.example`; workflow ส่งไปวางบน server ให้อัตโนมัติ       |
+| Variable            | `DEPLOY_PATH`         | absolute path ของแอป เช่น `/var/www/initd` (ไม่ใช้ช่องว่างหรือ `..`)                                |
 | Variable (optional) | `VITE_POCKETBASE_URL` | ค่าเริ่มต้น `/api/db` ผ่าน proxy ของเว็บ ไม่ต้องตั้งซ้ำ; ตั้งเฉพาะเมื่อต้องการใช้ URL อื่นตอน build |
-| Variable | `PM2_APP_NAME` | ชื่อ process PM2 เดิม; ค่าเริ่มต้น `initd` |
+| Variable            | `PM2_APP_NAME`        | ชื่อ process PM2 เดิม; ค่าเริ่มต้น `initd`                                                          |
 
 เตรียม server ครั้งแรก: SSH ด้วย root ไปยัง Ubuntu/Debian ที่เข้าถึงอินเทอร์เน็ตได้ Workflow ติดตั้ง rsync ที่ขาดผ่าน `apt-get`, โหลด nvm เดิมหรือสร้าง nvm v0.40.8 หากจำเป็น, ติดตั้ง Node.js **24** พร้อม npm หากยังไม่มีรุ่นที่ต้องการ และติดตั้ง PM2 หากไม่พบใน PATH ของ Node ที่เลือก ใช้ของเดิมเมื่อพร้อมแล้ว ไม่ติดตั้งซ้ำทุก deploy อีกทั้งสร้าง `DEPLOY_PATH` และวาง `.env` ให้เอง หากมี process PM2 อยู่แล้ว ต้องใช้ `server.js` และ working directory ตรงกับ `DEPLOY_PATH`
 
@@ -52,12 +52,12 @@ runner ต้องมี SSH และ rsync เช่นกัน Workflow ส
 
 ## หน้าหลัก
 
-| หน้า | งาน |
-| --- | --- |
-| `/login` | เข้าเว็บผ่าน PocketBase `oidc` หรือบัญชี `users` |
-| `/request` | ขอ VM/CT และระบุเจ้าของร่วมก่อนส่ง |
-| `/status` | ดูคำขอ, เพิ่ม/ลบเจ้าของร่วม, แก้หรือยกเลิกคำขอ pending; กดแถวเครื่องเพื่อดูกราฟ CPU/RAM/Network, IP ล่าสุด และจัดการ Power/Console/SSH |
-| `/admin` | ดูคิว, ตอบผู้ขอ, แก้ข้อมูลและ IP, Complete ด้วยตนเองหรือ Auto Provision, ลบ VM/CT |
+| หน้า       | งาน                                                                                                                                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `/login`   | เข้าเว็บผ่าน PocketBase `oidc` หรือบัญชี `users`                                                                                       |
+| `/request` | ขอ VM/CT และระบุเจ้าของร่วมก่อนส่ง                                                                                                     |
+| `/status`  | ดูคำขอ, เพิ่ม/ลบเจ้าของร่วม, แก้หรือยกเลิกคำขอ pending; กดแถวเครื่องเพื่อดูกราฟ CPU/RAM/Network, IP ล่าสุด และจัดการ Power/Console/SSH |
+| `/admin`   | ดูคิว, ตอบผู้ขอ, แก้ข้อมูลและ IP, Complete ด้วยตนเองหรือ Auto Provision, ลบ VM/CT                                                      |
 
 Popup “มีอะไรใหม่” หลังล็อกอินแก้ข้อความและเปิด/ปิดได้ใน [`src/lib/whats-new.ts`](src/lib/whats-new.ts) รายละเอียดอยู่ใน [คู่มือส่งต่อ](https://github.com/CSNIS-CSKmitl/Docs/blob/main/Projects/init-d/docs/HANDOVER_TH.md#ประกาศอัปเดตหลังล็อกอิน)
 
@@ -118,6 +118,7 @@ Production server จะ normalize OAuth callback ที่มี duplicate slas
 ## ฐานข้อมูลและการจัดเก็บข้อมูล (Database Architecture)
 
 โครงสร้างฐานข้อมูล PocketBase ของ `init.d` ถูกแยกส่วนเพื่อประสิทธิภาพและการขยายตัว:
+
 - `instances`: เก็บข้อมูลคำขอและสเปกเครื่อง (ลดจาก 36 เหลือ 20 ฟิลด์ คลีนและเบา)
 - `instance_infra`: ข้อมูลระดับ Proxmox/Hypervisor (`vmid`, `node`, `ip`, `provision_*`) ผูกแบบ 1-to-1
 - `instance_deletion_history`: เก็บประวัติของเครื่องที่ถูกลบออกจากการใช้งาน
@@ -129,7 +130,6 @@ Production server จะ normalize OAuth callback ที่มี duplicate slas
 
 เมื่ออยู่หลัง reverse proxy ให้ตั้ง `TRUST_PROXY=true` เฉพาะเมื่อ proxy ที่เชื่อถือได้เป็นผู้เขียน header ระบบจะเลือก IP ต้นทางตามลำดับ `CF-Connecting-IP`, `True-Client-IP`, `X-Forwarded-For`, `X-Real-IP`, `Forwarded` แล้วจึง fallback ไปยัง socket address ต้อง apply PocketBase migrations ให้มี `service_access_logs` และ `instance_access_logs` ก่อน deploy
 
-
 ## GitHub Actions deploy
 
 วิธีตั้งค่า SSH, ENV_FILE, PM2 และ deploy อัตโนมัติ: [คู่มือ deploy](https://github.com/CSNIS-CSKmitl/Docs/blob/main/Projects/init-d/docs/DEPLOY.md)
@@ -138,4 +138,3 @@ Production server จะ normalize OAuth callback ที่มี duplicate slas
 
 - [นโยบายความเป็นส่วนตัว](https://init-d.cskmitl.com/privacy)
 - [ข้อกำหนดการใช้งาน](https://init-d.cskmitl.com/terms)
-

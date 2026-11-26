@@ -91,7 +91,7 @@
 		{:else}
 			<KeyRound class="size-4" aria-hidden="true" />
 		{/if}
-		{oauthLoading ? "Signing in…" : "Continue with KMITL IAM"}
+		{oauthLoading ? "Signing in…" : "Login with Google"}
 	</Button>
 	<p class="mb-3 text-center text-xs text-muted-foreground">สำหรับนักศึกษาสาขาวิทยาการคอมพิวเตอร์</p>
 

@@ -1,242 +1,270 @@
-import type PocketBase from 'pocketbase';
-import type { LeaseInstance } from '../types';
+import type PocketBase from "pocketbase";
+import type { LeaseInstance } from "../types";
 
 // Lock before the first await so double submissions cannot start two operations.
 const active = new Set<string>();
 export const instanceIsBusy = (id: string) => active.has(id);
-export const instanceIsDeleted = (record: { status: string; provision_state?: string }) =>
-	record.status === 'deleted' || record.provision_state === 'deleted';
+export const instanceIsDeleted = (record: {
+  status: string;
+  provision_state?: string;
+}) => record.status === "deleted" || record.provision_state === "deleted";
 
 export type DeletedInstanceIdentity = {
-	vmid?: number | null;
-	node?: string | number | null;
-	ip?: string | null;
-	mac?: string | null;
+  vmid?: number | null;
+  node?: string | number | null;
+  ip?: string | null;
+  mac?: string | null;
 };
 
 async function updateInfraSafely(
-	pb: PocketBase,
-	instanceId: string,
-	patch: Record<string, unknown>
+  pb: PocketBase,
+  instanceId: string,
+  patch: Record<string, unknown>,
 ): Promise<void> {
-	try {
-		if (typeof pb.collection !== 'function') return;
-		const coll = pb.collection('instance_infra');
-		if (!coll || typeof coll.getFirstListItem !== 'function') return;
-		const existing = await coll
-			.getFirstListItem(`instance = "${instanceId}" || instance_ref = "${instanceId}"`)
-			.catch(() => null);
-		if (existing && (existing as any).id) {
-			await coll.update((existing as any).id, patch);
-		} else if (typeof coll.create === 'function') {
-			await coll.create({
-				instance: instanceId,
-				instance_ref: instanceId,
-				...patch
-			});
-		}
-	} catch {
-		// Non-blocking fallback
-	}
+  try {
+    if (typeof pb.collection !== "function") return;
+    const coll = pb.collection("instance_infra");
+    if (!coll || typeof coll.getFirstListItem !== "function") return;
+    const existing = await coll
+      .getFirstListItem(
+        `instance = "${instanceId}" || instance_ref = "${instanceId}"`,
+      )
+      .catch(() => null);
+    if (existing && (existing as any).id) {
+      await coll.update((existing as any).id, patch);
+    } else if (typeof coll.create === "function") {
+      await coll.create({
+        instance: instanceId,
+        instance_ref: instanceId,
+        ...patch,
+      });
+    }
+  } catch {
+    // Non-blocking fallback
+  }
 }
 
 export async function startInstanceProvisioning(
-	pb: PocketBase,
-	record: LeaseInstance,
-	target: Record<string, unknown>,
-	checkTarget: () => Promise<void>,
-	create: () => Promise<{ ipAddress?: string }>,
-	progress: (status: string, details?: string) => void,
-	onCompleted: (record: LeaseInstance) => void,
-	onFailed: (error: string) => void
+  pb: PocketBase,
+  record: LeaseInstance,
+  target: Record<string, unknown>,
+  checkTarget: () => Promise<void>,
+  create: () => Promise<{ ipAddress?: string }>,
+  progress: (status: string, details?: string) => void,
+  onCompleted: (record: LeaseInstance) => void,
+  onFailed: (error: string) => void,
 ): Promise<void> {
-	if (instanceIsDeleted(record)) {
-		throw new Error('Deleted leases are retained as history and cannot be provisioned again.');
-	}
-	if (active.has(record.id) || ['provisioning', 'deleting'].includes(record.provision_state ?? '')) {
-		throw new Error('An operation is already in progress for this instance.');
-	}
-	active.add(record.id);
+  if (instanceIsDeleted(record)) {
+    throw new Error(
+      "Deleted leases are retained as history and cannot be provisioned again.",
+    );
+  }
+  if (
+    active.has(record.id) ||
+    ["provisioning", "deleting"].includes(record.provision_state ?? "")
+  ) {
+    throw new Error("An operation is already in progress for this instance.");
+  }
+  active.add(record.id);
 
-	try {
-		await checkTarget();
-		await pb.collection('instances').update(record.id, {
-			status: 'pending',
-			provision_state: 'provisioning',
-			provision_error: '',
-			provision_started_at: new Date().toISOString(),
-			provision_completed_at: null,
-			...target
-		});
-		await updateInfraSafely(pb, record.id, {
-			provision_state: 'provisioning',
-			provision_error: '',
-			provision_started_at: new Date().toISOString(),
-			provision_completed_at: null,
-			...target
-		});
-	} catch (cause) {
-		const message = (cause instanceof Error ? cause.message : String(cause)).slice(0, 4096);
-		try {
-			await pb.collection('instances').update(record.id, {
-				status: 'failed',
-				provision_state: 'failed',
-				provision_error: message
-			});
-			await updateInfraSafely(pb, record.id, {
-				provision_state: 'failed',
-				provision_error: message
-			});
-		} catch (saveError) {
-			console.error('Could not persist provisioning startup failure:', saveError);
-		}
-		progress('Failed', message);
-		active.delete(record.id);
-		throw cause;
-	}
+  try {
+    await checkTarget();
+    await pb.collection("instances").update(record.id, {
+      status: "pending",
+      provision_state: "provisioning",
+      provision_error: "",
+      provision_started_at: new Date().toISOString(),
+      provision_completed_at: null,
+      ...target,
+    });
+    await updateInfraSafely(pb, record.id, {
+      provision_state: "provisioning",
+      provision_error: "",
+      provision_started_at: new Date().toISOString(),
+      provision_completed_at: null,
+      ...target,
+    });
+  } catch (cause) {
+    const message = (
+      cause instanceof Error ? cause.message : String(cause)
+    ).slice(0, 4096);
+    try {
+      await pb.collection("instances").update(record.id, {
+        status: "failed",
+        provision_state: "failed",
+        provision_error: message,
+      });
+      await updateInfraSafely(pb, record.id, {
+        provision_state: "failed",
+        provision_error: message,
+      });
+    } catch (saveError) {
+      console.error(
+        "Could not persist provisioning startup failure:",
+        saveError,
+      );
+    }
+    progress("Failed", message);
+    active.delete(record.id);
+    throw cause;
+  }
 
-	progress('Starting provisioning...');
-	// The initial DB write has completed before the form reports success.
-	void (async () => {
-		try {
-			const result = await create();
-			const updated = await pb.collection('instances').update<LeaseInstance>(record.id, {
-				status: 'completed',
-				provision_state: 'completed',
-				provision_error: '',
-				provision_completed_at: new Date().toISOString(),
-				...target,
-				...(result.ipAddress ? { IP: result.ipAddress } : {})
-			});
-			await updateInfraSafely(pb, record.id, {
-				provision_state: 'completed',
-				provision_error: '',
-				provision_completed_at: new Date().toISOString(),
-				...target,
-				...(result.ipAddress ? { ip: result.ipAddress } : {})
-			});
-			progress('Complete');
-			onCompleted(updated);
-		} catch (cause) {
-			const message = (cause instanceof Error ? cause.message : String(cause)).slice(0, 4096);
-			try {
-				await pb.collection('instances').update(record.id, {
-					status: 'failed',
-					provision_state: 'failed',
-					provision_error: message
-				});
-				await updateInfraSafely(pb, record.id, {
-					provision_state: 'failed',
-					provision_error: message
-				});
-			} catch (saveError) {
-				console.error('Could not persist provisioning failure:', saveError);
-			}
-			progress('Failed', message);
-			onFailed(message);
-		} finally {
-			active.delete(record.id);
-		}
-	})();
+  progress("Starting provisioning...");
+  // The initial DB write has completed before the form reports success.
+  void (async () => {
+    try {
+      const result = await create();
+      const updated = await pb
+        .collection("instances")
+        .update<LeaseInstance>(record.id, {
+          status: "completed",
+          provision_state: "completed",
+          provision_error: "",
+          provision_completed_at: new Date().toISOString(),
+          ...target,
+          ...(result.ipAddress ? { IP: result.ipAddress } : {}),
+        });
+      await updateInfraSafely(pb, record.id, {
+        provision_state: "completed",
+        provision_error: "",
+        provision_completed_at: new Date().toISOString(),
+        ...target,
+        ...(result.ipAddress ? { ip: result.ipAddress } : {}),
+      });
+      progress("Complete");
+      onCompleted(updated);
+    } catch (cause) {
+      const message = (
+        cause instanceof Error ? cause.message : String(cause)
+      ).slice(0, 4096);
+      try {
+        await pb.collection("instances").update(record.id, {
+          status: "failed",
+          provision_state: "failed",
+          provision_error: message,
+        });
+        await updateInfraSafely(pb, record.id, {
+          provision_state: "failed",
+          provision_error: message,
+        });
+      } catch (saveError) {
+        console.error("Could not persist provisioning failure:", saveError);
+      }
+      progress("Failed", message);
+      onFailed(message);
+    } finally {
+      active.delete(record.id);
+    }
+  })();
 }
 
 export async function deleteInstance(
-	pb: PocketBase,
-	record: LeaseInstance,
-	removeGuest: () => Promise<DeletedInstanceIdentity | void>,
-	actorId?: string
+  pb: PocketBase,
+  record: LeaseInstance,
+  removeGuest: () => Promise<DeletedInstanceIdentity | void>,
+  actorId?: string,
 ): Promise<void> {
-	if (instanceIsDeleted(record)) return; // Preserve the original deletion timestamp on retries.
-	if (active.has(record.id) || ['provisioning', 'deleting'].includes(record.provision_state ?? '')) {
-		throw new Error('Wait for the current operation to finish before deleting.');
-	}
-	active.add(record.id);
-	let deletedPatch: Record<string, unknown> | undefined;
-	try {
-		await pb.collection('instances').update(record.id, {
-			status: 'failed',
-			provision_state: 'deleting',
-			...(actorId ? { updated_by: actorId } : {})
-		});
-		await updateInfraSafely(pb, record.id, { provision_state: 'deleting' });
+  if (instanceIsDeleted(record)) return; // Preserve the original deletion timestamp on retries.
+  if (
+    active.has(record.id) ||
+    ["provisioning", "deleting"].includes(record.provision_state ?? "")
+  ) {
+    throw new Error(
+      "Wait for the current operation to finish before deleting.",
+    );
+  }
+  active.add(record.id);
+  let deletedPatch: Record<string, unknown> | undefined;
+  try {
+    await pb.collection("instances").update(record.id, {
+      status: "failed",
+      provision_state: "deleting",
+      ...(actorId ? { updated_by: actorId } : {}),
+    });
+    await updateInfraSafely(pb, record.id, { provision_state: "deleting" });
 
-		const identity = (await removeGuest()) ?? {
-			vmid: record.vmid ?? null,
-			node: record.node ?? null,
-			ip: record.IP ?? null
-		};
-		// Keep the lease as history and revoke the guest binding in the same write.
-		deletedPatch = {
-			status: 'deleted',
-			provision_state: 'deleted',
-			provision_error: '',
-			vmid: null,
-			node: null,
-			datedelete: new Date().toISOString(),
-			deleted_vmid: identity.vmid ?? record.vmid ?? null,
-			deleted_node:
-				identity.node != null
-					? String(identity.node)
-					: record.node != null
-						? String(record.node)
-						: null,
-			deleted_ip: identity.ip ?? record.IP ?? null,
-			deleted_mac: identity.mac ?? null,
-			...(actorId ? { updated_by: actorId } : {})
-		};
-		await pb.collection('instances').update(record.id, deletedPatch);
-		await updateInfraSafely(pb, record.id, {
-			vmid: null,
-			node: null,
-			ip: null,
-			provision_state: 'deleted',
-			provision_error: ''
-		});
+    const identity = (await removeGuest()) ?? {
+      vmid: record.vmid ?? null,
+      node: record.node ?? null,
+      ip: record.IP ?? null,
+    };
+    // Keep the lease as history and revoke the guest binding in the same write.
+    deletedPatch = {
+      status: "deleted",
+      provision_state: "deleted",
+      provision_error: "",
+      vmid: null,
+      node: null,
+      datedelete: new Date().toISOString(),
+      deleted_vmid: identity.vmid ?? record.vmid ?? null,
+      deleted_node:
+        identity.node != null
+          ? String(identity.node)
+          : record.node != null
+            ? String(record.node)
+            : null,
+      deleted_ip: identity.ip ?? record.IP ?? null,
+      deleted_mac: identity.mac ?? null,
+      ...(actorId ? { updated_by: actorId } : {}),
+    };
+    await pb.collection("instances").update(record.id, deletedPatch);
+    await updateInfraSafely(pb, record.id, {
+      vmid: null,
+      node: null,
+      ip: null,
+      provision_state: "deleted",
+      provision_error: "",
+    });
 
-		// Store deletion details in the dedicated history collection
-		try {
-			const histColl = pb.collection('instance_deletion_history');
-			if (histColl && typeof histColl.create === 'function') {
-				await histColl.create({
-					instance: record.id,
-					instance_ref: record.id,
-					hostname: record.hostname,
-					deleted_vmid: identity.vmid ?? record.vmid ?? null,
-					deleted_node:
-						identity.node != null
-							? String(identity.node)
-							: record.node != null
-								? String(record.node)
-								: null,
-					deleted_ip: identity.ip ?? record.IP ?? null,
-					deleted_mac: identity.mac ?? null,
-					deleted_at: new Date().toISOString(),
-					deleted_by: actorId || null
-				});
-			}
-		} catch (historyErr) {
-			console.error('Could not create instance_deletion_history record:', historyErr);
-		}
-	} catch (cause) {
-		const message = (cause instanceof Error ? cause.message : String(cause)).slice(0, 4096);
-		try {
-			await pb.collection('instances').update(
-				record.id,
-				deletedPatch
-					? deletedPatch
-					: {
-							status: 'failed',
-							provision_state: 'delete_failed',
-							provision_error: message,
-							...(actorId ? { updated_by: actorId } : {})
-						}
-			);
-			if (deletedPatch) return; // The retry saved the successful deletion outcome.
-		} catch (saveError) {
-			console.error('Could not save deletion outcome:', saveError);
-		}
-		throw cause;
-	} finally {
-		active.delete(record.id);
-	}
+    // Store deletion details in the dedicated history collection
+    try {
+      const histColl = pb.collection("instance_deletion_history");
+      if (histColl && typeof histColl.create === "function") {
+        await histColl.create({
+          instance: record.id,
+          instance_ref: record.id,
+          hostname: record.hostname,
+          deleted_vmid: identity.vmid ?? record.vmid ?? null,
+          deleted_node:
+            identity.node != null
+              ? String(identity.node)
+              : record.node != null
+                ? String(record.node)
+                : null,
+          deleted_ip: identity.ip ?? record.IP ?? null,
+          deleted_mac: identity.mac ?? null,
+          deleted_at: new Date().toISOString(),
+          deleted_by: actorId || null,
+        });
+      }
+    } catch (historyErr) {
+      console.error(
+        "Could not create instance_deletion_history record:",
+        historyErr,
+      );
+    }
+  } catch (cause) {
+    const message = (
+      cause instanceof Error ? cause.message : String(cause)
+    ).slice(0, 4096);
+    try {
+      await pb.collection("instances").update(
+        record.id,
+        deletedPatch
+          ? deletedPatch
+          : {
+              status: "failed",
+              provision_state: "delete_failed",
+              provision_error: message,
+              ...(actorId ? { updated_by: actorId } : {}),
+            },
+      );
+      if (deletedPatch) return; // The retry saved the successful deletion outcome.
+    } catch (saveError) {
+      console.error("Could not save deletion outcome:", saveError);
+    }
+    throw cause;
+  } finally {
+    active.delete(record.id);
+  }
 }

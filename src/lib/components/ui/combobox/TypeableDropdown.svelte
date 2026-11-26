@@ -43,6 +43,7 @@
 	} = $props();
 
 	let isOpen = $state(false);
+	let isTyping = $state(false);
 	let highlightedIndex = $state(-1);
 	let containerRef: HTMLDivElement | null = $state(null);
 	let inputRef: HTMLInputElement | null = $state(null);
@@ -53,22 +54,25 @@
 		options.map((opt) => (typeof opt === 'string' ? { value: opt, label: opt } : opt))
 	);
 
-	// Filter options based on typed input
+	// Filter options only while the user is actively typing, so opening a pre-filled
+	// dropdown still shows all available choices.
 	const filteredOptions = $derived<DropdownOption[]>(
-		normalizedOptions.filter((opt) => {
-			if (!value) return true;
-			const q = value.toLowerCase().trim();
-			const v = opt.value.toLowerCase();
-			const l = (opt.label ?? '').toLowerCase();
-			const b = (opt.badge ?? '').toLowerCase();
-			const d = (opt.description ?? '').toLowerCase();
-			return v.includes(q) || l.includes(q) || b.includes(q) || d.includes(q);
-		})
+		!isTyping || !value
+			? normalizedOptions
+			: normalizedOptions.filter((opt) => {
+					const q = value.toLowerCase().trim();
+					const v = opt.value.toLowerCase();
+					const l = (opt.label ?? '').toLowerCase();
+					const b = (opt.badge ?? '').toLowerCase();
+					const d = (opt.description ?? '').toLowerCase();
+					return v.includes(q) || l.includes(q) || b.includes(q) || d.includes(q);
+				})
 	);
 
 	function toggleDropdown() {
 		if (disabled) return;
 		isOpen = !isOpen;
+		isTyping = false;
 		if (isOpen) {
 			highlightedIndex = -1;
 			tick().then(() => inputRef?.focus());
@@ -78,6 +82,7 @@
 	function handleInput(e: Event) {
 		const target = e.target as HTMLInputElement;
 		value = target.value;
+		isTyping = true;
 		isOpen = true;
 		highlightedIndex = -1;
 		oninput?.(value);
@@ -86,12 +91,14 @@
 
 	function handleFocus() {
 		if (!disabled) {
+			isTyping = false;
 			isOpen = true;
 		}
 	}
 
 	function selectOption(opt: DropdownOption) {
 		value = opt.value;
+		isTyping = false;
 		isOpen = false;
 		highlightedIndex = -1;
 		onselect?.(opt.value, opt);
@@ -100,6 +107,7 @@
 
 	function selectCustom(customVal: string) {
 		value = customVal;
+		isTyping = false;
 		isOpen = false;
 		highlightedIndex = -1;
 		onselect?.(customVal);
