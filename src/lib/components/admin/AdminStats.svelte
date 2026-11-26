@@ -95,9 +95,9 @@
 					onclick={() => (timeRange = range.value)}
 					aria-pressed={timeRange === range.value}
 					class={cn(
-						'rounded-md px-2.5 py-1 font-mono text-xs transition-colors',
+						'rounded-md px-2.5 py-1 font-mono text-xs font-medium transition-colors',
 						timeRange === range.value
-							? 'bg-primary text-primary-foreground font-semibold'
+							? 'bg-primary text-primary-foreground'
 							: 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
 					)}
 				>
@@ -154,11 +154,27 @@
 			{/if}
 		</div>
 	{:else if loading}
-		<div
-			role="status"
-			class="flex items-center justify-center rounded-lg border border-border bg-card px-4 py-8 font-mono text-xs text-muted-foreground"
-		>
-			กำลังโหลดสถิติ...
+		<div role="status" aria-label="กำลังโหลดสถิติ" class="flex flex-col gap-3">
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+				{#each Array(6) as _, idx (idx)}
+					<div class="rounded-lg border border-border bg-card px-4 py-3 space-y-2 animate-pulse">
+						<div class="h-3 w-20 rounded bg-muted"></div>
+						<div class="h-7 w-12 rounded bg-muted"></div>
+					</div>
+				{/each}
+			</div>
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+				{#each Array(5) as _, idx (idx)}
+					<div class="rounded-lg border border-border bg-card px-4 py-3 space-y-2 animate-pulse">
+						<div class="h-3 w-24 rounded bg-muted"></div>
+						<div class="h-6 w-20 rounded bg-muted"></div>
+					</div>
+				{/each}
+			</div>
+			<div class="h-44 rounded-lg border border-border bg-card p-4 space-y-3 animate-pulse">
+				<div class="h-3.5 w-32 rounded bg-muted"></div>
+				<div class="h-28 w-full rounded bg-muted/60"></div>
+			</div>
 		</div>
 	{:else}
 		<!-- Status Drill-down Cards -->

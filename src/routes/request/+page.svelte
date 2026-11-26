@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { ActionData, PageData } from "./$types";
 	import { untrack } from "svelte";
+	import { enhance } from "$app/forms";
+	import { toast } from "$lib/toast";
 	import PresetCombobox from "$lib/components/request/PresetCombobox.svelte";
 	import RequestSidebarPreview from "$lib/components/request/RequestSidebarPreview.svelte";
 	import * as Field from "$lib/components/ui/field";
@@ -99,6 +101,7 @@
 	let ownerEmails = $state(untrack(() => form?.values?.owner_emails ?? data.editRecord?.owner_emails?.join(', ') ?? ''));
 
 	let selectedPreset = $state("");
+	let submitting = $state(false);
 
 	// Apply a preset's defaults to the form. Slug is the key — `''` means
 	// the user picked the blank option and we deliberately leave the
@@ -198,6 +201,28 @@
 
 <form
 	method="POST"
+	use:enhance={() => {
+		submitting = true;
+		return async ({ result, update }) => {
+			try {
+				if (result.type === "redirect") {
+					toast.success(
+						data.editRecord
+							? "บันทึกการแก้ไขคำขอเรียบร้อยแล้ว"
+							: "ส่งคำขอใช้งานเซิร์ฟเวอร์เรียบร้อยแล้ว",
+					);
+				} else if (result.type === "failure") {
+					const errs = (result.data as { errors?: Record<string, string> } | undefined)?.errors;
+					toast.error(errs?.global || "กรุณาตรวจสอบข้อมูลในแบบฟอร์มให้ครบถ้วน");
+				} else if (result.type === "error") {
+					toast.error("เกิดข้อผิดพลาดในการส่งคำขอ กรุณาลองใหม่");
+				}
+				await update();
+			} finally {
+				submitting = false;
+			}
+		};
+	}}
 	class="mx-auto grid max-w-6xl grid-cols-1 gap-12 lg:grid-cols-3 lg:gap-16 xl:max-w-7xl 2xl:max-w-[1600px] 2xl:gap-20"
 >
 	<!-- LEFT: form fields (~70%) -------------------------------------------- -->
@@ -648,5 +673,6 @@
 		{end_date}
 		{leaseDays}
 		isEdit={!!data.editRecord}
+		{submitting}
 	/>
 </form>

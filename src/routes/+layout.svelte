@@ -1,12 +1,15 @@
 <script lang="ts">
 	import '../app.css';
 	import { page } from '$app/state';
+	import { fly } from 'svelte/transition';
 	import favicon from '$lib/assets/favicon.svg';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import WhatsNewDialog from '$lib/components/WhatsNewDialog.svelte';
 	import AnnouncementCenter from '$lib/components/AnnouncementCenter.svelte';
 	import LegalConsent from '$lib/components/LegalConsent.svelte';
 	import { ModeWatcher } from 'mode-watcher';
+	import { toasts, dismissToast } from '$lib/toast';
+	import { CheckCircle2, AlertCircle, Info, X } from '@lucide/svelte';
 	import type { LayoutData } from './$types';
 	import type { Snippet } from 'svelte';
 
@@ -34,7 +37,7 @@
 	<title>init.d — infrastructure provisioning</title>
 </svelte:head>
 
-<div class="relative flex min-h-screen flex-col overflow-x-hidden bg-background text-foreground transition-colors duration-300">
+<div class="relative flex min-h-screen flex-col overflow-x-clip bg-background text-foreground transition-colors duration-300">
 	<!-- Ambient Background Glows -->
 	<div
 		class="pointer-events-none absolute top-0 left-1/2 -z-10 h-[350px] w-full max-w-[1200px] -translate-x-1/2 opacity-20 blur-[100px] transition-opacity duration-300"
@@ -66,7 +69,11 @@
 		{/if}
 	{/if}
 	<main class="relative mx-auto w-full max-w-[1400px] min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-10">
-		{@render children()}
+		{#key page.url.pathname}
+			<div class="animate-page-enter">
+				{@render children()}
+			</div>
+		{/key}
 	</main>
 	<footer class="relative border-t border-border px-6 py-3 text-center text-[11px] text-muted-foreground">
 		<span>© {new Date().getFullYear()} · <a href="https://github.com/techasit5415" target="_blank" rel="noopener noreferrer" class="hover:text-foreground hover:underline">Techasit Vanitpattarakul</a>
@@ -80,4 +87,40 @@
 		</nav>
 	</footer>
   <LegalConsent userId={data.user?.id ?? null} enabled={!isLegalPage} onAccepted={() => (legalAccepted = true)} />
+</div>
+
+<!-- Top-center toast notifications -->
+<div
+	aria-live="polite"
+	aria-atomic="false"
+	class="pointer-events-none fixed top-4 left-1/2 z-[120] flex w-[min(92vw,28rem)] -translate-x-1/2 flex-col items-center gap-2"
+>
+	{#each $toasts as item (item.id)}
+		<div
+			role={item.type === 'error' ? 'alert' : 'status'}
+			transition:fly={{ y: -24, duration: 220 }}
+			class="pointer-events-auto flex w-full items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-sm shadow-lg backdrop-blur-md {item.type === 'success'
+				? 'border-success/30 bg-card/95 text-foreground'
+				: item.type === 'error'
+					? 'border-destructive/40 bg-card/95 text-destructive'
+					: 'border-border bg-card/95 text-foreground'}"
+		>
+			{#if item.type === 'success'}
+				<CheckCircle2 class="size-4 shrink-0 text-success" aria-hidden="true" />
+			{:else if item.type === 'error'}
+				<AlertCircle class="size-4 shrink-0 text-destructive" aria-hidden="true" />
+			{:else}
+				<Info class="size-4 shrink-0 text-primary" aria-hidden="true" />
+			{/if}
+			<span class="min-w-0 flex-1 leading-snug">{item.message}</span>
+			<button
+				type="button"
+				onclick={() => dismissToast(item.id)}
+				aria-label="ปิดการแจ้งเตือน"
+				class="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+			>
+				<X class="size-3.5" />
+			</button>
+		</div>
+	{/each}
 </div>

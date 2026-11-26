@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Card from "$lib/components/ui/card";
 	import { Button } from "$lib/components/ui/button";
+	import { Spinner } from "$lib/components/ui/spinner";
 
 	let {
 		hostname = "",
@@ -17,6 +18,7 @@
 		end_date = "",
 		leaseDays = null,
 		isEdit = false,
+		submitting = false,
 	}: {
 		hostname: string;
 		type: "vm" | "container";
@@ -32,6 +34,7 @@
 		end_date: string;
 		leaseDays: number | null;
 		isEdit?: boolean;
+		submitting?: boolean;
 	} = $props();
 
 	const TH_MONTHS = [
@@ -181,9 +184,15 @@
 		{/if}
 		<Button
 			type="submit"
+			disabled={submitting}
 			class="w-full font-mono text-xs font-bold tracking-wider uppercase sm:w-auto"
 		>
-			{isEdit ? "save" : "send"}
+			{#if submitting}
+				<Spinner data-icon="inline-start" />
+				{isEdit ? "saving…" : "sending…"}
+			{:else}
+				{isEdit ? "save" : "send"}
+			{/if}
 		</Button>
 	</div>
 </aside>

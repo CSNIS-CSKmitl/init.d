@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import { toast } from "$lib/toast";
   import type { LeaseInstance } from "$lib/types";
   import { passionGroupName, creatorEmail, creatorName } from "$lib/types";
   import { cn } from "$lib/utils";
@@ -72,6 +73,7 @@
       consolePassword = data.vncPassword ?? null;
     } catch (err: any) {
       consoleError = err.message || "An unexpected error occurred.";
+      toast.error(consoleError);
     } finally {
       consoleLoading = false;
     }
@@ -116,6 +118,7 @@
     items: LeaseInstance[];
     form: { error?: string; id?: string; recordId?: string } | null;
     provisioning?: boolean;
+    loading?: boolean;
     progressMap?: Record<string, { status: string; error?: string }>;
     userId: string;
     filterTab?: AdminStatusFilter;
@@ -126,6 +129,7 @@
     items = [],
     form,
     provisioning = false,
+    loading = false,
     progressMap = {},
     userId,
     filterTab = $bindable<AdminStatusFilter>("all"),
@@ -208,7 +212,21 @@
   };
 </script>
 
-{#if items.length === 0}
+{#if loading}
+  <div role="status" aria-label="กำลังโหลดรายการคำขอ" class="overflow-hidden rounded-xl border border-border bg-card p-4 space-y-3">
+    {#each Array(5) as _, idx (idx)}
+      <div class="flex items-center justify-between gap-4 rounded-lg border border-border/50 p-3 animate-pulse">
+        <div class="h-5 w-20 rounded-full bg-muted"></div>
+        <div class="flex-1 space-y-1.5">
+          <div class="h-4 w-36 rounded bg-muted"></div>
+          <div class="h-3 w-56 rounded bg-muted/70"></div>
+        </div>
+        <div class="hidden h-4 w-28 rounded bg-muted sm:block"></div>
+        <div class="h-7 w-24 rounded bg-muted"></div>
+      </div>
+    {/each}
+  </div>
+{:else if items.length === 0}
   <Empty.Root class="border border-border bg-card">
     <Empty.Header>
       <Empty.Media variant="icon"><Inbox /></Empty.Media>

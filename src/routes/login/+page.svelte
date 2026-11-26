@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { LogIn, AlertCircle, User, Lock, KeyRound } from "@lucide/svelte";
+	import { enhance } from "$app/forms";
 	import { pbBrowser } from "$lib/pb/client";
+	import { toast } from "$lib/toast";
 	import type { ActionData } from "./$types";
 	import { Button } from "$lib/components/ui/button";
 	import { Input } from "$lib/components/ui/input";
@@ -12,7 +14,14 @@
 	let { form }: { form: ActionData } = $props();
 
 	let oauthLoading = $state(false);
+	let formSubmitting = $state(false);
 	let oauthError = $state<string | null>(null);
+
+	$effect(() => {
+		if (form?.error) {
+			toast.error(form.error);
+		}
+	});
 
 	async function signInWithOidc() {
 		oauthLoading = true;
@@ -40,6 +49,7 @@
 				const result = await res.json().catch(() => null);
 				throw new Error(result?.error || "KMITL IAM sign-in failed.");
 			}
+			toast.success("เข้าสู่ระบบสำเร็จ");
 			// Hard reload so every layout/page load re-runs on the
 			// server with the freshly-set `pb_auth` cookie — `goto()` keeps the client
 			// router state and can miss the new auth.
@@ -49,6 +59,7 @@
 			oauthError =
 				(e as { message?: string })?.message ??
 				"KMITL IAM sign-in failed. Please try again.";
+			toast.error(oauthError);
 		} finally {
 			oauthLoading = false;
 		}
@@ -93,7 +104,25 @@
 		<Separator class="flex-1" />
 	</div>
 
-	<form method="POST" class="rounded-lg border border-border bg-card p-6">
+	<form
+		method="POST"
+		use:enhance={() => {
+			formSubmitting = true;
+			return async ({ result, update }) => {
+				try {
+					if (result.type === "redirect") {
+						toast.success("เข้าสู่ระบบสำเร็จ");
+					} else if (result.type === "error") {
+						toast.error("ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่");
+					}
+					await update();
+				} finally {
+					formSubmitting = false;
+				}
+			};
+		}}
+		class="rounded-lg border border-border bg-card p-6"
+	>
 		<Field.FieldGroup>
 			<Field.Field>
 				<Field.FieldLabel for="identity" class="text-[11px] uppercase tracking-widest text-muted-foreground">
@@ -149,9 +178,14 @@
 				</Alert.Root>
 			{/if}
 
-			<Button type="submit" size="lg" class="w-full font-mono text-xs uppercase tracking-widest">
-				<LogIn data-icon="inline-start" />
-				Sign in
+			<Button type="submit" size="lg" disabled={formSubmitting} class="w-full font-mono text-xs uppercase tracking-widest">
+				{#if formSubmitting}
+					<Spinner data-icon="inline-start" />
+					Signing in…
+				{:else}
+					<LogIn data-icon="inline-start" />
+					Sign in
+				{/if}
 			</Button>
 		</Field.FieldGroup>
 	</form>

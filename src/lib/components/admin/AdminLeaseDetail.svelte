@@ -3,6 +3,7 @@
 	import { untrack } from 'svelte';
 	import { passionGroupName, creatorEmail, creatorName } from "$lib/types";
 	import { enhance } from "$app/forms";
+	import { toast } from "$lib/toast";
 	import { cn } from "$lib/utils";
 	import { leaseBadgeStatus, leaseNeedsResolve } from "$lib/leaseStatus";
 	import * as Field from "$lib/components/ui/field";
@@ -29,6 +30,7 @@
 		Trash2,
 		FileText,
 		Loader2,
+		Copy,
 	} from "@lucide/svelte";
 	import { TypeableDropdown } from "$lib/components/ui/combobox";
 
@@ -331,6 +333,31 @@
 		const expanded = (item as any).expand?.[field];
 		return expanded?.name || expanded?.email || value || '—';
 	};
+
+	async function copyIp(ip: string) {
+		try {
+			await navigator.clipboard.writeText(ip);
+			toast.success("คัดลอก IP Address แล้ว");
+		} catch {
+			toast.error("ไม่สามารถคัดลอก IP Address ได้");
+		}
+	}
+
+	function enhanceWithToast(successMessage: string | (() => string), errorFallback: string) {
+		return () => {
+			return async ({ result, update }: { result: { type: string; data?: Record<string, unknown> }; update: () => Promise<void> }) => {
+				if (result.type === "success") {
+					toast.success(typeof successMessage === "function" ? successMessage() : successMessage);
+				} else if (result.type === "failure") {
+					const err = typeof result.data?.error === "string" ? result.data.error : errorFallback;
+					toast.error(err);
+				} else if (result.type === "error") {
+					toast.error(errorFallback);
+				}
+				await update();
+			};
+		};
+	}
 </script>
 
 <div class="flex flex-col gap-6 px-6 py-5">
@@ -376,7 +403,19 @@
 			</div>
 			<div>
 				<div class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">IP Address</div>
-				<div class="break-all font-mono text-xs text-foreground">{item.IP || '—'}</div>
+				<div class="flex items-center gap-1.5 break-all font-mono text-xs text-foreground">
+					<span>{item.IP || '—'}</span>
+					{#if item.IP}
+						<button
+							type="button"
+							onclick={() => copyIp(item.IP!)}
+							aria-label="คัดลอก IP Address"
+							class="inline-flex items-center rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+						>
+							<Copy class="h-3 w-3" />
+						</button>
+					{/if}
+				</div>
 			</div>
 			<div class="sm:col-span-2">
 				<div class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Activity</div>
@@ -484,7 +523,12 @@
 				<span class="font-mono text-[10px] text-muted-foreground">sent {fmt(item.admin_reply_at)}</span>
 			{/if}
 		</div>
-		<form method="POST" action="?/reply" use:enhance class="flex flex-col gap-2">
+		<form
+			method="POST"
+			action="?/reply"
+			use:enhance={enhanceWithToast("ส่งข้อความถึงผู้ขอแล้ว", "ไม่สามารถบันทึกข้อความได้")}
+			class="flex flex-col gap-2"
+		>
 			<input type="hidden" name="id" value={item.id} />
 			<Textarea
 				name="reply"
@@ -501,7 +545,12 @@
 			</div>
 		</form>
 		{#if item.admin_reply}
-			<form method="POST" action="?/reply" use:enhance class="flex justify-end">
+			<form
+				method="POST"
+				action="?/reply"
+				use:enhance={enhanceWithToast("ลบข้อความตอบกลับแล้ว", "ไม่สามารถลบข้อความได้")}
+				class="flex justify-end"
+			>
 				<input type="hidden" name="id" value={item.id} />
 				<input type="hidden" name="clear" value="1" />
 				<Button type="submit" variant="outline" size="xs" class="border-destructive/20 font-mono text-destructive hover:bg-destructive/10">
@@ -529,7 +578,10 @@
 			<form
 				method="POST"
 				action="?/resolve"
-				use:enhance
+				use:enhance={enhanceWithToast(
+					() => (resolveMode === "auto" ? "เริ่มสร้าง VM/CT บน Proxmox แล้ว" : "อนุมัติคำขอเรียบร้อยแล้ว"),
+					"ไม่สามารถดำเนินการคำขอได้"
+				)}
 				class="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4"
 			>
 				<input type="hidden" name="id" value={item.id} />
@@ -673,7 +725,7 @@
 			<form
 				method="POST"
 				action="?/create"
-				use:enhance
+				use:enhance={enhanceWithToast("เริ่ม Provision แล้ว", "ไม่สามารถสร้างเครื่องได้")}
 				class="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4"
 			>
 				<input type="hidden" name="recordId" value={item.id} />
@@ -711,7 +763,12 @@
 		<h3 class="flex items-center gap-1.5 font-mono text-xs font-bold text-foreground uppercase">
 			<Settings2 class="h-3.5 w-3.5" /> Edit lease fields
 		</h3>
-		<form method="POST" action="?/update" use:enhance class="flex flex-col gap-4 rounded-lg border border-border bg-muted/30 p-4">
+		<form
+			method="POST"
+			action="?/update"
+			use:enhance={enhanceWithToast("บันทึกข้อมูลคำขอเรียบร้อยแล้ว", "ไม่สามารถบันทึกข้อมูลได้")}
+			class="flex flex-col gap-4 rounded-lg border border-border bg-muted/30 p-4"
+		>
 			<input type="hidden" name="id" value={item.id} />
 			<Field.FieldGroup class="grid grid-cols-1 gap-3 sm:grid-cols-3">
 				<Field.Field>
@@ -755,7 +812,23 @@
 		<p class="text-xs text-muted-foreground">ลบ VM/CT และดิสก์บน Proxmox แล้วเก็บรายการนี้เป็นประวัติ พร้อมวันที่ลบ หากเครื่องกำลังทำงาน ระบบจะหยุดเครื่องก่อนลบ</p>
 		<form method="POST" action="?/delete" use:enhance={() => {
 			deleting = true;
-			return async ({ update }) => { try { await update(); } finally { deleting = false; } };
+			return async ({ result, update }) => {
+				try {
+					if (result.type === "success") {
+						toast.success("ลบ VM/CT และเก็บประวัติเรียบร้อยแล้ว");
+					} else if (result.type === "failure") {
+						const err = typeof (result.data as { error?: unknown } | undefined)?.error === "string"
+							? (result.data as { error: string }).error
+							: "ไม่สามารถลบเครื่องได้";
+						toast.error(err);
+					} else if (result.type === "error") {
+						toast.error("ไม่สามารถลบเครื่องได้");
+					}
+					await update();
+				} finally {
+					deleting = false;
+				}
+			};
 		}} class="flex flex-col gap-3 rounded-lg border border-destructive/20 p-4">
 			<input type="hidden" name="id" value={item.id} />
 			<Field.Field>

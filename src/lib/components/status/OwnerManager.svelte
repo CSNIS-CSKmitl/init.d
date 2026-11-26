@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import { toast } from '$lib/toast';
 	import type { LeaseInstance } from '$lib/types';
 	import * as Field from '$lib/components/ui/field';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -9,6 +11,8 @@
 		userId: string;
 		form?: { id?: string; ownerError?: string; ownerEmails?: string } | null;
 	} = $props();
+
+	let saving = $state(false);
 </script>
 
 <section class="flex flex-col gap-2 border-t border-border pt-4">
@@ -20,7 +24,29 @@
 		{/each}
 	</p>
 	{#if item.email === userId}
-		<form method="POST" action="?/owners" class="flex flex-col gap-2">
+		<form
+			method="POST"
+			action="?/owners"
+			use:enhance={() => {
+				saving = true;
+				return async ({ result, update }) => {
+					try {
+						if (result.type === 'redirect' || result.type === 'success') {
+							toast.success('บันทึกผู้ดูแลร่วมเรียบร้อยแล้ว');
+						} else if (result.type === 'failure') {
+							const err = (result.data as { ownerError?: string } | undefined)?.ownerError;
+							toast.error(err || 'ไม่สามารถบันทึกผู้ดูแลร่วมได้');
+						} else if (result.type === 'error') {
+							toast.error('ไม่สามารถบันทึกผู้ดูแลร่วมได้');
+						}
+						await update();
+					} finally {
+						saving = false;
+					}
+				};
+			}}
+			class="flex flex-col gap-2"
+		>
 			<input type="hidden" name="id" value={item.id} />
 			<Field.Field data-invalid={form?.id === item.id && !!form?.ownerError}>
 				<Field.FieldLabel for="owners-{item.id}">Co-owner emails</Field.FieldLabel>
@@ -33,7 +59,9 @@
 					<Field.FieldError>{form.ownerError}</Field.FieldError>
 				{/if}
 			</Field.Field>
-			<Button type="submit" variant="outline" size="sm" class="self-start">Save owners</Button>
+			<Button type="submit" variant="outline" size="sm" disabled={saving} class="self-start">
+				{saving ? 'Saving…' : 'Save owners'}
+			</Button>
 		</form>
 	{/if}
 </section>

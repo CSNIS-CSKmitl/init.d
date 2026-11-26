@@ -4,6 +4,7 @@
 	import type { LeaseInstance } from '$lib/types';
 	import { untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
+	import { toast } from '$lib/toast';
 	import AdminStats from '$lib/components/admin/AdminStats.svelte';
 	import AdminQueueTable from '$lib/components/admin/AdminQueueTable.svelte';
 	import { Badge } from '$lib/components/ui/badge';
@@ -62,9 +63,11 @@
 				progressMap = latestProgress;
 			}
 			lastUpdatedAt = new Date().toISOString();
+			toast.success('รีเฟรชข้อมูลล่าสุดแล้ว');
 		} catch (err) {
 			console.error('Failed to refresh admin stats', err);
 			statsError = 'ไม่สามารถรีเฟรชข้อมูลสถิติได้';
+			toast.error(statsError);
 		} finally {
 			refreshing = false;
 		}
@@ -229,6 +232,7 @@
 		items={rangeItems}
 		{form}
 		{progressMap}
+		loading={refreshing && items.length === 0}
 		userId={data.user?.id ?? ''}
 		bind:filterTab={statusFilter}
 		bind:typeFilter

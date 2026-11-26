@@ -1,5 +1,6 @@
 <script lang="ts">
 	import QRCode from "qrcode";
+	import { toast } from "$lib/toast";
 	import * as Dialog from "$lib/components/ui/dialog";
 	import { Button } from "$lib/components/ui/button";
 	import { Check, Copy, ExternalLink, MessageSquare } from "@lucide/svelte";
@@ -39,11 +40,12 @@
 		try {
 			await navigator.clipboard.writeText(discordUrl);
 			copied = true;
+			toast.success("คัดลอกลิงก์ Discord แล้ว");
 			setTimeout(() => {
 				copied = false;
 			}, 2000);
 		} catch {
-			/* fallback */
+			toast.error("ไม่สามารถคัดลอกลิงก์ได้");
 		}
 	}
 
@@ -75,9 +77,11 @@
 						{@html qrSvg}
 					</div>
 				{:else}
-					<div class="flex size-48 items-center justify-center font-mono text-xs text-muted-foreground">
-						Loading QR Code...
-					</div>
+					<div
+						role="status"
+						aria-label="กำลังสร้าง QR Code"
+						class="size-48 animate-pulse rounded-lg bg-muted"
+					></div>
 				{/if}
 			</div>
 

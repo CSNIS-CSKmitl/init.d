@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { LeaseInstance } from '$lib/types';
+	import { toast } from '$lib/toast';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { leaseBadgeStatus } from '$lib/leaseStatus';
 	import InstanceDashboard from './InstanceDashboard.svelte';
@@ -54,6 +55,7 @@
 			consolePassword = data.vncPassword ?? null;
 		} catch (cause) {
 			consoleError = cause instanceof Error ? cause.message : 'ไม่สามารถเปิด Console ได้';
+			toast.error(consoleError);
 		} finally {
 			consoleLoading = false;
 		}

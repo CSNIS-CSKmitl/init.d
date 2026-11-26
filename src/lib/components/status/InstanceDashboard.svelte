@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { enhance } from '$app/forms';
+	import { toast } from '$lib/toast';
 	import type { InstanceMetricPoint, InstanceMetrics, LeaseInstance } from '$lib/types';
 	import { appendLiveMetricPoint, liveMetricPoint, METRICS_POLL_MS } from '$lib/instance-metrics';
 	import { passionGroupName } from '$lib/types';
@@ -9,7 +11,7 @@
 	import { Spinner } from '$lib/components/ui/spinner';
 	import MetricChart from './MetricChart.svelte';
 	import OwnerManager from './OwnerManager.svelte';
-	import { RefreshCw, Terminal, Power, RotateCw, Pause, Play, Square, Monitor, X } from '@lucide/svelte';
+	import { RefreshCw, Terminal, Power, RotateCw, Pause, Play, Square, Monitor, X, Copy } from '@lucide/svelte';
 
 	let {
 		item,
@@ -165,6 +167,15 @@
 		throw new Error('คำสั่งใช้เวลานานเกินไป กรุณารีเฟรชสถานะก่อนลองอีกครั้ง');
 	}
 
+	async function copyText(value: string, label: string) {
+		try {
+			await navigator.clipboard.writeText(value);
+			toast.success(`คัดลอก ${label} แล้ว`);
+		} catch {
+			toast.error(`ไม่สามารถคัดลอก ${label} ได้`);
+		}
+	}
+
 	async function power(action: PowerAction) {
 		const prompts: Partial<Record<PowerAction, string>> = {
 			shutdown: 'ปิดเครื่องอย่างปลอดภัย? งานที่กำลังทำอาจหยุดลง',
@@ -186,8 +197,10 @@
 			const data = await response.json();
 			if (!response.ok) throw new Error(data.error || data.message || 'ส่งคำสั่งไม่สำเร็จ');
 			if (data.upid) await pollTask(data.upid);
+			toast.success(`ดำเนินการ ${action} สำเร็จ`);
 		} catch (e) {
 			actionError = e instanceof Error ? e.message : 'ส่งคำสั่งไม่สำเร็จ';
+			toast.error(actionError);
 		} finally {
 			actionLoading = null;
 			await refresh(true);
@@ -238,7 +251,25 @@
 		{#if loadError}<p class="text-sm text-destructive" role="alert">{loadError}</p>{/if}
 
 		{#if loading}
-			<div class="flex min-h-52 items-center justify-center gap-2 text-muted-foreground"><Spinner class="size-5" /> กำลังโหลดสถิติ...</div>
+			<div class="space-y-4" role="status" aria-label="กำลังโหลดสถิติเครื่อง">
+				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+					{#each Array(4) as _, idx (idx)}
+						<div class="rounded-lg border border-border bg-muted/30 p-3 space-y-2 animate-pulse">
+							<div class="h-3 w-16 rounded bg-muted"></div>
+							<div class="h-6 w-24 rounded bg-muted"></div>
+							<div class="h-3 w-20 rounded bg-muted"></div>
+						</div>
+					{/each}
+				</div>
+				<div class="grid gap-3 lg:grid-cols-2">
+					{#each Array(2) as _, idx (idx)}
+						<div class="h-44 rounded-lg border border-border bg-muted/20 p-4 space-y-3 animate-pulse">
+							<div class="h-3.5 w-28 rounded bg-muted"></div>
+							<div class="h-28 w-full rounded bg-muted/70"></div>
+						</div>
+					{/each}
+				</div>
+			</div>
 	{:else if metrics}
 			<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				<div class="rounded-lg border border-border bg-muted/30 p-3"><p class="text-xs text-muted-foreground">CPU</p><p class="mt-1 text-lg font-semibold">{metrics.current.cpu?.toFixed(1) ?? '—'}%</p><p class="text-xs text-muted-foreground">{metrics.current.cpus ?? item.specs.cpu} vCPU</p></div>
@@ -272,7 +303,35 @@
 				<div class="rounded-lg border border-border bg-muted/40 p-3"><p class="text-xs font-semibold text-primary">ข้อความจากแอดมิน</p><p class="mt-1 whitespace-pre-wrap text-sm">{item.admin_reply}</p></div>
 			{/if}
 			<div class="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-				<div><p class="text-xs text-muted-foreground">Network</p><p>{item.network_type} · {item.dns_name || 'ไม่มี DNS'}</p>{#if liveIp}<p class="text-xs text-muted-foreground">IP {liveIp}</p>{/if}</div>
+				<div>
+					<p class="text-xs text-muted-foreground">Network</p>
+					<div class="flex flex-wrap items-center gap-1.5">
+						<span>{item.network_type} · {item.dns_name || 'ไม่มี DNS'}</span>
+						{#if item.dns_name}
+							<button
+								type="button"
+								onclick={() => copyText(item.dns_name!, 'DNS')}
+								class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+								aria-label="คัดลอก DNS"
+							>
+								<Copy class="size-3" />
+							</button>
+						{/if}
+					</div>
+					{#if liveIp}
+						<div class="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+							<span class="font-mono">IP {liveIp}</span>
+							<button
+								type="button"
+								onclick={() => copyText(liveIp, 'IP Address')}
+								class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+								aria-label="คัดลอก IP Address"
+							>
+								<Copy class="size-3" />
+							</button>
+						</div>
+					{/if}
+				</div>
 				<div><p class="text-xs text-muted-foreground">Open ports</p><p>{ports.join(', ') || '—'}</p></div>
 				<div><p class="text-xs text-muted-foreground">Group</p><p>{passionGroupName(item)}</p></div>
 			</div>
@@ -281,7 +340,28 @@
 			{#if item.status === 'pending'}
 				<div class="flex flex-wrap gap-2">
 					<Button href={`/request?edit=${item.id}`} variant="outline" size="sm">แก้คำขอ</Button>
-					<form method="POST" action="?/cancel" onsubmit={(event) => { if (!window.confirm('ยกเลิกคำขอนี้?')) event.preventDefault(); }}>
+					<form
+						method="POST"
+						action="?/cancel"
+						use:enhance={({ cancel }) => {
+							if (!window.confirm('ยกเลิกคำขอนี้?')) {
+								cancel();
+								return;
+							}
+							return async ({ result, update }) => {
+								if (result.type === 'success') {
+									toast.success('ยกเลิกคำขอเรียบร้อยแล้ว');
+									onClose();
+								} else if (result.type === 'failure') {
+									const err = (result.data as { error?: string } | undefined)?.error;
+									toast.error(err || 'ไม่สามารถยกเลิกคำขอได้');
+								} else if (result.type === 'error') {
+									toast.error('ไม่สามารถยกเลิกคำขอได้');
+								}
+								await update();
+							};
+						}}
+					>
 						<input type="hidden" name="id" value={item.id} />
 						<Button type="submit" variant="outline" size="sm" class="text-destructive">ยกเลิกคำขอ</Button>
 					</form>
