@@ -19,6 +19,8 @@ import { createHostVerifier } from "./src/lib/server/ssh-hostkeys.mjs";
 export default defineConfig(({ mode }) => {
   // Load .env for the development WebSocket server.
   const env = loadEnv(mode, process.cwd(), "");
+  const dbUrl =
+    env.MICROBASE_URL || env.POCKETBASE_URL || "http://localhost:3000";
   const proxmoxHost = env.PROXMOX_HOST || "localhost";
   const proxmoxPort = env.PROXMOX_PORT || "8006";
 
@@ -55,7 +57,7 @@ export default defineConfig(({ mode }) => {
               socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
               return;
             }
-            const auth = await authenticateSocket(req, env.POCKETBASE_URL);
+            const auth = await authenticateSocket(req, dbUrl);
             if (!auth) {
               socket.end(
                 "HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n",
@@ -249,7 +251,7 @@ export default defineConfig(({ mode }) => {
               socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
               return;
             }
-            const auth = await authenticateSocket(req, env.POCKETBASE_URL);
+            const auth = await authenticateSocket(req, dbUrl);
             if (!auth) {
               socket.end(
                 "HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n",
